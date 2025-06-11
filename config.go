@@ -1,4 +1,4 @@
-package config
+package main
 
 import (
 	"fmt"
@@ -9,30 +9,30 @@ import (
 )
 
 type Config struct {
-	Name        string   `yaml:Name`
+	Name        string   `yaml:"Name"`
 	BackupDir   string   `yaml:"BackupDir"`
 	RemoteNodes []string `yaml:"RemoteNodes"`
 	SourceDirs  []string `yaml:"SourceDirs"`
 }
 
-var Global Config
+var Cfg Config
 
 // Reads the config file and makes it available globally.
-func Read(path string) error {
+func ReadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading config file: %w", err)
+		return fmt.Errorf("reading config file ⇒  %w", err)
 	}
 
-	err = yaml.Unmarshal(data, &Global)
+	err = yaml.Unmarshal(data, &Cfg)
 	if err != nil {
-		return fmt.Errorf("parsing config file: %w", err)
+		return fmt.Errorf("parsing config file ⇒  %w", err)
 	}
 
-	if len(Global.SourceDirs) == 0 {
+	if len(Cfg.SourceDirs) == 0 {
 		return fmt.Errorf("SourceDirs specified in config")
 	}
-	if Global.BackupDir == "" {
+	if Cfg.BackupDir == "" {
 		return fmt.Errorf("BackupDir not specified in config")
 	}
 
@@ -40,8 +40,9 @@ func Read(path string) error {
 }
 
 func NodeDir(node string) string {
-	return filepath.Join(Global.BackupDir, node, "latest")
+	return filepath.Join(Cfg.BackupDir, node, "latest")
 }
+
 func NodeDirLatest(node string) string {
-	return filepath.Join(Global.BackupDir, node, "latest")
+	return filepath.Join(Cfg.BackupDir, node, "latest")
 }

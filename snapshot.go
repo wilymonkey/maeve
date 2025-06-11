@@ -1,4 +1,4 @@
-package snapshot
+package main
 
 import (
 	"errors"
@@ -7,13 +7,11 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
-	config "github.com/wilymonkey/maeve/internal/config"
 )
 
 // Creates a snapshot of the given node.
-func Node(node string) error {
-	source := config.NodeDirLatest(node)
+func SnapshotNode(node string) error {
+	source := NodeDirLatest(node)
 	sourceDir, err := os.Open(source)
 	if err != nil {
 		return err
@@ -24,8 +22,8 @@ func Node(node string) error {
 	if err != nil {
 		return fmt.Errorf("%s latest folder is empty: %w", node, err)
 	}
-	target := filepath.Join(config.NodeDir(node), time.Now().Format(time.DateOnly))
-	err = Create(source, target)
+	target := filepath.Join(NodeDir(node), time.Now().Format(time.DateOnly))
+	err = SnapshotCreate(source, target)
 	if err != nil {
 		return fmt.Errorf("unable to create snapshot: %w", err)
 	}
@@ -34,7 +32,7 @@ func Node(node string) error {
 }
 
 // Creates all required directories then hardlinks all files from source to target.
-func Create(source, target string) error {
+func SnapshotCreate(source, target string) error {
 	if err := createDir(source, target); err != nil {
 		return err
 	}
