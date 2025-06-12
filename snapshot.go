@@ -6,13 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 )
 
 // Creates a snapshot of the given node.
-func Snapshot(node string) error {
-	source := NodeDirLatest(node)
+func Snapshot(nodeName string) error {
+	source := NodeDirLatest(nodeName)
 	sourceDir, err := os.Open(source)
 	if err != nil {
 		return err
@@ -21,12 +22,16 @@ func Snapshot(node string) error {
 
 	_, err = sourceDir.Readdir(1)
 	if err != nil {
-		return fmt.Errorf("%s latest folder is empty ⇒  %w", node, err)
+		return fmt.Errorf("%s latest folder is empty ⇒  %w", nodeName, err)
 	}
-	target := filepath.Join(NodeDir(node), time.Now().Format(time.DateOnly))
-	err = NewSnapshot(source, target)
-	if err != nil {
+
+	target := filepath.Join(NodeDir(nodeName), time.Now().Format("20060102-1504"))
+	if err = NewSnapshot(source, target); err != nil {
 		return fmt.Errorf("unable to create snapshot ⇒  %w", err)
+	}
+
+	if err = trimSnapshots(nodeName); err != nil {
+		return fmt.Errorf("unable to trim snapshots ⇒  %w", err)
 	}
 
 	return nil
@@ -157,4 +162,30 @@ func shouldReplace(source, target string) (bool, error) {
 	}
 
 	return sourceInfo.ModTime().After(targetInfo.ModTime()), nil
+}
+
+func trimSnapshots(nodeName string) error {
+	// Increased by 1 to ignore the "latest" folder.
+	maxBackups := Cfg.MaxBackups + 1
+	dir := NodeDir(nodeName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("unable to read entries in node %s ⇒  %w", nodeName, err)
+	}
+
+	if len(entries) <= maxBackups {
+		return nil
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
+
+	for _, folder := range entries[:len(entries)-maxBackups] {
+		path := filepath.Join(dir, folder.Name())
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("unable to delete snapshot %s ⇒  %w", path, err)
+		}
+	}
+	return nil
 }

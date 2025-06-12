@@ -52,6 +52,10 @@ func main() {
 		}
 		fmt.Println("Local directories cloned with hardlinks")
 
+		if err := Snapshot(Cfg.Name); err != nil {
+			log.Fatalf("Failed to snapshot after local pull ⇒  %v", err)
+		}
+
 		for _, nodeAddress := range Cfg.RemoteNodes {
 			if err := LocalPush(nodeAddress); err != nil {
 				log.Printf("Failed to sync to %s ⇒  %v", nodeAddress, err)

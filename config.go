@@ -72,10 +72,10 @@ func DefaultConfig(path string) error {
 	return nil
 }
 
-func NodeDir(node string) string {
-	return filepath.Join(Cfg.BackupDir, node, "latest")
+func NodeDir(nodeName string) string {
+	return filepath.Join(Cfg.BackupDir, nodeName)
 }
 
-func NodeDirLatest(node string) string {
-	return filepath.Join(Cfg.BackupDir, node, "latest")
+func NodeDirLatest(nodeName string) string {
+	return filepath.Join(NodeDir(nodeName), "latest")
 }
