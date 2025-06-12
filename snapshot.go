@@ -148,7 +148,6 @@ func newDir(filePath string) error {
 		return fmt.Errorf("unable to create parent dir %s ⇒  %v", dirPath, err)
 	}
 	return nil
-
 }
 
 func shouldReplace(source, target string) (bool, error) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Pulls changes from Cfg.SourceDirs.
@@ -27,16 +28,17 @@ func LocalPull() error {
 
 // Pushes changes to a given node address.
 func LocalPush(nodeAddress string) error {
-	remotePath, err := RunSSH(nodeAddress, "maeve -node-path "+Cfg.Name)
+	remotePath, err := RunSSH(nodeAddress, ".local/bin/maeve --node-path "+Cfg.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}
+	remotePath = strings.TrimSuffix(remotePath, "\n")
 
-	if err := RunRsync(nodeAddress, remotePath); err != nil {
+	if err := RunSCP(nodeAddress, remotePath); err != nil {
 		return fmt.Errorf("rsync failed ⇒  %w", err)
 	}
 
-	_, err = RunSSH(nodeAddress, "maeve -snapshot "+Cfg.Name)
+	_, err = RunSSH(nodeAddress, ".local/bin/maeve --snapshot "+Cfg.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -9,25 +8,13 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "Path to the configuration file")
 	snapshotNode := flag.String("snapshot", "", "Create a hardlink based snapshot of a given node")
 	nodePath := flag.String("node-path", "", "Get the path of a given node; creates the path if it doesn't exist")
 	backupAll := flag.Bool("backup-all", false, "Backup to all nodes in config")
 	flag.Parse()
 
-	if err := ReadConfig(*configPath); err != nil {
-		var pathErr *os.PathError
-		if errors.As(err, &pathErr) {
-			if err := DefaultConfig(*configPath); err != nil {
-				log.Fatalf("Failed to create default config ⇒  %v", err)
-			}
-			// Try to read the newly created config file.
-			if err := ReadConfig(*configPath); err != nil {
-				log.Fatalf("Failed to load default config ⇒  %v", err)
-			}
-		} else {
-			log.Fatalf("Failed to load config ⇒  %v", err)
-		}
+	if err := ReadConfig(); err != nil {
+		log.Fatalf("Failed to read config ⇒  %v", err)
 	}
 
 	if *snapshotNode != "" {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,16 +24,18 @@ func RunSSH(address string, command string) (string, error) {
 	return stdout.String(), nil
 }
 
-func RunRsync(address, path string) error {
+func RunSCP(address, path string) error {
 	host, port := splitHostPort(address)
-	cmd := exec.Command("rsync", "-avzP", "--delete", "-e", "ssh -p "+port, NodeDirLatest(Cfg.Name), host+":"+path)
+	// Quirk of the exec command of scp makes it nest "latest" folders.
+	target := host + ":" + filepath.Dir(path)
+	cmd := exec.Command("scp", "-r", "-P", port, NodeDirLatest(Cfg.Name), target)
 
 	var stderr bytes.Buffer
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("rsync command failed ⇒  %v, stderr: %s", err, stderr.String())
+		return fmt.Errorf("scp command failed ⇒  %v, stderr: %s", err, stderr.String())
 	}
 
 	return nil
