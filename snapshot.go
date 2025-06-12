@@ -52,6 +52,10 @@ func NewSnapshot(source, target string) error {
 		if err != nil {
 			return err
 		}
+		// Directories are created when files are created.
+		if dir.IsDir() {
+			return nil
+		}
 
 		relPath, err := filepath.Rel(source, path)
 		if err != nil {
@@ -60,7 +64,7 @@ func NewSnapshot(source, target string) error {
 		targetPath := filepath.Join(target, relPath)
 
 		wg.Add(1)
-		go func(path, targetPath string, dir os.DirEntry) {
+		go func(sourcePath, targetPath string, dir os.DirEntry) {
 			defer wg.Done()
 
 			sem.Acquire()
@@ -73,33 +77,43 @@ func NewSnapshot(source, target string) error {
 			}
 			fileMode := dInfo.Mode()
 
-			if dir.IsDir() {
-				if err := os.MkdirAll(targetPath, dInfo.Mode().Perm()); err != nil {
-					errChan <- err
-				}
-				return
-			}
-
 			if fileMode.IsRegular() {
-				if err := os.Link(path, targetPath); err != nil {
+				if err := os.Link(sourcePath, targetPath); err != nil {
+
+					if os.IsNotExist(err) {
+						if err := newDir(targetPath); err != nil {
+							errChan <- err
+						}
+						// Try to link the file again.
+						if err := os.Link(sourcePath, targetPath); err != nil {
+							errChan <- err
+						}
+						return
+					}
+
+					if os.IsExist(err) {
+						replaceFile, err := shouldReplace(sourcePath, targetPath)
+						if err != nil {
+							errChan <- fmt.Errorf("unable to stat file ⇒  %w", err)
+						}
+						if replaceFile {
+							if err := os.Remove(targetPath); err != nil {
+								errChan <- fmt.Errorf("unable to remove target file ⇒  %w", err)
+							}
+							// Try to link the file again.
+							if err := os.Link(sourcePath, targetPath); err != nil {
+								errChan <- err
+							}
+						}
+						return
+					}
+
 					errChan <- err
 				}
 				return
 			}
 
-			if fileMode&os.ModeSymlink != 0 {
-				linkTarget, err := os.Readlink(path)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if err := os.Symlink(linkTarget, targetPath); err != nil {
-					errChan <- err
-				}
-				return
-			}
-
-			// Skip other file types (e.g., devices, sockets)
+			// Skip other file types (e.g., devices, sockets, symlinks)
 
 		}(path, targetPath, dir)
 
@@ -121,4 +135,26 @@ func NewSnapshot(source, target string) error {
 		return errors.Join(allErrors...)
 	}
 	return nil
+}
+
+func newDir(filePath string) error {
+	dirPath := filepath.Dir(filePath)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return fmt.Errorf("unable to create parent dir %s ⇒  %v", dirPath, err)
+	}
+	return nil
+
+}
+
+func shouldReplace(source, target string) (bool, error) {
+	sourceInfo, err := os.Stat(source)
+	if err != nil {
+		return false, err
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		return false, err
+	}
+
+	return sourceInfo.ModTime().After(targetInfo.ModTime()), nil
 }
