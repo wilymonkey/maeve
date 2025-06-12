@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
 
 // Creates a snapshot of the given node.
-func SnapshotNode(node string) error {
+func Snapshot(node string) error {
 	source := NodeDirLatest(node)
 	sourceDir, err := os.Open(source)
 	if err != nil {
@@ -20,27 +21,25 @@ func SnapshotNode(node string) error {
 
 	_, err = sourceDir.Readdir(1)
 	if err != nil {
-		return fmt.Errorf("%s latest folder is empty: %w", node, err)
+		return fmt.Errorf("%s latest folder is empty ⇒  %w", node, err)
 	}
 	target := filepath.Join(NodeDir(node), time.Now().Format(time.DateOnly))
-	err = SnapshotCreate(source, target)
+	err = NewSnapshot(source, target)
 	if err != nil {
-		return fmt.Errorf("unable to create snapshot: %w", err)
+		return fmt.Errorf("unable to create snapshot ⇒  %w", err)
 	}
 
 	return nil
 }
 
 // Creates all required directories then hardlinks all files from source to target.
-func SnapshotCreate(source, target string) error {
-	if err := createDir(source, target); err != nil {
-		return err
-	}
+func NewSnapshot(source, target string) error {
+	sem := NewSemaphore(runtime.NumCPU() * 20)
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, 100)
 	var mu sync.Mutex
 	var allErrors []error
-
 	go func() {
 		for err := range errChan {
 			mu.Lock()
@@ -49,34 +48,46 @@ func SnapshotCreate(source, target string) error {
 		}
 	}()
 
-	err := filepath.WalkDir(source, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(source, func(path string, dir os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			return nil
-		}
-		targetPath, err := targetPath(source, path, target)
+
+		relPath, err := filepath.Rel(source, path)
 		if err != nil {
 			return err
 		}
+		targetPath := filepath.Join(target, relPath)
 
 		wg.Add(1)
-		go func(path, targetPath string, d os.DirEntry) {
+		go func(path, targetPath string, dir os.DirEntry) {
 			defer wg.Done()
 
-			dInfo, err := d.Info()
+			sem.Acquire()
+			defer sem.Release()
+
+			dInfo, err := dir.Info()
 			if err != nil {
 				errChan <- err
 				return
 			}
 			fileMode := dInfo.Mode()
 
+			if dir.IsDir() {
+				if err := os.MkdirAll(targetPath, dInfo.Mode().Perm()); err != nil {
+					errChan <- err
+				}
+				return
+			}
+
 			if fileMode.IsRegular() {
 				if err := os.Link(path, targetPath); err != nil {
 					errChan <- err
 				}
-			} else if fileMode&os.ModeSymlink != 0 {
+				return
+			}
+
+			if fileMode&os.ModeSymlink != 0 {
 				linkTarget, err := os.Readlink(path)
 				if err != nil {
 					errChan <- err
@@ -85,9 +96,12 @@ func SnapshotCreate(source, target string) error {
 				if err := os.Symlink(linkTarget, targetPath); err != nil {
 					errChan <- err
 				}
+				return
 			}
+
 			// Skip other file types (e.g., devices, sockets)
-		}(path, targetPath, d)
+
+		}(path, targetPath, dir)
 
 		return nil
 	})
@@ -107,35 +121,4 @@ func SnapshotCreate(source, target string) error {
 		return errors.Join(allErrors...)
 	}
 	return nil
-}
-
-func createDir(source, target string) error {
-	return filepath.WalkDir(source, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		targetPath, err := targetPath(source, path, target)
-		if err != nil {
-			return err
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		return os.MkdirAll(targetPath, info.Mode().Perm())
-	})
-}
-
-func targetPath(source, path, target string) (string, error) {
-	relPath, err := filepath.Rel(source, path)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(target, relPath), nil
-
 }

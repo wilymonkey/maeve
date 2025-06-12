@@ -21,12 +21,12 @@ var Cfg Config
 func ReadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading config file ⇒  %w", err)
+		return fmt.Errorf("Reading config file ⇒  %w", err)
 	}
 
 	err = yaml.Unmarshal(data, &Cfg)
 	if err != nil {
-		return fmt.Errorf("parsing config file ⇒  %w", err)
+		return fmt.Errorf("Parsing config file ⇒  %w", err)
 	}
 
 	if len(Cfg.SourceDirs) == 0 {

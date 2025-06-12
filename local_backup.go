@@ -10,16 +10,17 @@ import (
 
 // Pulls changes from Cfg.SourceDirs to the Cfg.BackupDir.
 func LocalPull() error {
-	err := os.MkdirAll(Cfg.BackupDir, 0755)
+	localPath := NodeDirLatest(Cfg.Name)
+	err := os.MkdirAll(localPath, 0755)
 	if err != nil {
-		return fmt.Errorf("creating backup directory: %w", err)
+		return fmt.Errorf("creating backup directory ⇒  %w", err)
 	}
 
 	for _, srcDir := range Cfg.SourceDirs {
-		destDir := filepath.Join(NodeDirLatest(Cfg.Name), filepath.Base(srcDir))
-		err := SnapshotCreate(srcDir, destDir)
+		destDir := filepath.Join(localPath, filepath.Base(srcDir))
+		err := NewSnapshot(srcDir, destDir)
 		if err != nil {
-			return fmt.Errorf("cloning %s to %s: %w", srcDir, destDir, err)
+			return fmt.Errorf("cloning %s to %s ⇒  %w", srcDir, destDir, err)
 		}
 	}
 
