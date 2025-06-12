@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Name        string   `yaml:"Name"`
 	BackupDir   string   `yaml:"BackupDir"`
+	MaxBackups  int      `yaml:"MaxBackups"`
 	RemoteNodes []string `yaml:"RemoteNodes"`
 	SourceDirs  []string `yaml:"SourceDirs"`
 }
@@ -21,16 +22,19 @@ var Cfg Config
 func ReadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading config file ⇒  %w", err)
+		return fmt.Errorf("unable to read ⇒  %w", err)
 	}
 
 	err = yaml.Unmarshal(data, &Cfg)
 	if err != nil {
-		return fmt.Errorf("parsing config file ⇒  %w", err)
+		return fmt.Errorf("unable to parse ⇒  %w", err)
 	}
 
 	if Cfg.BackupDir == "" {
-		return fmt.Errorf("BackupDir not specified in config")
+		return fmt.Errorf("BackupDir not specified")
+	}
+	if Cfg.MaxBackups < 1 {
+		return fmt.Errorf("MaxBackups of %d is not valid", Cfg.MaxBackups)
 	}
 
 	return nil
@@ -52,6 +56,7 @@ func DefaultConfig(path string) error {
 	var config = Config{
 		Name:        hostname,
 		BackupDir:   backupDir,
+		MaxBackups:  5,
 		RemoteNodes: make([]string, 0),
 		SourceDirs:  make([]string, 0),
 	}

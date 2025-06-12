@@ -23,10 +23,10 @@ func main() {
 			}
 			// Try to read the newly created config file.
 			if err := ReadConfig(*configPath); err != nil {
-				log.Fatalf("Failed to read default config ⇒  %v", err)
+				log.Fatalf("Failed to load default config ⇒  %v", err)
 			}
 		} else {
-			log.Fatalf("Failed to read config ⇒  %v", err)
+			log.Fatalf("Failed to load config ⇒  %v", err)
 		}
 	}
 
@@ -34,7 +34,6 @@ func main() {
 		if err := Snapshot(*snapshotNode); err != nil {
 			log.Fatalf("Failed to create snapshot ⇒  %v", err)
 		}
-		fmt.Println("Snapshot created successfully")
 		return
 	}
 
@@ -48,25 +47,22 @@ func main() {
 	}
 
 	if *backupAll {
-		log.Fatalf("Backup not implemented")
+		if err := LocalPull(); err != nil {
+			log.Fatalf("Failed to clone directories ⇒  %v", err)
+		}
+		fmt.Println("Local directories cloned with hardlinks")
+
+		for _, nodeAddress := range Cfg.RemoteNodes {
+			if err := LocalPush(nodeAddress); err != nil {
+				log.Printf("Failed to sync to %s ⇒  %v", nodeAddress, err)
+				continue
+			}
+			fmt.Printf("Successfully synced and snapshotted to %s\n", nodeAddress)
+		}
 		return
 	}
 
-	// TODO: Print status
-
-	// err = LocalPull()
-	// if err != nil {
-	// 	log.Fatalf("Failed to clone directories: %v", err)
-	// }
-	// fmt.Println("Local directories cloned with hardlinks")
-
-	// for _, node := range Cfg.RemoteNodes {
-	// 	err = LocalPush(node)
-	// 	if err != nil {
-	// 		log.Printf("Failed to sync and snapshot to %s: %v", node, err)
-	// 		continue
-	// 	}
-	// 	fmt.Printf("Successfully synced and snapshotted to %s\n", node)
-	// }
-
+	if err := Status(); err != nil {
+		log.Fatalf("Unable to start TUI ⇒  %v", err)
+	}
 }
