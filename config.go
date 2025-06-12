@@ -21,19 +21,47 @@ var Cfg Config
 func ReadConfig(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("Reading config file ⇒  %w", err)
+		return fmt.Errorf("reading config file ⇒  %w", err)
 	}
 
 	err = yaml.Unmarshal(data, &Cfg)
 	if err != nil {
-		return fmt.Errorf("Parsing config file ⇒  %w", err)
+		return fmt.Errorf("parsing config file ⇒  %w", err)
 	}
 
-	if len(Cfg.SourceDirs) == 0 {
-		return fmt.Errorf("SourceDirs specified in config")
-	}
 	if Cfg.BackupDir == "" {
 		return fmt.Errorf("BackupDir not specified in config")
+	}
+
+	return nil
+}
+
+// Create default config file and write it to the path given.
+func DefaultConfig(path string) error {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("unable to get hostname ⇒  %w", err)
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("unable to get current path ⇒  %w", err)
+	}
+	backupDir := filepath.Join(filepath.Dir(exePath), "backups")
+
+	var config = Config{
+		Name:        hostname,
+		BackupDir:   backupDir,
+		RemoteNodes: make([]string, 0),
+		SourceDirs:  make([]string, 0),
+	}
+
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("unable to convert struct to yaml ⇒  %w", err)
+	}
+	if err := os.WriteFile(path, data, 0755); err != nil {
+		return fmt.Errorf("unable to write config file ⇒  %w", err)
 	}
 
 	return nil

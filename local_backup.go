@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// Pulls changes from Cfg.SourceDirs to the Cfg.BackupDir.
+// Pulls changes from Cfg.SourceDirs.
 func LocalPull() error {
 	localPath := NodeDirLatest(Cfg.Name)
 	err := os.MkdirAll(localPath, 0755)
@@ -27,7 +27,7 @@ func LocalPull() error {
 	return nil
 }
 
-// Pushes the local backup to a given node.
+// Pushes changes to Cfg.RemoteNodes.
 func LocalPush(node string) error {
 	// Ensure remote target directory
 	remoteTarget := fmt.Sprintf("%s:%s", node, Cfg.BackupDir)
