@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -37,9 +36,14 @@ func Snapshot(nodeName string) error {
 	return nil
 }
 
-// Creates all required directories then hardlinks all files from source to target.
+// Creates hardlinks for all files from source to target.
+// CAUTION: Deletes the target directory if it exists.
 func NewSnapshot(source, target string) error {
-	sem := NewSemaphore(runtime.NumCPU() * 20)
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("deleting %s ⇒  %w", target, err)
+	}
+
+	sem := NewSemaphore(20)
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)

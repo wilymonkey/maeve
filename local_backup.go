@@ -10,8 +10,12 @@ import (
 // Pulls changes from Cfg.SourceDirs.
 func LocalPull() error {
 	localPath := NodeDirLatest(Cfg.Name)
-	err := os.MkdirAll(localPath, 0755)
-	if err != nil {
+
+	if err := os.RemoveAll(localPath); err != nil {
+		return fmt.Errorf("deleting local latest directory ⇒  %w", err)
+	}
+
+	if err := os.MkdirAll(localPath, 0755); err != nil {
 		return fmt.Errorf("creating backup directory ⇒  %w", err)
 	}
 
@@ -28,7 +32,7 @@ func LocalPull() error {
 
 // Pushes changes to a given node address.
 func LocalPush(nodeAddress string) error {
-	remotePath, err := RunSSH(nodeAddress, ".local/bin/maeve --node-path "+Cfg.Name)
+	remotePath, err := RunSSH(nodeAddress, "maeve --node-path "+Cfg.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}
@@ -38,7 +42,7 @@ func LocalPush(nodeAddress string) error {
 		return fmt.Errorf("rsync failed ⇒  %w", err)
 	}
 
-	_, err = RunSSH(nodeAddress, ".local/bin/maeve --snapshot "+Cfg.Name)
+	_, err = RunSSH(nodeAddress, "maeve --snapshot "+Cfg.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}
