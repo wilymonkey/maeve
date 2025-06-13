@@ -48,3 +48,33 @@ func splitHostPort(nodeAddress string) (host string, port string) {
 	}
 	return parts[0], parts[1]
 }
+
+func SSHPipe(address, remoteCmd string, data []byte) ([]byte, error) {
+	host, port := splitHostPort(address)
+	cmd := exec.Command("ssh", "-p", port, host, remoteCmd)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdin pipe error: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start error: %v", err)
+	}
+
+	// Write binary data to stdin
+	if _, err := stdin.Write(data); err != nil {
+		return nil, fmt.Errorf("write error: %v", err)
+	}
+	stdin.Close()
+
+	// Wait for command to finish
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("wait error: %v", err)
+	}
+
+	return stdout.Bytes(), nil
+}
