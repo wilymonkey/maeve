@@ -17,23 +17,23 @@ func main() {
 		log.Fatalf("Failed to read config ⇒  %v", err)
 	}
 
-	if *snapshotNode != "" {
+	switch {
+
+	case *snapshotNode != "":
 		if err := Snapshot(*snapshotNode); err != nil {
 			log.Fatalf("Failed to create snapshot ⇒  %v", err)
 		}
 		return
-	}
 
-	if *nodePath != "" {
+	case *nodePath != "":
 		nodeDir := NodeDirLatest(*nodePath)
 		if err := os.MkdirAll(nodeDir, 0755); err != nil {
 			log.Fatalf("Failed to create node folder ⇒  %v", err)
 		}
-		fmt.Println(nodeDir)
+		fmt.Print(nodeDir)
 		return
-	}
 
-	if *backupAll {
+	case *backupAll:
 		if err := LocalPull(); err != nil {
 			log.Fatalf("Failed to clone directories ⇒  %v", err)
 		}
@@ -51,9 +51,10 @@ func main() {
 			fmt.Printf("Successfully synced and snapshotted to %s\n", nodeAddress)
 		}
 		return
-	}
 
-	if err := Status(); err != nil {
-		log.Fatalf("Unable to start TUI ⇒  %v", err)
+	default:
+		if err := Status(); err != nil {
+			log.Fatalf("Unable to start TUI ⇒  %v", err)
+		}
 	}
 }

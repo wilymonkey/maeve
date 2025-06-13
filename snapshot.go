@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Creates a snapshot of the given node.
+// Creates a snapshot and hashsum file of a given node. Trims snapshots at the end.
 func Snapshot(nodeName string) error {
 	source := NodeDirLatest(nodeName)
 	sourceDir, err := os.Open(source)
@@ -24,9 +24,14 @@ func Snapshot(nodeName string) error {
 		return fmt.Errorf("%s latest folder is empty ⇒  %w", nodeName, err)
 	}
 
-	target := filepath.Join(NodeDir(nodeName), time.Now().Format("20060102-1504"))
+	snapshotName := time.Now().Format("20060102-1504")
+	target := filepath.Join(NodeDir(nodeName), snapshotName)
 	if err = NewSnapshot(source, target); err != nil {
 		return fmt.Errorf("unable to create snapshot ⇒  %w", err)
+	}
+
+	if err = NewSHA3Sums(nodeName, snapshotName); err != nil {
+		return fmt.Errorf("unable to create hashsums ⇒  %w", err)
 	}
 
 	if err = trimSnapshots(nodeName); err != nil {

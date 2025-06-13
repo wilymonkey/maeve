@@ -10,16 +10,17 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/goccy/go-yaml"
 	"golang.org/x/crypto/sha3"
 )
 
 type FileHash struct {
-	relPath string `yaml:"RelativePath:"`
-	hash    string `yaml:"SHAKE256:"`
+	relPath string
+	hash    string
 }
 
-func NewSHA3Sums(source string) error {
+func NewSHA3Sums(nodeName, snapshot string) error {
+	source := filepath.Join(NodeDir(nodeName), snapshot)
+
 	sem := NewSemaphore(20)
 	var wg sync.WaitGroup
 
@@ -34,12 +35,17 @@ func NewSHA3Sums(source string) error {
 		}
 	}()
 
+	hashPath := filepath.Join(Cfg.BackupDir, "hashsums", nodeName, snapshot+".txt")
+	if err := os.MkdirAll(filepath.Dir(hashPath), 0755); err != nil {
+		return fmt.Errorf("unable to hashfile dir ⇒  %v", err)
+	}
+
 	hashChan := make(chan FileHash, 100)
 	var hashMU sync.Mutex
 	go func() {
 		hashMU.Lock()
 		for hash := range hashChan {
-			writeHashFile(source, hash)
+			writeHashFile(hashPath, hash)
 		}
 		hashMU.Unlock()
 	}()
@@ -128,18 +134,14 @@ func hashFile(path string) (string, error) {
 }
 
 func writeHashFile(path string, hash FileHash) error {
-	data, err := yaml.Marshal(hash)
-	if err != nil {
-		return fmt.Errorf("unable to convert FileHash ⇒  %w", err)
-	}
-
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
 		return fmt.Errorf("unable to open hash file ⇒  %w", err)
 	}
 	defer file.Close()
 
-	if _, err := file.Write(data); err != nil {
+	line := fmt.Sprintf("\"%s\",\"%s\"\n", hash.relPath, hash.hash)
+	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("unable to append to hash file ⇒  %w", err)
 	}
 	return nil
