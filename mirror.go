@@ -12,20 +12,17 @@ import (
 	"time"
 )
 
-// FileInfo represents file metadata
 type FileInfo struct {
-	Name    string
+	relPath string
 	Size    int64
 	ModTime time.Time
 }
 
-// FileList represents a list of files
 type FileList struct {
 	Files []FileInfo
 }
 
-// Client initiates sync with server
-func client(localDir, remoteHost, remoteDir string) {
+func mirrorDir(localDir, remoteHost, remoteDir string) {
 	remoteFiles := getRemoteFileList(remoteHost, remoteDir)
 	localFiles := getLocalFileList(localDir)
 	changedFiles := compareFiles(localFiles, remoteFiles)
@@ -34,16 +31,16 @@ func client(localDir, remoteHost, remoteDir string) {
 }
 
 // getLocalFileList retrieves files in directory
-func getLocalFileList(dir string) FileList {
+func getLocalFileList(dir string, pos uint) FileList {
 	var files []FileInfo
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	filepath.WalkDir(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
 			relPath, _ := filepath.Rel(dir, path)
 			files = append(files, FileInfo{
-				Name:    relPath,
+				relPath: relPath,
 				Size:    info.Size(),
 				ModTime: info.ModTime(),
 			})
@@ -85,10 +82,10 @@ func compareFiles(local, remote FileList) []FileInfo {
 	var changed []FileInfo
 	localMap := make(map[string]FileInfo)
 	for _, f := range local.Files {
-		localMap[f.Name] = f
+		localMap[f.relPath] = f
 	}
 	for _, rf := range remote.Files {
-		lf, exists := localMap[rf.Name]
+		lf, exists := localMap[rf.relPath]
 		if !exists || lf.Size != rf.Size || !lf.ModTime.Equal(rf.ModTime) {
 			changed = append(changed, lf)
 		}
@@ -99,7 +96,7 @@ func compareFiles(local, remote FileList) []FileInfo {
 // sendChangedFiles sends modified files to server
 func sendChangedFiles(changed []FileInfo, localDir, host, remoteDir string) {
 	for _, f := range changed {
-		localPath := filepath.Join(localDir, f.Name)
+		localPath := filepath.Join(localDir, f.relPath)
 		cmd := exec.Command("ssh", host, fmt.Sprintf("%s receive %s", os.Args[0], remoteDir))
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -133,7 +130,7 @@ func receiveFiles(dir string) {
 	if err := dec.Decode(&fInfo); err != nil {
 		log.Fatal(err)
 	}
-	filePath := filepath.Join(dir, fInfo.Name)
+	filePath := filepath.Join(dir, fInfo.relPath)
 	os.MkdirAll(filepath.Dir(filePath), 0755)
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -151,15 +148,15 @@ func sendDeletedFiles(local, remote FileList, host, remoteDir string) {
 	var deleted []FileInfo
 	remoteMap := make(map[string]bool)
 	for _, f := range remote.Files {
-		remoteMap[f.Name] = true
+		remoteMap[f.relPath] = true
 	}
 	for _, lf := range local.Files {
-		if !remoteMap[lf.Name] {
+		if !remoteMap[lf.relPath] {
 			continue
 		}
 	}
 	for rfName := range remoteMap {
-		deleted = append(deleted, FileInfo{Name: rfName})
+		deleted = append(deleted, FileInfo{relPath: rfName})
 	}
 	if len(deleted) == 0 {
 		return
@@ -191,7 +188,7 @@ func deleteFiles(dir string) {
 		log.Fatal(err)
 	}
 	for _, f := range deleted.Files {
-		filePath := filepath.Join(dir, f.Name)
+		filePath := filepath.Join(dir, f.relPath)
 		if err := os.Remove(filePath); err != nil {
 			log.Printf("Failed to delete %s: %v", filePath, err)
 		}

@@ -7,9 +7,11 @@ import (
 	"strings"
 )
 
-// Pulls changes from Cfg.SourceDirs.
+// Pulls changes from Cfg.SourceDirs and writes hashes to file.
+//
+// CAUTION: Deletes the Cfg.SelfDir directory.
 func LocalPull() error {
-	localPath := NodeDirLatest(Cfg.Name)
+	localPath := Config.SelfDir()
 
 	if err := os.RemoveAll(localPath); err != nil {
 		return fmt.Errorf("deleting local latest directory ⇒  %w", err)
@@ -19,12 +21,19 @@ func LocalPull() error {
 		return fmt.Errorf("creating backup directory ⇒  %w", err)
 	}
 
-	for _, srcDir := range Cfg.SourceDirs {
+	for _, srcDir := range Config.SourceDirs {
 		destDir := filepath.Join(localPath, filepath.Base(srcDir))
-		err := NewSnapshot(srcDir, destDir)
-		if err != nil {
-			return fmt.Errorf("cloning %s to %s ⇒  %w", srcDir, destDir, err)
+		if err := NewSnapshot(srcDir, destDir); err != nil {
+			return fmt.Errorf("unable to clone %s to %s ⇒  %w", srcDir, destDir, err)
 		}
+	}
+
+	hashes, err := NewSHA3Sums(localPath)
+	if err != nil {
+		return fmt.Errorf("unable to create hashsums for local files ⇒  %w", err)
+	}
+	if err := WriteFileHashes(hashes, localPath); err != nil {
+		return fmt.Errorf("unable to write hashsums to file ⇒  %w", err)
 	}
 
 	return nil
@@ -32,7 +41,7 @@ func LocalPull() error {
 
 // Pushes changes to a given node address.
 func LocalPush(nodeAddress string) error {
-	remotePath, err := RunSSH(nodeAddress, "maeve --node-path "+Cfg.Name)
+	remotePath, err := RunSSH(nodeAddress, "maeve --node-path "+Config.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}
@@ -42,7 +51,7 @@ func LocalPush(nodeAddress string) error {
 		return fmt.Errorf("rsync failed ⇒  %w", err)
 	}
 
-	_, err = RunSSH(nodeAddress, "maeve --snapshot "+Cfg.Name)
+	_, err = RunSSH(nodeAddress, "maeve --snapshot "+Config.Name)
 	if err != nil {
 		return fmt.Errorf("unable to get remotePath ⇒  %w", err)
 	}

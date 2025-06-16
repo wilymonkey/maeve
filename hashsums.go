@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,10 +20,8 @@ type FileHash struct {
 	hash    string
 }
 
-func NewSHA3Sums(nodeName, snapshot string) error {
-	source := filepath.Join(NodeDir(nodeName), snapshot)
-
-	sem := NewSemaphore(20)
+func NewSHA3Sums(source string) ([]FileHash, error) {
+	sem := ScalingSemaphore(20)
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
@@ -35,17 +35,13 @@ func NewSHA3Sums(nodeName, snapshot string) error {
 		}
 	}()
 
-	hashPath := filepath.Join(Cfg.BackupDir, "hashsums", nodeName, snapshot+".txt")
-	if err := os.MkdirAll(filepath.Dir(hashPath), 0755); err != nil {
-		return fmt.Errorf("unable to hashfile dir ⇒  %v", err)
-	}
-
 	hashChan := make(chan FileHash, 100)
 	var hashMU sync.Mutex
+	var hashsums []FileHash
 	go func() {
 		hashMU.Lock()
 		for hash := range hashChan {
-			writeHashFile(hashPath, hash)
+			hashsums = append(hashsums, hash)
 		}
 		hashMU.Unlock()
 	}()
@@ -102,10 +98,10 @@ func NewSHA3Sums(nodeName, snapshot string) error {
 	}
 
 	if len(allErrors) > 0 {
-		return errors.Join(allErrors...)
+		return nil, errors.Join(allErrors...)
 	}
 
-	return nil
+	return hashsums, nil
 }
 
 // Does a rolling hash on a file.
@@ -133,16 +129,34 @@ func hashFile(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func writeHashFile(path string, hash FileHash) error {
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+func WriteFileHashes(fileHashes []FileHash, key string) error {
+	path := filepath.Join(Config.HashDir(), toShortKey(key))
+	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("unable to open hash file ⇒  %w", err)
 	}
-	defer file.Close()
+	defer f.Close()
 
-	line := fmt.Sprintf("\"%s\",\"%s\"\n", hash.relPath, hash.hash)
-	if _, err := file.WriteString(line); err != nil {
-		return fmt.Errorf("unable to append to hash file ⇒  %w", err)
+	return gob.NewEncoder(f).Encode(fileHashes)
+}
+
+func ReadFileHashes(key string) ([]FileHash, error) {
+	path := filepath.Join(Config.HashDir(), toShortKey(key))
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	defer f.Close()
+
+	var hashes []FileHash
+	if err := gob.NewDecoder(f).Decode(&hashes); err != nil {
+		return nil, fmt.Errorf("unable to decode hash file ⇒  %w", err)
+	}
+	return hashes, nil
+}
+
+func toShortKey(s string) string {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }

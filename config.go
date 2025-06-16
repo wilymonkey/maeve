@@ -8,7 +8,7 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-type Config struct {
+type MaeveConfig struct {
 	Name        string   `yaml:"Name"`
 	BackupDir   string   `yaml:"BackupDir"`
 	MaxBackups  int      `yaml:"MaxBackups"`
@@ -16,7 +16,7 @@ type Config struct {
 	SourceDirs  []string `yaml:"SourceDirs"`
 }
 
-var Cfg Config
+var Config MaeveConfig
 
 // Reads the config file and makes it available globally.
 func ReadConfig() error {
@@ -42,16 +42,16 @@ func ReadConfig() error {
 		}
 	}
 
-	err = yaml.Unmarshal(data, &Cfg)
+	err = yaml.Unmarshal(data, &Config)
 	if err != nil {
 		return fmt.Errorf("unable to parse ⇒  %w", err)
 	}
 
-	if Cfg.BackupDir == "" {
+	if Config.BackupDir == "" {
 		return fmt.Errorf("BackupDir not specified")
 	}
-	if Cfg.MaxBackups < 1 {
-		return fmt.Errorf("MaxBackups of %d is not valid", Cfg.MaxBackups)
+	if Config.MaxBackups < 1 {
+		return fmt.Errorf("MaxBackups of %d is not valid", Config.MaxBackups)
 	}
 
 	return nil
@@ -70,7 +70,7 @@ func DefaultConfig(configPath string) error {
 	}
 	backupDir := filepath.Join(filepath.Dir(exePath), "backups")
 
-	var config = Config{
+	var config = MaeveConfig{
 		Name:        hostname,
 		BackupDir:   backupDir,
 		MaxBackups:  5,
@@ -94,10 +94,49 @@ func DefaultConfig(configPath string) error {
 	return nil
 }
 
-func NodeDir(nodeName string) string {
-	return filepath.Join(Cfg.BackupDir, nodeName)
+func (c *MaeveConfig) HashDir() string {
+	return filepath.Join(c.BackupDir, "hashes")
 }
 
-func NodeDirLatest(nodeName string) string {
-	return filepath.Join(NodeDir(nodeName), "latest")
+func (c *MaeveConfig) SelfDir() string {
+	return filepath.Join(c.BackupDir, "hardlinks")
+}
+
+func (c *MaeveConfig) NodeDir(nodeName string) string {
+	return filepath.Join(c.BackupDir, "backups")
+}
+
+func (c *MaeveConfig) NodeDirTemp(nodeName string) string {
+	return filepath.Join(c.NodeDir(nodeName), "temp")
+}
+
+// Gets the latest snapshot in a given node.
+// CAUTION: Deletes files (not directories) found in the given node.
+func (c *MaeveConfig) NodeDirLatest(nodeName string) (string, error) {
+	baseDir := c.NodeDir(nodeName)
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("unable to read %s directory ⇒  %w", nodeName, err)
+	}
+	if len(entries) == 0 {
+		return "", os.ErrNotExist
+	}
+
+	var latest os.DirEntry
+	for _, dir := range entries {
+		if dir.Name() > latest.Name() {
+			latest = dir
+		}
+	}
+	latestPath := filepath.Join(baseDir, latest.Name())
+
+	if !latest.IsDir() {
+		if err := os.RemoveAll(latestPath); err != nil {
+			return "", fmt.Errorf("unable to delete problem file found in %s directory ⇒  %w", nodeName, err)
+		}
+		// Keep deleting offending files until a dir is returned.
+		return c.NodeDirLatest(nodeName)
+	}
+
+	return filepath.Join(latestPath), nil
 }
