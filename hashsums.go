@@ -129,9 +129,8 @@ func hashFile(path string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func WriteFileHashes(fileHashes []FileHash, key string) error {
-	path := filepath.Join(Config.HashDir(), toShortKey(key))
-	f, err := os.Create(path)
+func WriteFileHashes(fileHashes []FileHash, dir string) error {
+	f, err := os.Create(Config.HashFile(dir))
 	if err != nil {
 		return fmt.Errorf("unable to open hash file ⇒  %w", err)
 	}
@@ -140,9 +139,8 @@ func WriteFileHashes(fileHashes []FileHash, key string) error {
 	return gob.NewEncoder(f).Encode(fileHashes)
 }
 
-func ReadFileHashes(key string) ([]FileHash, error) {
-	path := filepath.Join(Config.HashDir(), toShortKey(key))
-	f, err := os.Open(path)
+func ReadFileHashes(dir string) ([]FileHash, error) {
+	f, err := os.Open(Config.HashFile(dir))
 	if err != nil {
 		return nil, err
 	}

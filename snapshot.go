@@ -48,7 +48,7 @@ func NewSnapshot(source, target string) error {
 		return fmt.Errorf("deleting %s ⇒  %w", target, err)
 	}
 
-	sem := NewSemaphore(20)
+	sem := ScalingSemaphore(20)
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
@@ -151,14 +151,6 @@ func NewSnapshot(source, target string) error {
 	return nil
 }
 
-func newDir(filePath string) error {
-	dirPath := filepath.Dir(filePath)
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		return fmt.Errorf("unable to create parent dir %s ⇒  %v", dirPath, err)
-	}
-	return nil
-}
-
 func shouldReplace(source, target string) (bool, error) {
 	sourceInfo, err := os.Stat(source)
 	if err != nil {
@@ -174,7 +166,7 @@ func shouldReplace(source, target string) (bool, error) {
 
 func trimSnapshots(nodeName string) error {
 	// Increased by 1 to ignore the "latest" folder.
-	maxBackups := Cfg.MaxBackups + 1
+	maxBackups := Config.MaxBackups + 1
 	dir := NodeDir(nodeName)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
