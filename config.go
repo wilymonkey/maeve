@@ -18,6 +18,59 @@ type MaeveConfig struct {
 	SourceDirs    []string `yaml:"SourceDirs"`
 }
 
+// Hash file path for a given directory.
+func (c *MaeveConfig) MasterHashFile(node string) string {
+	return filepath.Join(c.NodeDir(node), "maeve_hashmap.gob")
+}
+
+// Hash file path for a given directory.
+func (c *MaeveConfig) HashFile(dir string) string {
+	return filepath.Join(dir, "maeve_hashes.gob")
+}
+
+func (c *MaeveConfig) SelfDir() string {
+	return filepath.Join(c.BackupDir, "my_files")
+}
+
+func (c *MaeveConfig) NodeDir(node string) string {
+	return filepath.Join(c.BackupDir, "backups", node)
+}
+
+func (c *MaeveConfig) NodeDirTemp(node string) string {
+	return filepath.Join(c.NodeDir(node), "temp")
+}
+
+// Gets the latest snapshot in a given node.
+// CAUTION: Deletes files (not directories) found in the given node.
+func (c *MaeveConfig) NodeDirLatest(node string) (string, error) {
+	baseDir := c.NodeDir(node)
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("unable to read %s directory ⇒  %w", node, err)
+	}
+	if len(entries) == 0 {
+		return "", os.ErrNotExist
+	}
+
+	var latest os.DirEntry
+	for _, dir := range entries {
+		if dir.Name() > latest.Name() {
+			latest = dir
+		}
+	}
+	latestPath := filepath.Join(baseDir, latest.Name())
+
+	if !latest.IsDir() {
+		if err := os.RemoveAll(latestPath); err != nil {
+			return "", fmt.Errorf("unable to delete problem file found in %s directory ⇒  %w", node, err)
+		}
+		// Keep deleting offending files until a dir is returned.
+		return c.NodeDirLatest(node)
+	}
+
+	return filepath.Join(latestPath), nil
+}
+
 var Config MaeveConfig
 
 // Reads the config file and makes it available globally.
@@ -137,55 +190,26 @@ func findSSHKeys() (string, error) {
 	return key, err
 }
 
-// Hash file path for a given directory.
-func (c *MaeveConfig) MasterHashFile(node string) string {
-	return filepath.Join(c.NodeDir(node), "maeve_hashmap.gob")
+type RelativeNodePath struct {
+	path string
 }
 
-// Hash file path for a given directory.
-func (c *MaeveConfig) HashFile(dir string) string {
-	return filepath.Join(dir, "maeve_hashes.gob")
+func (r *RelativeNodePath) toPath(node string) string {
+	return filepath.Join(Config.NodeDir(node), r.path)
 }
 
-func (c *MaeveConfig) SelfDir() string {
-	return filepath.Join(c.BackupDir, "hardlinks")
+type RelativeSnapshotPath struct {
+	path string
 }
 
-func (c *MaeveConfig) NodeDir(node string) string {
-	return filepath.Join(c.BackupDir, "backups")
+func (r *RelativeSnapshotPath) toPath(node, snapshot string) string {
+	return filepath.Join(Config.NodeDir(node), snapshot, r.path)
 }
 
-func (c *MaeveConfig) NodeDirTemp(node string) string {
-	return filepath.Join(c.NodeDir(node), "temp")
+func (r *RelativeSnapshotPath) toNode(snapshot string) RelativeNodePath {
+	return RelativeNodePath{path: filepath.Join(snapshot, r.path)}
 }
 
-// Gets the latest snapshot in a given node.
-// CAUTION: Deletes files (not directories) found in the given node.
-func (c *MaeveConfig) NodeDirLatest(node string) (string, error) {
-	baseDir := c.NodeDir(node)
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		return "", fmt.Errorf("unable to read %s directory ⇒  %w", node, err)
-	}
-	if len(entries) == 0 {
-		return "", os.ErrNotExist
-	}
-
-	var latest os.DirEntry
-	for _, dir := range entries {
-		if dir.Name() > latest.Name() {
-			latest = dir
-		}
-	}
-	latestPath := filepath.Join(baseDir, latest.Name())
-
-	if !latest.IsDir() {
-		if err := os.RemoveAll(latestPath); err != nil {
-			return "", fmt.Errorf("unable to delete problem file found in %s directory ⇒  %w", node, err)
-		}
-		// Keep deleting offending files until a dir is returned.
-		return c.NodeDirLatest(node)
-	}
-
-	return filepath.Join(latestPath), nil
+func (r *RelativeSnapshotPath) toTempPath(node string) string {
+	return filepath.Join(Config.NodeDirTemp(node), r.path)
 }

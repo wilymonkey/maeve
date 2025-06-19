@@ -14,12 +14,13 @@ import (
 )
 
 type FileHash struct {
-	relPath string
-	hash    [32]byte
+	path RelativeSnapshotPath
+	hash [32]byte
 }
 
-func NewSHA3Sums(source string) ([]FileHash, error) {
+func NewFileHash(source string) ([]FileHash, error) {
 	sem := NewScalingSemaphore(20)
+	defer sem.Close()
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
@@ -76,7 +77,7 @@ func NewSHA3Sums(source string) ([]FileHash, error) {
 					errChan <- err
 					return
 				}
-				hashChan <- FileHash{relPath: relPath, hash: hash}
+				hashChan <- FileHash{path: RelativeSnapshotPath{path: relPath}, hash: hash}
 				return
 			}
 
@@ -127,7 +128,8 @@ func hashFile(path string) ([32]byte, error) {
 		hash.Write(buf[:n])
 	}
 
-	return [32]byte(hash.Sum(nil)), nil
+	copy(result[:], hash.Sum(nil))
+	return result, nil
 }
 
 func WriteFileHashes(fileHashes []FileHash, dir string) error {
@@ -159,26 +161,27 @@ var ErrInvalidMH = errors.New("invalid MasterHash file")
 type MasterHash struct {
 	dirs map[string]struct{}
 	// hash as key, relPath as value
-	hashes map[[32]byte]string
+	hashes map[[32]byte]RelativeNodePath
 }
 
 // Checks folders of a given node to see if the MasterHash contains those
 // dirs as well (i.e. they have been added to the hashes map).
-func (mh *MasterHash) validate(node string) (bool, error) {
+// Only returns a value if it's invalid.
+func (mh *MasterHash) validate(node string) error {
 	entries, err := os.ReadDir(Config.NodeDir(node))
 	if err != nil {
-		return false, fmt.Errorf("read entries in node %s ⇒  %w", node, err)
+		return fmt.Errorf("read entries in node %s ⇒  %w", node, err)
 	}
 
 	for _, e := range entries {
 		if e.IsDir() {
 			if _, exists := mh.dirs[e.Name()]; !exists {
-				return false, nil
+				return ErrInvalidMH
 			}
 		}
 	}
 
-	return true, nil
+	return nil
 }
 
 // Retrieves the MasterHash of a given node.
@@ -187,32 +190,21 @@ func GetMasterHash(node string) (*MasterHash, error) {
 
 	f, err := os.Open(Config.MasterHashFile(node))
 	if err != nil {
-		if err == os.ErrNotExist {
-			masterHash, err = NewMasterHash(node)
-			if err != nil {
-				return nil, fmt.Errorf("missing file; create MasterHash ⇒  %w", err)
-			}
-		}
-		return nil, err
+		return nil, fmt.Errorf("open MasterHash file ⇒  %w", err)
 	}
 	defer f.Close()
 
 	if err := gob.NewDecoder(f).Decode(masterHash); err != nil {
 		return nil, fmt.Errorf("decode MasterHash file ⇒  %w", err)
 	}
-	isValid, err := masterHash.validate(node)
-	if err != nil {
-		return nil, fmt.Errorf("validate MasterHash")
-	}
-	if !isValid {
-		masterHash, err = NewMasterHash(node)
-		if err != nil {
-			return nil, fmt.Errorf("invalid hashes; create MasterHash ⇒  %w", err)
-		}
+	if err := masterHash.validate(node); err != nil {
+		return nil, fmt.Errorf("validate MasterHash ⇒  %w", err)
 	}
 
 	return masterHash, nil
 }
+
+var ErrMissingHashFile = errors.New("hash file is missing")
 
 // Creates a MasterHash file for a given node.
 func NewMasterHash(node string) (*MasterHash, error) {
@@ -224,15 +216,18 @@ func NewMasterHash(node string) (*MasterHash, error) {
 	}
 
 	dirs := make(map[string]struct{})
-	hashes := make(map[[32]byte]string)
+	hashes := make(map[[32]byte]RelativeNodePath)
 	for _, e := range entries {
 		if e.IsDir() {
 			hFile, err := ReadFileHashes(filepath.Join(baseDir, e.Name()))
 			if err != nil {
+				if err == os.ErrNotExist {
+					err = ErrMissingHashFile
+				}
 				return nil, fmt.Errorf("read hash file in snapshot %s ⇒  %w", e.Name(), err)
 			}
 			for _, h := range hFile {
-				hashes[h.hash] = h.relPath
+				hashes[h.hash] = h.path.toNode(e.Name())
 			}
 			dirs[e.Name()] = struct{}{}
 		}

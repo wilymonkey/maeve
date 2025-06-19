@@ -1,40 +1,38 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 // Pulls changes from Cfg.SourceDirs and writes hashes to file.
 //
 // CAUTION: Deletes the Cfg.SelfDir directory.
 func LocalPull() error {
-	localDir := Config.SelfDir()
+	selfDir := Config.SelfDir()
 
-	if err := os.RemoveAll(localDir); err != nil {
-		return fmt.Errorf("deleting local latest directory ⇒  %w", err)
+	if err := os.RemoveAll(selfDir); err != nil {
+		return fmt.Errorf("delete self dir ⇒  %w", err)
 	}
 
-	if err := os.MkdirAll(localDir, 0755); err != nil {
-		return fmt.Errorf("creating backup directory ⇒  %w", err)
+	if err := os.MkdirAll(selfDir, 0755); err != nil {
+		return fmt.Errorf("create self dir ⇒  %w", err)
 	}
 
 	for _, srcDir := range Config.SourceDirs {
-		destDir := filepath.Join(localDir, filepath.Base(srcDir))
-		if err := NewSnapshot(srcDir, destDir); err != nil {
-			return fmt.Errorf("unable to clone %s to %s ⇒  %w", srcDir, destDir, err)
+		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
+		if err := HardlinkDir(srcDir, destDir); err != nil {
+			return fmt.Errorf("hardlink dir %s to %s ⇒  %w", srcDir, destDir, err)
 		}
 	}
 
-	hashes, err := NewSHA3Sums(localDir)
+	hashes, err := NewFileHash(selfDir)
 	if err != nil {
-		return fmt.Errorf("unable to create hashsums for local files ⇒  %w", err)
+		return fmt.Errorf("create hashsums for self dir⇒  %w", err)
 	}
-	if err := WriteFileHashes(hashes, localDir); err != nil {
-		return fmt.Errorf("unable to write hashsums to file ⇒  %w", err)
+	if err := WriteFileHashes(hashes, selfDir); err != nil {
+		return fmt.Errorf("write hashsums to file ⇒  %w", err)
 	}
 
 	return nil

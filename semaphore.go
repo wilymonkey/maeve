@@ -27,3 +27,7 @@ func (s *Semaphore) Acquire() {
 func (s *Semaphore) Release() {
 	<-s.permits
 }
+
+func (s *Semaphore) Close() {
+	close(s.permits)
+}

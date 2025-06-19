@@ -25,7 +25,6 @@ func main() {
 
 	// Hidden, internal use only
 	flagHashes := fs.String("latest-hashes", "", "")
-	flagSnapshot := fs.String("snapshot", "", "")
 	flagNodePath := fs.String("node-path", "", "")
 
 	fs.Parse(os.Args[1:])
@@ -35,12 +34,6 @@ func main() {
 	}
 
 	switch {
-
-	case *flagSnapshot != "":
-		if err := Snapshot(*flagSnapshot); err != nil {
-			log.Fatalf("Failed to create snapshot ⇒  %v", err)
-		}
-		return
 
 	case *flagNodePath != "":
 		nodePath(*flagNodePath)
@@ -83,10 +76,6 @@ func backupAll() {
 		log.Fatalf("Failed to clone directories ⇒  %v", err)
 	}
 	fmt.Println("Local directories cloned with hardlinks")
-
-	if err := Snapshot(Config.Name); err != nil {
-		log.Fatalf("Failed to snapshot after local pull ⇒  %v", err)
-	}
 
 	for _, nodeAddress := range Config.RemoteNodes {
 		if err := LocalPush(nodeAddress); err != nil {
