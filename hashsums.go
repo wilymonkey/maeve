@@ -183,6 +183,10 @@ func (mh *MasterHash) validate(node string) (bool, error) {
 // Retrieves the MasterHash of a given node, creating it if
 // it doesn't exist or is invalid.
 func GetMasterHash(node string) (*MasterHash, error) {
+
+	// TODO: Handle the case where there is no master hash inside that func.
+	// Either if the base folder isn't there or if there are no snapshots to
+	// to create a MasterHash for.
 	var mh *MasterHash
 
 	f, err := os.Open(Config.MasterHashFile(node))

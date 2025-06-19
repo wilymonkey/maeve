@@ -99,9 +99,5 @@ func backupAll() {
 }
 
 func nodePath(dir string) {
-	nodeDir := NodeDirLatest(*flagPath)
-	if err := os.MkdirAll(nodeDir, 0755); err != nil {
-		log.Fatalf("Failed to create node folder ⇒  %v", err)
-	}
-	fmt.Print(nodeDir)
+	// TODO: Are we keeping this?
 }

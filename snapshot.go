@@ -12,7 +12,7 @@ import (
 
 // Creates a snapshot and hashsum file of a given node. Trims snapshots at the end.
 func Snapshot(nodeName string) error {
-	source := NodeDirLatest(nodeName)
+	source, err := Config.NodeDirLatest(nodeName)
 	sourceDir, err := os.Open(source)
 	if err != nil {
 		return err
@@ -164,13 +164,13 @@ func shouldReplace(source, target string) (bool, error) {
 	return sourceInfo.ModTime().After(targetInfo.ModTime()), nil
 }
 
-func trimSnapshots(nodeName string) error {
+func trimSnapshots(node string) error {
 	// Increased by 1 to ignore the "latest" folder.
 	maxBackups := Config.MaxBackups
-	dir := NodeDir(nodeName)
+	dir := NodeDir(node)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("unable to read entries in node %s ⇒  %w", nodeName, err)
+		return fmt.Errorf("unable to read entries in node %s ⇒  %w", node, err)
 	}
 
 	if len(entries) <= maxBackups {
@@ -188,4 +188,48 @@ func trimSnapshots(nodeName string) error {
 		}
 	}
 	return nil
+}
+
+func LinkFilesFromSnapshots(node string, sourceHash []FileHash) ([]FileHash, error) {
+	localMaster, err := GetMasterHash(node)
+	if err != nil {
+		return nil, fmt.Errorf("get MasterHash ⇒  %w", err)
+	}
+
+	sem := NewScalingSemaphore(20)
+	var wg sync.WaitGroup
+
+	// TODO: Stop all linking when 1 error is encountered.
+
+	missingChan := make(chan FileHash, 100)
+	var missingMU sync.Mutex
+	var missing []FileHash
+	go func() {
+		missingMU.Lock()
+		for hash := range missingChan {
+			missing = append(missing, hash)
+		}
+		missingMU.Unlock()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		sem.Acquire()
+		defer sem.Release()
+
+		for _, s := range sourceHash {
+			if lPath, exists := localMaster.hashes[s.hash]; exists {
+				// TODO: Link local path with source path.
+			} else {
+				missingChan <- s
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(missingChan)
+
+	return missing, nil
 }

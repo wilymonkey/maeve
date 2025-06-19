@@ -33,7 +33,7 @@ func mirrorDir(localDir, remoteHost, remoteDir string) {
 // getLocalFileList retrieves files in directory
 func getLocalFileList(dir string, pos uint) FileList {
 	var files []FileInfo
-	filepath.WalkDir(dir, func(path string, info os.FileInfo, err error) error {
+	filepath.WalkDir(dir, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
