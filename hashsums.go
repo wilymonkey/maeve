@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"golang.org/x/crypto/sha3"
+	"github.com/zeebo/blake3"
 )
 
 type FileHash struct {
@@ -112,10 +112,10 @@ func hashFile(path string) ([32]byte, error) {
 	}
 	defer file.Close()
 
-	hash := sha3.NewShake256()
+	hash := blake3.New()
 	reader := bufio.NewReader(file)
-	// 64kb reads at one time.
-	buf := make([]byte, 64*1024)
+
+	buf := make([]byte, 64*1024) // 64kb reads at one time.
 	for {
 		n, err := reader.Read(buf)
 		if err != nil && err != io.EOF {
@@ -127,8 +127,7 @@ func hashFile(path string) ([32]byte, error) {
 		hash.Write(buf[:n])
 	}
 
-	hash.Read(result[:])
-	return result, nil
+	return [32]byte(hash.Sum(nil)), nil
 }
 
 func WriteFileHashes(fileHashes []FileHash, dir string) error {
@@ -155,6 +154,8 @@ func ReadFileHashes(dir string) ([]FileHash, error) {
 	return hashes, nil
 }
 
+var ErrInvalidMH = errors.New("invalid MasterHash file")
+
 type MasterHash struct {
 	dirs map[string]struct{}
 	// hash as key, relPath as value
@@ -180,19 +181,14 @@ func (mh *MasterHash) validate(node string) (bool, error) {
 	return true, nil
 }
 
-// Retrieves the MasterHash of a given node, creating it if
-// it doesn't exist or is invalid.
+// Retrieves the MasterHash of a given node.
 func GetMasterHash(node string) (*MasterHash, error) {
-
-	// TODO: Handle the case where there is no master hash inside that func.
-	// Either if the base folder isn't there or if there are no snapshots to
-	// to create a MasterHash for.
-	var mh *MasterHash
+	var masterHash *MasterHash
 
 	f, err := os.Open(Config.MasterHashFile(node))
 	if err != nil {
 		if err == os.ErrNotExist {
-			mh, err = newMasterHash(node)
+			masterHash, err = NewMasterHash(node)
 			if err != nil {
 				return nil, fmt.Errorf("missing file; create MasterHash ⇒  %w", err)
 			}
@@ -201,25 +197,25 @@ func GetMasterHash(node string) (*MasterHash, error) {
 	}
 	defer f.Close()
 
-	if err := gob.NewDecoder(f).Decode(mh); err != nil {
+	if err := gob.NewDecoder(f).Decode(masterHash); err != nil {
 		return nil, fmt.Errorf("decode MasterHash file ⇒  %w", err)
 	}
-	isValid, err := mh.validate(node)
+	isValid, err := masterHash.validate(node)
 	if err != nil {
 		return nil, fmt.Errorf("validate MasterHash")
 	}
 	if !isValid {
-		mh, err = newMasterHash(node)
+		masterHash, err = NewMasterHash(node)
 		if err != nil {
 			return nil, fmt.Errorf("invalid hashes; create MasterHash ⇒  %w", err)
 		}
 	}
 
-	return mh, nil
+	return masterHash, nil
 }
 
 // Creates a MasterHash file for a given node.
-func newMasterHash(node string) (*MasterHash, error) {
+func NewMasterHash(node string) (*MasterHash, error) {
 	baseDir := Config.NodeDir(node)
 
 	entries, err := os.ReadDir(baseDir)
