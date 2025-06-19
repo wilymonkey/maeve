@@ -138,6 +138,11 @@ func findSSHKeys() (string, error) {
 }
 
 // Hash file path for a given directory.
+func (c *MaeveConfig) MasterHashFile(node string) string {
+	return filepath.Join(c.NodeDir(node), "maeve_hashmap.gob")
+}
+
+// Hash file path for a given directory.
 func (c *MaeveConfig) HashFile(dir string) string {
 	return filepath.Join(dir, "maeve_hashes.gob")
 }

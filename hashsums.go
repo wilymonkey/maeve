@@ -3,10 +3,8 @@ package main
 import (
 	"bufio"
 	"encoding/gob"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,9 +13,15 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+type MasterHash struct {
+	dirs []string
+	// hash as key, relPath as value
+	hashes map[[32]byte]string
+}
+
 type FileHash struct {
 	relPath string
-	hash    string
+	hash    [32]byte
 }
 
 func NewSHA3Sums(source string) ([]FileHash, error) {
@@ -105,10 +109,12 @@ func NewSHA3Sums(source string) ([]FileHash, error) {
 }
 
 // Does a rolling hash on a file.
-func hashFile(path string) (string, error) {
+func hashFile(path string) ([32]byte, error) {
+	var result [32]byte
+
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return result, err
 	}
 	defer file.Close()
 
@@ -117,16 +123,18 @@ func hashFile(path string) (string, error) {
 	// 64kb reads at one time.
 	buf := make([]byte, 64*1024)
 	for {
-		reader_len, err := reader.Read(buf)
+		n, err := reader.Read(buf)
 		if err != nil && err != io.EOF {
-			return "", err
+			return result, err
 		}
-		if reader_len == 0 {
+		if n == 0 {
 			break
 		}
-		hash.Write(buf[:reader_len])
+		hash.Write(buf[:n])
 	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
+
+	hash.Read(result[:])
+	return result, nil
 }
 
 func WriteFileHashes(fileHashes []FileHash, dir string) error {
@@ -151,10 +159,4 @@ func ReadFileHashes(dir string) ([]FileHash, error) {
 		return nil, fmt.Errorf("unable to decode hash file ⇒  %w", err)
 	}
 	return hashes, nil
-}
-
-func toShortKey(s string) string {
-	h := fnv.New64a()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }
