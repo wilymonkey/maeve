@@ -48,7 +48,7 @@ func NewSnapshot(source, target string) error {
 		return fmt.Errorf("deleting %s ⇒  %w", target, err)
 	}
 
-	sem := ScalingSemaphore(20)
+	sem := NewScalingSemaphore(20)
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
@@ -166,7 +166,7 @@ func shouldReplace(source, target string) (bool, error) {
 
 func trimSnapshots(nodeName string) error {
 	// Increased by 1 to ignore the "latest" folder.
-	maxBackups := Config.MaxBackups + 1
+	maxBackups := Config.MaxBackups
 	dir := NodeDir(nodeName)
 	entries, err := os.ReadDir(dir)
 	if err != nil {

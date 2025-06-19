@@ -6,10 +6,15 @@ type Semaphore struct {
 	permits chan struct{}
 }
 
-// Creates a Semaphore with permits that scale with cpu number.
-func ScalingSemaphore(n int) *Semaphore {
+// Creates a Semaphore with n permits that scale with cpu number.
+func NewScalingSemaphore(n int) *Semaphore {
+	return NewSemaphore(runtime.NumCPU() * n)
+}
+
+// Creates a Semaphore with n permits.
+func NewSemaphore(n int) *Semaphore {
 	return &Semaphore{
-		permits: make(chan struct{}, runtime.NumCPU()*n),
+		permits: make(chan struct{}, n),
 	}
 }
 

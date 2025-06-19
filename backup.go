@@ -92,7 +92,7 @@ func LinkSnapshotFiles(node string, source []FileHash) ([]FileHash, error) {
 		localSet[f.hash] = f
 	}
 
-	sem := ScalingSemaphore(20)
+	sem := NewScalingSemaphore(20)
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
