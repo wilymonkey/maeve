@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/zeebo/blake3"
 )
@@ -18,34 +19,23 @@ type FileHash struct {
 	hash [32]byte
 }
 
-func NewFileHash(source string) ([]FileHash, error) {
+func NewDirFileHash(source string) ([]FileHash, error) {
 	sem := NewScalingSemaphore(20)
 	defer sem.Close()
-	var wg sync.WaitGroup
 
-	errChan := make(chan error, 100)
-	var mu sync.Mutex
-	var allErrors []error
-	go func() {
-		for err := range errChan {
-			mu.Lock()
-			allErrors = append(allErrors, err)
-			mu.Unlock()
-		}
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eGrp, ctx := errgroup.WithContext(ctx)
 
 	hashChan := make(chan FileHash, 100)
-	var hashMU sync.Mutex
 	var hashsums []FileHash
 	go func() {
-		hashMU.Lock()
 		for hash := range hashChan {
 			hashsums = append(hashsums, hash)
 		}
-		hashMU.Unlock()
 	}()
 
-	err := filepath.WalkDir(source, func(path string, dir os.DirEntry, err error) error {
+	err := filepath.WalkDir(source, func(filePath string, dir os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -53,52 +43,45 @@ func NewFileHash(source string) ([]FileHash, error) {
 			return nil
 		}
 
-		wg.Add(1)
-		go func(sourcePath, filePath string, dir os.DirEntry) {
-			defer wg.Done()
-
+		eGrp.Go(func() error {
 			sem.Acquire()
 			defer sem.Release()
 
-			dInfo, err := dir.Info()
+			if info, err := dir.Info(); err != nil {
+				return err
+			} else if !info.Mode().IsRegular() {
+				return nil
+			}
+
+			hash, err := hashFile(filePath)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 
-			if dInfo.Mode().IsRegular() {
-				hash, err := hashFile(filePath)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				relPath, err := filepath.Rel(sourcePath, filePath)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				hashChan <- FileHash{path: RelativeSnapshotPath{path: relPath}, hash: hash}
-				return
+			relPath, err := filepath.Rel(source, filePath)
+			if err != nil {
+				return err
 			}
 
-			// Skip other file types (e.g., devices, sockets, symlinks)
-
-		}(source, path, dir)
+			hashChan <- FileHash{path: RelativeSnapshotPath{path: relPath}, hash: hash}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				return nil
+			}
+		})
 
 		return nil
 	})
 
-	wg.Wait()
-	close(errChan)
-	close(hashChan)
-
 	if err != nil {
-		allErrors = append(allErrors, err)
+		return nil, fmt.Errorf("walk dir %s ⇒  %w", source, err)
 	}
-
-	if len(allErrors) > 0 {
-		return nil, errors.Join(allErrors...)
+	if err := eGrp.Wait(); err != nil {
+		return nil, fmt.Errorf("hardlink files ⇒  %w", err)
 	}
+	close(hashChan)
 
 	return hashsums, nil
 }

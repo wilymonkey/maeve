@@ -23,7 +23,6 @@ func HardlinkDir(source, target string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	eGrp, ctx := errgroup.WithContext(ctx)
 
 	err := filepath.WalkDir(source, func(sourcePath string, dir os.DirEntry, err error) error {
@@ -60,7 +59,6 @@ func HardlinkDir(source, target string) error {
 	if err != nil {
 		return fmt.Errorf("walk dir %s ⇒  %w", source, err)
 	}
-
 	if err := eGrp.Wait(); err != nil {
 		return fmt.Errorf("hardlink files ⇒  %w", err)
 	}
@@ -96,7 +94,8 @@ func TrimSnapshots(node string) error {
 func LinkFilesFromSnapshots(node string, remoteHash []FileHash) ([]FileHash, error) {
 	localMaster, err := GetMasterHash(node)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrInvalidMH) {
+		switch {
+		case errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrInvalidMH):
 			localMaster, err = NewMasterHash(node)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
@@ -104,44 +103,51 @@ func LinkFilesFromSnapshots(node string, remoteHash []FileHash) ([]FileHash, err
 				}
 				return nil, fmt.Errorf("create MasterHash ⇒  %w", err)
 			}
+		default:
+			return nil, fmt.Errorf("get MasterHash ⇒  %w", err)
 		}
-		return nil, fmt.Errorf("get MasterHash ⇒  %w", err)
 	}
 
 	sem := NewScalingSemaphore(20)
 	defer sem.Close()
-	var wg sync.WaitGroup
 
-	// TODO: Stop all linking when 1 error is encountered.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eGrp, ctx := errgroup.WithContext(ctx)
 
 	missingChan := make(chan FileHash, 100)
-	var missingMU sync.Mutex
 	var missing []FileHash
 	go func() {
-		missingMU.Lock()
 		for hash := range missingChan {
 			missing = append(missing, hash)
 		}
-		missingMU.Unlock()
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	eGrp.Go(func() error {
 		sem.Acquire()
 		defer sem.Release()
-
 		for _, r := range remoteHash {
 			if lPath, exists := localMaster.hashes[r.hash]; exists {
-				err := hardlink(lPath.toPath(node), r.path.toTempPath(node))
+				sourcePath := lPath.toPath(node)
+				targetPath := r.path.toTempPath(node)
+				if err := hardlink(sourcePath, targetPath); err != nil {
+					return err
+				}
 			} else {
 				missingChan <- r
 			}
 		}
-	}()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	})
 
-	wg.Wait()
+	if err := eGrp.Wait(); err != nil {
+		return nil, fmt.Errorf("hardlink snapshot files ⇒  %w", err)
+	}
 	close(missingChan)
 
 	return missing, nil

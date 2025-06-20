@@ -27,7 +27,7 @@ func LocalPull() error {
 		}
 	}
 
-	hashes, err := NewFileHash(selfDir)
+	hashes, err := NewDirFileHash(selfDir)
 	if err != nil {
 		return fmt.Errorf("create hashsums for self dir⇒  %w", err)
 	}
