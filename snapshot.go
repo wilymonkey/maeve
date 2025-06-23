@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
+
+	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 // Creates hardlinks for all files from source to target.
@@ -18,7 +21,7 @@ func HardlinkDir(source, target string) error {
 		return fmt.Errorf("delete target dir %s ⇒  %w", target, err)
 	}
 
-	sem := NewScalingSemaphore(20)
+	sem := utils.NewScalingSemaphore(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -41,16 +44,16 @@ func HardlinkDir(source, target string) error {
 		targetPath := filepath.Join(target, relPath)
 
 		eGrp.Go(func() error {
+			sem.Acquire()
+			defer sem.Release()
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
+				return hardlink(sourcePath, targetPath)
 			}
 
-			sem.Acquire()
-			defer sem.Release()
-
-			return hardlink(sourcePath, targetPath)
 		})
 
 		return nil
@@ -67,8 +70,8 @@ func HardlinkDir(source, target string) error {
 }
 
 func TrimSnapshots(node string) error {
-	maxBackups := Config.MaxBackups
-	dir := Config.NodeDir(node)
+	maxBackups := cfg.Global.MaxBackups
+	dir := cfg.Global.NodeDir(node)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("unable to read entries in node %s ⇒  %w", node, err)
@@ -91,15 +94,15 @@ func TrimSnapshots(node string) error {
 	return nil
 }
 
-func LinkFilesFromSnapshots(node string, remoteHash []FileHash) ([]FileHash, error) {
-	localMaster, err := GetMasterHash(node)
+func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]hashsums.FileHash, error) {
+	localMaster, err := hashsums.GetMasterHash(node)
 	if err != nil {
 		switch {
-		case errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrInvalidMH):
-			localMaster, err = NewMasterHash(node)
+		case errors.Is(err, os.ErrNotExist) || errors.Is(err, hashsums.ErrInvalidMH):
+			localMaster, err = hashsums.NewMasterHash(node)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					return remoteHash, nil
+					return remoteHashes, nil
 				}
 				return nil, fmt.Errorf("create MasterHash ⇒  %w", err)
 			}
@@ -108,15 +111,15 @@ func LinkFilesFromSnapshots(node string, remoteHash []FileHash) ([]FileHash, err
 		}
 	}
 
-	sem := NewScalingSemaphore(20)
+	sem := utils.NewScalingSemaphore(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eGrp, ctx := errgroup.WithContext(ctx)
 
-	missingChan := make(chan FileHash, 100)
-	var missing []FileHash
+	missingChan := make(chan hashsums.FileHash, 100)
+	var missing []hashsums.FileHash
 	go func() {
 		for hash := range missingChan {
 			missing = append(missing, hash)
@@ -126,15 +129,15 @@ func LinkFilesFromSnapshots(node string, remoteHash []FileHash) ([]FileHash, err
 	eGrp.Go(func() error {
 		sem.Acquire()
 		defer sem.Release()
-		for _, r := range remoteHash {
-			if lPath, exists := localMaster.hashes[r.hash]; exists {
-				sourcePath := lPath.toPath(node)
-				targetPath := r.path.toTempPath(node)
+		for _, rHash := range remoteHashes {
+			if relPath := localMaster.Exists(rHash); relPath != nil {
+				sourcePath := relPath.Resolve(node)
+				targetPath := rHash.Path.ResolveTemp(node)
 				if err := hardlink(sourcePath, targetPath); err != nil {
 					return err
 				}
 			} else {
-				missingChan <- r
+				missingChan <- rHash
 			}
 		}
 		select {
@@ -171,9 +174,10 @@ func hardlink(sourcePath, targetPath string) error {
 	}
 
 	if os.IsNotExist(err) {
-		if err := newDir(targetPath); err != nil {
-			return fmt.Errorf("create base dir ⇒  %w", err)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return fmt.Errorf("create base dir ⇒  %v", err)
 		}
+
 		// Try to link the file again.
 		if err := os.Link(sourcePath, targetPath); err != nil {
 			return fmt.Errorf("create file link ⇒  %w", err)

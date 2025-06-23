@@ -1,4 +1,4 @@
-package main
+package cfg
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 )
+
+var Global MaeveConfig
 
 type MaeveConfig struct {
 	Name          string   `yaml:"Name"`
@@ -71,8 +73,6 @@ func (c *MaeveConfig) NodeDirLatest(node string) (string, error) {
 	return filepath.Join(latestPath), nil
 }
 
-var Config MaeveConfig
-
 // Reads the config file and makes it available globally.
 func ReadConfig() error {
 	userConfigDir, err := os.UserConfigDir()
@@ -97,16 +97,16 @@ func ReadConfig() error {
 		}
 	}
 
-	err = yaml.Unmarshal(data, &Config)
+	err = yaml.Unmarshal(data, &Global)
 	if err != nil {
 		return fmt.Errorf("unable to parse ⇒  %w", err)
 	}
 
-	if Config.BackupDir == "" {
+	if Global.BackupDir == "" {
 		return fmt.Errorf("BackupDir not specified")
 	}
-	if Config.MaxBackups < 1 {
-		return fmt.Errorf("MaxBackups of %d is not valid", Config.MaxBackups)
+	if Global.MaxBackups < 1 {
+		return fmt.Errorf("MaxBackups of %d is not valid", Global.MaxBackups)
 	}
 
 	return nil
@@ -116,27 +116,28 @@ func ReadConfig() error {
 func DefaultConfig(configPath string) error {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("unable to get hostname ⇒  %w", err)
+		return fmt.Errorf("get hostname ⇒  %w", err)
 	}
 
-	exePath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("unable to get current path ⇒  %w", err)
-	}
-	backupDir := filepath.Join(filepath.Dir(exePath), "backups")
-	sshKey, err := findSSHKeys()
-	if err != nil {
-		return fmt.Errorf("unable to find a private ssh key ⇒  %w", err)
-	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("unable to find home directory ⇒  %w", err)
+		return fmt.Errorf("get home dir ⇒  %w", err)
 	}
-	sshKnownHosts := filepath.Join(homeDir, ".ssh", "known_hosts")
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	sshKey, err := findSSHKeys(sshDir)
+	if err != nil {
+		return fmt.Errorf("find a private ssh key ⇒  %w", err)
+	}
+	sshKnownHosts := filepath.Join(sshDir, "known_hosts")
+	_, err = os.Stat(sshKnownHosts)
+	if err != nil {
+		return fmt.Errorf("find a ssh known hosts ⇒  %w", err)
+	}
 
 	var config = MaeveConfig{
 		Name:          hostname,
-		BackupDir:     backupDir,
+		BackupDir:     filepath.Join(homeDir, "Maeve"),
 		SSHKey:        sshKey,
 		SSHKnownHosts: sshKnownHosts,
 		MaxBackups:    5,
@@ -146,11 +147,11 @@ func DefaultConfig(configPath string) error {
 
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("unable to convert struct to yaml ⇒  %w", err)
+		return fmt.Errorf("convert config to yaml ⇒  %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return fmt.Errorf("unable to create maeve config dir ⇒  %v", err)
+		return fmt.Errorf("create config dir ⇒  %v", err)
 	}
 
 	if err := os.WriteFile(configPath, data, 0755); err != nil {
@@ -160,23 +161,20 @@ func DefaultConfig(configPath string) error {
 	return nil
 }
 
-func findSSHKeys() (string, error) {
+func findSSHKeys(sshDir string) (string, error) {
 	var key string
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
 
-	err = filepath.WalkDir(filepath.Join(homeDir, ".ssh"), func(path string, dir os.DirEntry, err error) error {
+	err := filepath.WalkDir(sshDir, func(path string, dir os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if isPub, err := filepath.Match("*.pub", dir.Name()); err == nil {
-			if isID, err := filepath.Match("id_*", dir.Name()); err == nil {
-				if !dir.IsDir() && !isPub && isID {
+		name := dir.Name()
+		if !dir.IsDir() {
+			if isID, _ := filepath.Match("id_*", name); isID {
+				if isPub, _ := filepath.Match("*.pub", name); !isPub {
 					key = path
-					return filepath.SkipDir // Stop walking after finding the first private key
+					return filepath.SkipDir
 				}
 			}
 		}
@@ -188,28 +186,4 @@ func findSSHKeys() (string, error) {
 		return "", os.ErrNotExist
 	}
 	return key, err
-}
-
-type RelativeNodePath struct {
-	path string
-}
-
-func (r *RelativeNodePath) toPath(node string) string {
-	return filepath.Join(Config.NodeDir(node), r.path)
-}
-
-type RelativeSnapshotPath struct {
-	path string
-}
-
-func (r *RelativeSnapshotPath) toPath(node, snapshot string) string {
-	return filepath.Join(Config.NodeDir(node), snapshot, r.path)
-}
-
-func (r *RelativeSnapshotPath) toNode(snapshot string) RelativeNodePath {
-	return RelativeNodePath{path: filepath.Join(snapshot, r.path)}
-}
-
-func (r *RelativeSnapshotPath) toTempPath(node string) string {
-	return filepath.Join(Config.NodeDirTemp(node), r.path)
 }

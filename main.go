@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/tui"
 )
 
 func main() {
@@ -29,18 +33,17 @@ func main() {
 
 	fs.Parse(os.Args[1:])
 
-	if err := ReadConfig(); err != nil {
+	if err := cfg.ReadConfig(); err != nil {
 		log.Fatalf("Failed to read config ⇒  %v", err)
 	}
 
 	switch {
+	case *flagBackupAll:
+		backupAll()
+		return
 
 	case *flagNodePath != "":
 		nodePath(*flagNodePath)
-		return
-
-	case *flagBackupAll:
-		backupAll()
 		return
 
 	case *flagHashes != "":
@@ -48,7 +51,7 @@ func main() {
 		return
 
 	default:
-		if err := Status(); err != nil {
+		if err := tui.Status(); err != nil {
 			log.Fatalf("Unable to start TUI ⇒  %v", err)
 		}
 	}
@@ -56,11 +59,11 @@ func main() {
 
 // Print to os.Stdout the latest hashes for a given node.
 func latestHashes(node string) {
-	dir, err := Config.NodeDirLatest(node)
+	dir, err := cfg.Global.NodeDirLatest(node)
 	if err != nil {
 		log.Fatalf("Failure to get hashes ⇒  %v", err)
 	}
-	hashes, err := ReadFileHashes(dir)
+	hashes, err := hashsums.ReadFileHashes(dir)
 	if err != nil {
 		log.Fatalf("Failure to get hashes ⇒  %v", err)
 	}
@@ -77,7 +80,7 @@ func backupAll() {
 	}
 	fmt.Println("Local directories cloned with hardlinks")
 
-	for _, nodeAddress := range Config.RemoteNodes {
+	for _, nodeAddress := range cfg.Global.RemoteNodes {
 		if err := LocalPush(nodeAddress); err != nil {
 			log.Printf("Failed to sync to %s ⇒  %v", nodeAddress, err)
 			continue

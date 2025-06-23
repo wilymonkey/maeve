@@ -1,4 +1,4 @@
-package main
+package ssh
 
 import (
 	"encoding/gob"
@@ -7,7 +7,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/hashsums"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -18,7 +21,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 		return nil, fmt.Errorf("parse node address ⇒  %w", err)
 	}
 
-	key, err := os.ReadFile(Config.SSHKey)
+	key, err := os.ReadFile(cfg.Global.SSHKey)
 	if err != nil {
 		return nil, fmt.Errorf("read ssh key ⇒  %w", err)
 	}
@@ -28,7 +31,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 		return nil, fmt.Errorf("parse ssh key ⇒  %w", err)
 	}
 
-	hostKeyCallback, err := knownhosts.New(Config.SSHKnownHosts)
+	hostKeyCallback, err := knownhosts.New(cfg.Global.SSHKnownHosts)
 	if err != nil {
 		return nil, fmt.Errorf("create host key callback ⇒  %w", err)
 	}
@@ -39,7 +42,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 		HostKeyCallback: hostKeyCallback,
 	}
 
-	client, err := ssh.Dial("tcp", host+port, config)
+	client, err := ssh.Dial("tcp", host+":"+port, config)
 	if err != nil {
 		return nil, fmt.Errorf("dial ssh ⇒  %w", err)
 	}
@@ -75,6 +78,8 @@ func sendDir(client *ssh.Client, address string) error {
 	for err := range errs {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
+
+	return nil
 }
 
 func sendFile(client *ssh.Client, localPath, remotePath string) error {
@@ -131,7 +136,7 @@ func parseAddress(address string) (user, host, port string, err error) {
 	return user, host, port, nil
 }
 
-func remoteHashes(client *ssh.Client) ([]FileHash, error) {
+func remoteHashes(client *ssh.Client) ([]hashsums.FileHash, error) {
 	session, err := client.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("new ssh session ⇒  %w", err)
@@ -143,12 +148,12 @@ func remoteHashes(client *ssh.Client) ([]FileHash, error) {
 		return nil, fmt.Errorf("getting stdOut pipe for session ⇒  %w", err)
 	}
 
-	err = session.Start(fmt.Sprintf("maeve --latest-hashes %s", Config.Name))
+	err = session.Start(fmt.Sprintf("maeve --latest-hashes %s", cfg.Global.Name))
 	if err != nil {
 		return nil, fmt.Errorf("start maeve through ssh ⇒  %w", err)
 	}
 
-	var hashes []FileHash
+	var hashes []hashsums.FileHash
 	err = gob.NewDecoder(stdout).Decode(&hashes)
 	if err != nil {
 		return nil, fmt.Errorf("decode stdout ⇒  %w", err)
@@ -159,4 +164,56 @@ func remoteHashes(client *ssh.Client) ([]FileHash, error) {
 	}
 
 	return hashes, nil
+}
+
+// MaxSessions tries to open as many "session" channels as possible
+// on the given SSH client, and returns the maximum before failure.
+func maxSessions(client *ssh.Client) (int, error) {
+	var sessions []*ssh.Session
+	defer func() {
+		for _, s := range sessions {
+			s.Close()
+		}
+	}()
+
+	count := 0
+	for {
+		sess, err := client.NewSession()
+		if err != nil {
+			break
+		}
+		sessions = append(sessions, sess)
+		count++
+	}
+
+	if count == 0 {
+		return 0, fmt.Errorf("unable to open any SSH sessions")
+	}
+	return count, nil
+}
+
+type ProgressWriter struct {
+	ID           int
+	Writer       io.Writer
+	Total        int64
+	Transferred  int64
+	Percent      int
+	LastReported time.Time
+}
+
+func NewProgressWriter(id int, total int64, writer io.Writer) ProgressWriter {
+	return ProgressWriter{ID: id, Writer: writer, Total: total}
+}
+
+func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	n, err := pw.Writer.Write(p)
+	pw.Transferred += int64(n)
+
+	now := time.Now()
+	if now.Sub(pw.LastReported) > time.Second || pw.Transferred == pw.Total {
+		pw.Percent = int(float64(pw.Transferred) / float64(pw.Total) * 100)
+		pw.LastReported = now
+	}
+
+	return n, err
 }
