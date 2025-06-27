@@ -39,7 +39,7 @@ func main() {
 
 	switch {
 	case *flagBackupAll:
-		backupAll()
+		tui.AsBackup()
 		return
 
 	case *flagNodePath != "":
@@ -51,9 +51,7 @@ func main() {
 		return
 
 	default:
-		if err := tui.Status(); err != nil {
-			log.Fatalf("Unable to start TUI ⇒  %v", err)
-		}
+		tui.AsHome()
 	}
 }
 
@@ -72,22 +70,6 @@ func latestHashes(node string) {
 	if err := enc.Encode(hashes); err != nil {
 		log.Fatalf("Failure to encode hashes ⇒  %v", err)
 	}
-}
-
-func backupAll() {
-	if err := LocalPull(); err != nil {
-		log.Fatalf("Failed to clone directories ⇒  %v", err)
-	}
-	fmt.Println("Local directories cloned with hardlinks")
-
-	for _, nodeAddress := range cfg.Global.RemoteNodes {
-		if err := LocalPush(nodeAddress); err != nil {
-			log.Printf("Failed to sync to %s ⇒  %v", nodeAddress, err)
-			continue
-		}
-		fmt.Printf("Successfully synced and snapshotted to %s\n", nodeAddress)
-	}
-
 }
 
 func nodePath(dir string) {

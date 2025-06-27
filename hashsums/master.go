@@ -20,7 +20,7 @@ type MasterHash struct {
 }
 
 func (mh *MasterHash) Exists(fileHash FileHash) *utils.RelativePath {
-	if relPath, exists := mh.hashes[fileHash.hash]; exists {
+	if relPath, exists := mh.hashes[fileHash.Hash]; exists {
 		return &relPath
 	}
 	return nil
@@ -89,7 +89,7 @@ func NewMasterHash(node string) (*MasterHash, error) {
 				return nil, fmt.Errorf("read hash file in snapshot %s ⇒  %w", e.Name(), err)
 			}
 			for _, h := range hFile {
-				hashes[h.hash] = h.Path.Resolve(e.Name())
+				hashes[h.Hash] = h.Path.Resolve(e.Name())
 			}
 			dirs[e.Name()] = struct{}{}
 		}

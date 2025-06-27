@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 )

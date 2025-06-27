@@ -8,16 +8,16 @@ import (
 )
 
 type RelativePath struct {
-	path string
+	Path string
 }
 
 // Resolves to absolute path.
 func (r *RelativePath) Resolve(node string) string {
-	return filepath.Join(cfg.Global.NodeDir(node), r.path)
+	return filepath.Join(cfg.Global.NodeDir(node), r.Path)
 }
 
 type SnapshotPath struct {
-	path string
+	Path string
 }
 
 func NewSnapshotPath(sourcePath, filePath string) SnapshotPath {
@@ -26,15 +26,15 @@ func NewSnapshotPath(sourcePath, filePath string) SnapshotPath {
 		panic(fmt.Errorf("Critical! Unable to get relative path of: %s and %s", sourcePath, filePath))
 	}
 
-	return SnapshotPath{path: relPath}
+	return SnapshotPath{Path: relPath}
 }
 
 // Resolves to relative path.
 func (s *SnapshotPath) Resolve(snapshot string) RelativePath {
-	return RelativePath{path: filepath.Join(snapshot, s.path)}
+	return RelativePath{Path: filepath.Join(snapshot, s.Path)}
 }
 
 // Resolves to an absolute path with NodeDirTemp as the base.
 func (r *SnapshotPath) ResolveTemp(node string) string {
-	return filepath.Join(cfg.Global.NodeDirTemp(node), r.path)
+	return filepath.Join(cfg.Global.NodeDirTemp(node), r.Path)
 }

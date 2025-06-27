@@ -1,9 +1,10 @@
-package main
+package shared
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -63,7 +64,7 @@ func HardlinkDir(source, target string) error {
 		return fmt.Errorf("walk dir %s ⇒  %w", source, err)
 	}
 	if err := eGrp.Wait(); err != nil {
-		return fmt.Errorf("hardlink files ⇒  %w", err)
+		return utils.PrintErr(err)
 	}
 
 	return nil
@@ -164,27 +165,15 @@ func hardlink(sourcePath, targetPath string) error {
 		return fmt.Errorf("stat source path ⇒  %w", err)
 	}
 	// Ignore symlinks, sockets etc.
-	if info.Mode().IsRegular() {
+	if !info.Mode().IsRegular() {
 		return nil
 	}
 
-	err = os.Link(sourcePath, targetPath)
-	if err == nil {
+	if err = os.Link(sourcePath, targetPath); err == nil {
 		return nil
 	}
 
-	if os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return fmt.Errorf("create base dir ⇒  %v", err)
-		}
-
-		// Try to link the file again.
-		if err := os.Link(sourcePath, targetPath); err != nil {
-			return fmt.Errorf("create file link ⇒  %w", err)
-		}
-	}
-
-	if os.IsExist(err) {
+	if errors.Is(err, fs.ErrExist) {
 		replaceFile, err := shouldReplace(sourcePath, targetPath)
 		if err != nil {
 			return fmt.Errorf("compare files ⇒  %w", err)
@@ -199,7 +188,16 @@ func hardlink(sourcePath, targetPath string) error {
 		}
 	}
 
-	return err
+	// Assume the error is the base folder not existing
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return fmt.Errorf("create base dir ⇒  %v", err)
+	}
+	// Try to link the file again.
+	if err := os.Link(sourcePath, targetPath); err != nil {
+		return fmt.Errorf("create file link ⇒  %w", err)
+	}
+
+	return nil
 }
 
 func shouldReplace(source, target string) (bool, error) {

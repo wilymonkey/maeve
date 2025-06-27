@@ -18,7 +18,7 @@ import (
 
 type FileHash struct {
 	Path utils.SnapshotPath
-	hash [32]byte
+	Hash [32]byte
 }
 
 func NewDirFileHash(sourcePath string) error {
@@ -60,7 +60,7 @@ func NewDirFileHash(sourcePath string) error {
 				return err
 			}
 
-			hashChan <- FileHash{Path: utils.NewSnapshotPath(sourcePath, filePath), hash: hash}
+			hashChan <- FileHash{Path: utils.NewSnapshotPath(sourcePath, filePath), Hash: hash}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
