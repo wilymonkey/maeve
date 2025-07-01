@@ -1,25 +1,30 @@
 package tui
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/wilymonkey/maeve/cfg"
 )
 
 type homeModel struct {
-	spinner  spinner.Model
-	status   string
-	quitting bool
+	spinner    spinner.Model
+	nodeStatus map[string]nodeStatus
 }
 
 func newHomeModel() homeModel {
-	s := spinner.New()
-	s.Spinner = spinner.MiniDot
-	s.Style = spinnerStyle
+	s := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(spinnerStyle),
+	)
+	ns := make(map[string]nodeStatus)
+	for _, node := range cfg.Global.RemoteNodes {
+		ns[node] = nodeStatus{name: node}
+	}
 	return homeModel{
-		spinner: s,
-		status:  "Status not implemented...press q to quit",
+		spinner:    s,
+		nodeStatus: ns,
 	}
 }
 
@@ -45,13 +50,11 @@ func (hm homeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (hm homeModel) View() string {
-	if hm.quitting {
-		return "Exiting...\n"
+	var b strings.Builder
+	spinView := hm.spinner.View()
+	b.WriteString(titleStyle.Render("REMOTE NODES\n"))
+	for _, ns := range hm.nodeStatus {
+		ns.View(&b, spinView)
 	}
-
-	return fmt.Sprintf(
-		"%s %s\n",
-		hm.spinner.View(),
-		spinnerStyle.Render(hm.status),
-	)
+	return b.String()
 }

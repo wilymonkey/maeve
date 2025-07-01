@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/utils"
 )
@@ -45,7 +48,9 @@ func (om overseerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (om overseerModel) View() string {
-	return logo + "\n" + om.current.View()
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n%s\n", logo, om.current.View())
+	return b.String()
 }
 
 func AsBackup() error {
