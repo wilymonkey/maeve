@@ -16,30 +16,36 @@ type overseerModel struct {
 	current tea.Model
 }
 
-func (m overseerModel) Init() tea.Cmd {
-	return m.current.Init()
+func (om overseerModel) Init() tea.Cmd {
+	return om.current.Init()
 }
 
-func (m overseerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (om overseerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case overseerBackMsg:
-		if m.prev != nil {
-			m.current = m.prev
-			m.prev = nil
-			return m, nil
+		if om.prev != nil {
+			om.current = om.prev
+			om.prev = nil
+			return om, nil
 		}
-		return m, tea.Quit
+		return om, tea.Quit
+
+	case errorMsg:
+		return om, tea.Sequence(
+			msg.print(),
+			overseerBack,
+		)
 
 	default:
-		updated, cmd := m.current.Update(msg)
-		m.current = updated
-		return m, cmd
+		updated, cmd := om.current.Update(msg)
+		om.current = updated
+		return om, cmd
 	}
 }
 
-func (m overseerModel) View() string {
-	return m.current.View()
+func (om overseerModel) View() string {
+	return logo + "\n" + om.current.View()
 }
 
 func AsBackup() error {
@@ -53,7 +59,7 @@ func AsHome() error {
 func startTui(current tea.Model) error {
 	p := tea.NewProgram(overseerModel{
 		current: current,
-	})
+	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return utils.PrintErr(err)
 	}

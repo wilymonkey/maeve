@@ -71,12 +71,6 @@ func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			overseerBack,
 		)
 
-	case errorMsg:
-		return bm, tea.Sequence(
-			msg.print(),
-			overseerBack,
-		)
-
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		bm.spinner, cmd = bm.spinner.Update(msg)

@@ -49,12 +49,9 @@ func (hm homeModel) View() string {
 		return "Exiting...\n"
 	}
 
-	logoStyled := logoStyle.Render(logo)
-
 	return fmt.Sprintf(
-		"%s\n\n%s %s\n",
-		logoStyled,
+		"%s %s\n",
 		hm.spinner.View(),
-		logoStyle.Render(hm.status),
+		spinnerStyle.Render(hm.status),
 	)
 }
