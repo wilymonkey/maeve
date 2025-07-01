@@ -5,13 +5,24 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/wilymonkey/maeve/tui/style"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type overseerBackMsg struct{}
+type overseerMsgPush struct {
+	next tea.Model
+}
+
+func overseerPush(m tea.Model) tea.Cmd {
+	return func() tea.Msg {
+		return overseerMsgPush{next: m}
+	}
+}
+
+type overseerMsgBack struct{}
 
 func overseerBack() tea.Msg {
-	return overseerBackMsg{}
+	return overseerMsgBack{}
 }
 
 type overseerModel struct {
@@ -26,13 +37,18 @@ func (om overseerModel) Init() tea.Cmd {
 func (om overseerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
-	case overseerBackMsg:
+	case overseerMsgBack:
 		if om.prev != nil {
 			om.current = om.prev
 			om.prev = nil
 			return om, nil
 		}
 		return om, tea.Quit
+
+	case overseerMsgPush:
+		om.prev = om.current
+		om.current = msg.next
+		return om, nil
 
 	case errorMsg:
 		return om, tea.Sequence(
@@ -49,7 +65,7 @@ func (om overseerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (om overseerModel) View() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n%s\n", logo, om.current.View())
+	fmt.Fprintf(&b, "%s\n%s\n", style.ILogo, om.current.View())
 	return b.String()
 }
 

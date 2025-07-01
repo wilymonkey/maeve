@@ -128,7 +128,7 @@ func parseAddress(address string) (user, host, port string, err error) {
 
 	hostPort := strings.Split(parts[1], ":")
 	if len(hostPort) != 2 {
-		return "", "", "", fmt.Errorf("invalid format: missing :")
+		hostPort = append(hostPort, "22")
 	}
 	host = hostPort[0]
 	port = hostPort[1]

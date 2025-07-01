@@ -9,6 +9,7 @@ import (
 
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/shared"
 	"github.com/wilymonkey/maeve/tui"
 )
 
@@ -26,6 +27,7 @@ func main() {
 
 	// Visible
 	flagBackupAll := fs.Bool("backup-all", false, "Backup to all nodes in config")
+	flagVersion := fs.Bool("version", false, "Print the current version")
 
 	// Hidden, internal use only
 	flagHashes := fs.String("latest-hashes", "", "")
@@ -40,6 +42,10 @@ func main() {
 	switch {
 	case *flagBackupAll:
 		tui.AsBackup()
+		return
+
+	case *flagVersion:
+		printVersion()
 		return
 
 	case *flagNodePath != "":
@@ -70,6 +76,11 @@ func latestHashes(node string) {
 	if err := enc.Encode(hashes); err != nil {
 		log.Fatalf("Failure to encode hashes ⇒  %v", err)
 	}
+}
+
+func printVersion() {
+	fmt.Printf("%s\n", shared.VERSION)
+	os.Exit(0)
 }
 
 func nodePath(dir string) {

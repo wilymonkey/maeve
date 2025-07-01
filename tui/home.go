@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/shared"
+	"github.com/wilymonkey/maeve/tui/style"
 )
 
 type homeModel struct {
@@ -16,7 +19,7 @@ type homeModel struct {
 func newHomeModel() homeModel {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.MiniDot),
-		spinner.WithStyle(spinnerStyle),
+		spinner.WithStyle(style.Spinner),
 	)
 	ns := make(map[string]nodeStatus)
 	for _, node := range cfg.Global.RemoteNodes {
@@ -29,7 +32,12 @@ func newHomeModel() homeModel {
 }
 
 func (hm homeModel) Init() tea.Cmd {
-	return hm.spinner.Tick
+	var cmds []tea.Cmd
+	cmds = append(cmds, hm.spinner.Tick)
+	for _, id := range hm.nodeStatus {
+		cmds = append(cmds, id.FetchState)
+	}
+	return tea.Batch(cmds...)
 }
 
 func (hm homeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -39,7 +47,12 @@ func (hm homeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
 			return hm, overseerBack
+		case "b":
+			return hm, overseerPush(newBackupModel())
 		}
+	case nodeStatus:
+		hm.nodeStatus[msg.name] = msg
+		return hm, nil
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -51,10 +64,22 @@ func (hm homeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (hm homeModel) View() string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "Version: %s", shared.VERSION)
+	b.WriteString("\n")
 	spinView := hm.spinner.View()
-	b.WriteString(titleStyle.Render("REMOTE NODES\n"))
+	b.WriteString(style.Title.Render("REMOTE NODES"))
+	b.WriteString("\n")
 	for _, ns := range hm.nodeStatus {
 		ns.View(&b, spinView)
+		if ns.err != nil {
+			title := style.Fail.Render("Error:")
+			fmt.Fprintf(&b, "%s %v\n", title, ns.err)
+		}
 	}
+	b.WriteString(style.Title.Render("COMMANDS"))
+	b.WriteString("\n")
+	b.WriteString(style.Help.Render("Press b to run backup"))
+	b.WriteString("\n")
+	b.WriteString(style.Help.Render("Press q to quit"))
 	return b.String()
 }

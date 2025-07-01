@@ -14,6 +14,7 @@ import (
 	"github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/shared"
 	"github.com/wilymonkey/maeve/ssh"
+	"github.com/wilymonkey/maeve/tui/style"
 )
 
 const descBackup = "Create backup files"
@@ -33,8 +34,10 @@ func newBackupModel() backupModel {
 		progress.WithWidth(40),
 		progress.WithoutPercentage(),
 	)
-	s := spinner.New()
-	s.Style = spinnerStyle
+	s := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(style.Spinner),
+	)
 	return backupModel{
 		currOp:   descBackup,
 		spinner:  s,
@@ -60,14 +63,14 @@ func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case doneBackup:
 		bm.currOp = descHashsums
 		return bm, tea.Sequence(
-			tea.Printf("%s %s", checkMark, descBackup),
+			tea.Printf("%s %s", style.ITick, descBackup),
 			newBackupHashes,
 		)
 
 	case doneHashsums:
 		bm.currOp = ""
 		return bm, tea.Sequence(
-			tea.Printf("%s %s", checkMark, descHashsums),
+			tea.Printf("%s %s", style.ITick, descHashsums),
 			overseerBack,
 		)
 
@@ -88,7 +91,7 @@ func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m backupModel) View() string {
 	if m.currOp == "" {
-		return successStyle.Margin(1, 4).Render("Done!")
+		return style.Success.Margin(1, 4).Render("Done!")
 	}
 
 	spin := m.spinner.View() + " "
@@ -100,7 +103,7 @@ func (m backupModel) View() string {
 	cellsRemaining := max(0, m.width-lipgloss.Width(spin+info+prog))
 	gap := strings.Repeat(" ", cellsRemaining)
 
-	help := helpStyle.Render("Press q to stop the backup")
+	help := style.Help.Render("Press q to stop the backup")
 
 	return spin + info + gap + prog + "\n\n" + help
 }
