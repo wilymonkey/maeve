@@ -33,15 +33,19 @@ func main() {
 	flagHashes := fs.String("latest-hashes", "", "")
 	flagNodePath := fs.String("node-path", "", "")
 
-	fs.Parse(os.Args[1:])
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		log.Fatalf("Failed to parse args: %v", err)
+	}
 
 	if err := cfg.ReadConfig(); err != nil {
-		log.Fatalf("Failed to read config ⇒  %v", err)
+		log.Fatalf("Failed to read config:  %v", err)
 	}
 
 	switch {
 	case *flagBackupAll:
-		tui.AsBackup()
+		if err := tui.AsBackup(); err != nil {
+			log.Fatalf("Failed to start backup:  %v", err)
+		}
 		return
 
 	case *flagVersion:
@@ -57,7 +61,9 @@ func main() {
 		return
 
 	default:
-		tui.AsHome()
+		if err := tui.AsHome(); err != nil {
+			log.Fatalf("Failed to start homepage:  %v", err)
+		}
 	}
 }
 

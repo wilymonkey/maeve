@@ -1,4 +1,4 @@
-package tui
+package backup
 
 import (
 	"fmt"
@@ -14,13 +14,15 @@ import (
 	"github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/shared"
 	"github.com/wilymonkey/maeve/ssh"
+	"github.com/wilymonkey/maeve/tui/overseer"
+	tuiShared "github.com/wilymonkey/maeve/tui/shared"
 	"github.com/wilymonkey/maeve/tui/style"
 )
 
 const descBackup = "Create backup files"
 const descHashsums = "Calculating hashsums"
 
-type backupModel struct {
+type Model struct {
 	currOp   string
 	width    int
 	height   int
@@ -28,7 +30,7 @@ type backupModel struct {
 	progress progress.Model
 }
 
-func newBackupModel() backupModel {
+func New() Model {
 	p := progress.New(
 		progress.WithDefaultGradient(),
 		progress.WithWidth(40),
@@ -38,18 +40,18 @@ func newBackupModel() backupModel {
 		spinner.WithSpinner(spinner.MiniDot),
 		spinner.WithStyle(style.Spinner),
 	)
-	return backupModel{
+	return Model{
 		currOp:   descBackup,
 		spinner:  s,
 		progress: p,
 	}
 }
 
-func (bm backupModel) Init() tea.Cmd {
-	return tea.Batch(newBackupDir, bm.spinner.Tick)
+func (bm Model) Init() tea.Cmd {
+	return tea.Batch(pullChanges, bm.spinner.Tick)
 }
 
-func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (bm Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		bm.width, bm.height = msg.Width, msg.Height
@@ -57,21 +59,21 @@ func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
-			return bm, overseerBack
+			return bm, overseer.Back
 		}
 
 	case doneBackup:
 		bm.currOp = descHashsums
 		return bm, tea.Sequence(
 			tea.Printf("%s %s", style.ITick, descBackup),
-			newBackupHashes,
+			newHashes,
 		)
 
 	case doneHashsums:
 		bm.currOp = ""
 		return bm, tea.Sequence(
 			tea.Printf("%s %s", style.ITick, descHashsums),
-			overseerBack,
+			overseer.Back,
 		)
 
 	case spinner.TickMsg:
@@ -89,7 +91,7 @@ func (bm backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return bm, nil
 }
 
-func (m backupModel) View() string {
+func (m Model) View() string {
 	if m.currOp == "" {
 		return style.Success.Margin(1, 4).Render("Done!")
 	}
@@ -111,21 +113,21 @@ func (m backupModel) View() string {
 type doneBackup struct{}
 
 // Pulls changes from Cfg.SourceDirs and writes hashes to file.
-func newBackupDir() tea.Msg {
+func pullChanges() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
-		return newErrorMsg(err)
+		return tuiShared.NewErrMsg(err)
 	}
 
 	if err := os.MkdirAll(selfDir, 0755); err != nil {
-		return newErrorMsg(err)
+		return tuiShared.NewErrMsg(err)
 	}
 
 	for _, srcDir := range cfg.Global.SourceDirs {
 		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
 		if err := shared.HardlinkDir(srcDir, destDir); err != nil {
-			return newErrorMsg(err)
+			return tuiShared.NewErrMsg(err)
 		}
 	}
 
@@ -134,10 +136,10 @@ func newBackupDir() tea.Msg {
 
 type doneHashsums struct{}
 
-func newBackupHashes() tea.Msg {
+func newHashes() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 	if err := hashsums.NewDirFileHash(selfDir); err != nil {
-		return newErrorMsg(err)
+		return tuiShared.NewErrMsg(err)
 	}
 	return doneHashsums{}
 }

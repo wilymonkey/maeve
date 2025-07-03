@@ -1,4 +1,4 @@
-package tui
+package home
 
 import (
 	"fmt"
@@ -8,15 +8,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/shared"
+	"github.com/wilymonkey/maeve/tui/backup"
+	"github.com/wilymonkey/maeve/tui/overseer"
 	"github.com/wilymonkey/maeve/tui/style"
 )
 
-type homeModel struct {
+type Model struct {
 	spinner    spinner.Model
 	nodeStatus map[string]nodeStatus
 }
 
-func newHomeModel() homeModel {
+func New() Model {
 	s := spinner.New(
 		spinner.WithSpinner(spinner.MiniDot),
 		spinner.WithStyle(style.Spinner),
@@ -25,51 +27,51 @@ func newHomeModel() homeModel {
 	for _, node := range cfg.Global.RemoteNodes {
 		ns[node] = nodeStatus{name: node}
 	}
-	return homeModel{
+	return Model{
 		spinner:    s,
 		nodeStatus: ns,
 	}
 }
 
-func (hm homeModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	cmds = append(cmds, hm.spinner.Tick)
-	for _, id := range hm.nodeStatus {
+	cmds = append(cmds, m.spinner.Tick)
+	for _, id := range m.nodeStatus {
 		cmds = append(cmds, id.FetchState)
 	}
 	return tea.Batch(cmds...)
 }
 
-func (hm homeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
-			return hm, overseerBack
+			return m, overseer.Back
 		case "b":
-			return hm, overseerPush(newBackupModel())
+			return m, overseer.Push(backup.New())
 		}
 	case nodeStatus:
-		hm.nodeStatus[msg.name] = msg
-		return hm, nil
+		m.nodeStatus[msg.name] = msg
+		return m, nil
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
-		hm.spinner, cmd = hm.spinner.Update(msg)
-		return hm, cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
-	return hm, nil
+	return m, nil
 }
 
-func (hm homeModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Version: %s", shared.VERSION)
 	b.WriteString("\n")
-	spinView := hm.spinner.View()
+	spinView := m.spinner.View()
 	b.WriteString(style.Title.Render("REMOTE NODES"))
 	b.WriteString("\n")
-	for _, ns := range hm.nodeStatus {
+	for _, ns := range m.nodeStatus {
 		ns.View(&b, spinView)
 		if ns.err != nil {
 			title := style.Fail.Render("Error:")

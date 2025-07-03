@@ -1,4 +1,4 @@
-package tui
+package home
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/ssh"
+	"github.com/wilymonkey/maeve/tui/shared"
 	"github.com/wilymonkey/maeve/tui/style"
 )
 
@@ -21,7 +22,7 @@ type nodeStatus struct {
 func (ns *nodeStatus) View(b *strings.Builder, spinView string) {
 	name := style.Bright.Render(ns.name)
 	if ns.isDone {
-		fmt.Fprintf(b, "%s: %s SSH %s Maeve\n", name, boolView(ns.canSSH), boolView(ns.canMaeve))
+		fmt.Fprintf(b, "%s: %s SSH %s Maeve\n", name, shared.BoolView(ns.canSSH), shared.BoolView(ns.canMaeve))
 	} else {
 		fmt.Fprintf(b, "%s: %s\n", name, spinView)
 	}
