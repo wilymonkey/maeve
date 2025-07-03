@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -10,6 +11,7 @@ import (
 	"github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/style"
+	"github.com/wilymonkey/maeve/utils"
 	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
@@ -22,6 +24,7 @@ type Model struct {
 	height   int
 	spinner  spinner.Model
 	progress progress.Model
+	err      *myerr.ErrMsg
 }
 
 func New() Model {
@@ -34,7 +37,12 @@ func New() Model {
 		spinner.WithSpinner(spinner.MiniDot),
 		spinner.WithStyle(style.Spinner),
 	)
+	linkDirs := make(map[string]linkPathMeta)
+	for _, dir := range cfg.Global.SourceDirs {
+		linkDirs[dir] = linkPathMeta{path: dir}
+	}
 	return Model{
+		linkDirs: linkDirs,
 		spinner:  s,
 		progress: p,
 	}
@@ -78,6 +86,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, overseer.Back
 		}
 
+	case myerr.ErrMsg:
+		m.err = &msg
+		if cfg.TuiInteractive {
+			return m, nil
+		} else {
+			return m, overseer.Back
+		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -97,37 +113,18 @@ func (m Model) View() string {
 	var b strings.Builder
 	spinView := m.spinner.View()
 
-	const linkTitle = "CREATE BACKUP FILES"
-	if m.linkDone {
-		b.WriteString(style.TitleSuccess.Render(linkTitle))
-	} else {
-		b.WriteString(spinView)
-		b.WriteString(style.Title.Render(linkTitle))
-	}
-	b.WriteString("\n")
-	b.WriteString(m.linkDirsView(&b))
+	titleWithProgress(&b, "CREATE BACKUP FILES", spinView, m.linkDone, true)
+	m.linkDirsView(&b)
 
-	const hashTitle = "CALCULATING HASHSUMS"
-	if m.hashDone {
-		b.WriteString(style.TitleSuccess.Render(hashTitle))
-	} else if m.linkDone {
-		b.WriteString(spinView)
-		b.WriteString(style.Title.Render(hashTitle))
-	} else {
-		b.WriteString(style.TitlePending.Render(hashTitle))
-	}
 	b.WriteString("\n")
+	titleWithProgress(&b, "CALCULATING HASHSUMS", spinView, m.hashDone, m.linkDone)
 
-	const sendTitle = "SENDING TO REMOTE NODES"
-	if m.sendDone {
-		b.WriteString(style.TitleSuccess.Render(sendTitle))
-	} else if m.hashDone {
-		b.WriteString(spinView)
-		b.WriteString(style.Title.Render(sendTitle))
-	} else {
-		b.WriteString(style.TitlePending.Render(sendTitle))
-	}
 	b.WriteString("\n")
+	titleWithProgress(&b, "SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone)
+
+	if m.err != nil {
+		m.err.Print(&b)
+	}
 
 	b.WriteString("\n")
 	b.WriteString(style.Help.Render("Press q to stop"))
@@ -135,8 +132,23 @@ func (m Model) View() string {
 	return b.String()
 }
 
-func (m *Model) linkDirsView(b *strings.Builder) string {
+func titleWithProgress(b *strings.Builder, title, spinView string, isDone, isPending bool) {
+	if isDone {
+		b.WriteString(style.TitleSuccess.Render(title))
+	} else if isPending {
+		fmt.Fprintf(b, "%s %s", spinView, style.Title.MarginTop(0).Render(title))
+	} else {
+		b.WriteString(style.TitlePending.Render(title))
+	}
+	b.WriteString("\n")
+}
 
+func (m *Model) linkDirsView(b *strings.Builder) {
+	for _, dir := range m.linkDirs {
+		path := utils.TruncateStr(dir.path, 20)
+		size := utils.BytesToHuman(dir.size)
+		fmt.Fprintf(b, "%s   Files: %d Size: %s\n", path, dir.number, size)
+	}
 }
 
 type doneHashsums struct{}

@@ -2,10 +2,11 @@ package myerr
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/style"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/wilymonkey/maeve/style"
 )
 
 // Wraps the error with file and codeline location.
@@ -24,9 +25,9 @@ func TuiMsg(e error) ErrMsg {
 	return ErrMsg{err: e}
 }
 
-func (e *ErrMsg) Print() tea.Cmd {
+func (e *ErrMsg) Print(b *strings.Builder) {
 	fail := style.Fail.Render("Failed!")
-	return tea.Printf("%s %s\n%v", style.ICross, fail, e.err)
+	fmt.Fprintf(b, "\n\n%s %s %v\n\n", style.ICross, fail, e.err)
 }
 
 func BoolView(b bool) string {

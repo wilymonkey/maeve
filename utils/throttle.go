@@ -9,23 +9,28 @@ func Throttle[T any](tChan chan T, every func(T), emit func()) {
 		throttleDuration := 200 * time.Millisecond
 
 		var (
-			timer   *time.Timer
-			timerCh <-chan time.Time
-			canEmit bool = true // Flag to control emission
+			timer     *time.Timer
+			timerChan <-chan time.Time
+			canEmit   = true
 		)
 
 		for {
 			select {
-			case value := <-tChan:
-				every(value)
-				if canEmit {
+			case value, ok := <-tChan:
+				if ok {
+					every(value)
+					if canEmit {
+						emit()
+						canEmit = false
+						timer = time.NewTimer(throttleDuration)
+						timerChan = timer.C
+					}
+				} else {
 					emit()
-					canEmit = false
-					timer = time.NewTimer(throttleDuration)
-					timerCh = timer.C
+					return
 				}
 
-			case <-timerCh:
+			case <-timerChan:
 				canEmit = true
 			}
 		}

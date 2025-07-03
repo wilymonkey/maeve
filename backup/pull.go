@@ -30,32 +30,32 @@ func pullChanges(linkDirs map[string]linkPathMeta) tea.Msg {
 		return myerr.TuiMsg(err)
 	}
 
-	sizeChan := make(chan int64, 100)
-	defer close(sizeChan)
-	var totalSize int64
-	var totalFiles int64
-	for _, srcDir := range cfg.Global.SourceDirs {
+	for srcDir := range linkDirs {
 		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
+
+		sizeChan := make(chan int64, 100)
+		var totalSize int64
+		var totalFiles int64
 		utils.Throttle(
 			sizeChan,
 			func(size int64) {
 				totalFiles++
 				totalSize += size
-
 			},
 			func() {
-				cfg.TuiProgram.Send(func() tea.Msg {
-					return linkPathMeta{
+				cfg.TuiProgram.Send(
+					linkPathMeta{
 						path:   srcDir,
 						number: totalFiles,
 						size:   totalSize,
-					}
-				})
+					},
+				)
 			})
 
 		if err := local.HardlinkDir(srcDir, destDir, sizeChan); err != nil {
 			return myerr.TuiMsg(err)
 		}
+		close(sizeChan)
 	}
 
 	return doneBackup{}
