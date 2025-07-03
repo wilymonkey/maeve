@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/tui/shared"
-	"github.com/wilymonkey/maeve/tui/style"
+	"github.com/wilymonkey/maeve/style"
+	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type msgPush struct {
@@ -56,7 +56,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.current = msg.next
 		return m, m.current.Init()
 
-	case shared.ErrMsg:
+	case myerr.ErrMsg:
 		return m, tea.Sequence(
 			msg.Print(),
 			Back,

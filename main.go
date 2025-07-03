@@ -1,16 +1,16 @@
 package main
 
 import (
-	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/shared"
-	"github.com/wilymonkey/maeve/tui"
+	"github.com/wilymonkey/maeve/home"
+	"github.com/wilymonkey/maeve/overseer"
 )
 
 func main() {
@@ -43,9 +43,7 @@ func main() {
 
 	switch {
 	case *flagBackupAll:
-		if err := tui.AsBackup(); err != nil {
-			log.Fatalf("Failed to start backup:  %v", err)
-		}
+		startTui(backup.New())
 		return
 
 	case *flagVersion:
@@ -61,34 +59,25 @@ func main() {
 		return
 
 	default:
-		if err := tui.AsHome(); err != nil {
-			log.Fatalf("Failed to start homepage:  %v", err)
-		}
+		startTui(home.New())
 	}
 }
 
-// Print to os.Stdout the latest hashes for a given node.
 func latestHashes(node string) {
-	dir, err := cfg.Global.NodeDirLatest(node)
-	if err != nil {
-		log.Fatalf("Failure to get hashes ⇒  %v", err)
-	}
-	hashes, err := hashsums.ReadFileHashes(dir)
-	if err != nil {
-		log.Fatalf("Failure to get hashes ⇒  %v", err)
-	}
-
-	enc := gob.NewEncoder(os.Stdout)
-	if err := enc.Encode(hashes); err != nil {
-		log.Fatalf("Failure to encode hashes ⇒  %v", err)
-	}
 }
 
 func printVersion() {
-	fmt.Printf("%s\n", shared.VERSION)
+	fmt.Printf("%s\n", cfg.VERSION)
 	os.Exit(0)
 }
 
 func nodePath(dir string) {
 	// TODO: Are we keeping this?
+}
+
+func startTui(start tea.Model) {
+	p := tea.NewProgram(overseer.New(start), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Fatalf("Failed to start TUI:  %v", err)
+	}
 }

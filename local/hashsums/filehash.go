@@ -12,17 +12,18 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/local/mypath"
+	"github.com/wilymonkey/maeve/utils/semaphore"
 	"github.com/zeebo/blake3"
 )
 
 type FileHash struct {
-	Path utils.SnapshotPath
+	Path mypath.SnapshotPath
 	Hash [32]byte
 }
 
 func NewDirFileHash(sourcePath string) error {
-	sem := utils.NewScalingSemaphore(20)
+	sem := semaphore.NewScaling(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,7 +61,7 @@ func NewDirFileHash(sourcePath string) error {
 				return err
 			}
 
-			hashChan <- FileHash{Path: utils.NewSnapshotPath(sourcePath, filePath), Hash: hash}
+			hashChan <- FileHash{Path: mypath.NewSnapshotPath(sourcePath, filePath), Hash: hash}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

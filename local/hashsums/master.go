@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/local/mypath"
 )
 
 var ErrInvalidMH = errors.New("invalid MasterHash file")
@@ -16,10 +16,10 @@ var ErrInvalidMH = errors.New("invalid MasterHash file")
 type MasterHash struct {
 	dirs map[string]struct{}
 	// hash as key, relPath as value
-	hashes map[[32]byte]utils.RelativePath
+	hashes map[[32]byte]mypath.RelativePath
 }
 
-func (mh *MasterHash) Exists(fileHash FileHash) *utils.RelativePath {
+func (mh *MasterHash) Exists(fileHash FileHash) *mypath.RelativePath {
 	if relPath, exists := mh.hashes[fileHash.Hash]; exists {
 		return &relPath
 	}
@@ -78,7 +78,7 @@ func NewMasterHash(node string) (*MasterHash, error) {
 	}
 
 	dirs := make(map[string]struct{})
-	hashes := make(map[[32]byte]utils.RelativePath)
+	hashes := make(map[[32]byte]mypath.RelativePath)
 	for _, e := range entries {
 		if e.IsDir() {
 			hFile, err := ReadFileHashes(filepath.Join(baseDir, e.Name()))

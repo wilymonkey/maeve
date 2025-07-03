@@ -1,4 +1,4 @@
-package shared
+package local
 
 import (
 	"context"
@@ -10,8 +10,9 @@ import (
 	"sort"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/local/hashsums"
+	"github.com/wilymonkey/maeve/utils/myerr"
+	"github.com/wilymonkey/maeve/utils/semaphore"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,7 +23,7 @@ func HardlinkDir(source, target string) error {
 		return fmt.Errorf("delete target dir %s ⇒  %w", target, err)
 	}
 
-	sem := utils.NewScalingSemaphore(20)
+	sem := semaphore.NewScaling(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -64,7 +65,7 @@ func HardlinkDir(source, target string) error {
 		return fmt.Errorf("walk dir %s ⇒  %w", source, err)
 	}
 	if err := eGrp.Wait(); err != nil {
-		return utils.PrintErr(err)
+		return myerr.PrintErr(err)
 	}
 
 	return nil
@@ -112,7 +113,7 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]ha
 		}
 	}
 
-	sem := utils.NewScalingSemaphore(20)
+	sem := semaphore.NewScaling(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())

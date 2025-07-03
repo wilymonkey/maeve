@@ -6,11 +6,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/shared"
-	"github.com/wilymonkey/maeve/tui/backup"
-	"github.com/wilymonkey/maeve/tui/overseer"
-	"github.com/wilymonkey/maeve/tui/style"
+	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/style"
 )
 
 type Model struct {
@@ -66,7 +65,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Version: %s", shared.VERSION)
+	fmt.Fprintf(&b, "Version: %s", cfg.VERSION)
 	b.WriteString("\n")
 	spinView := m.spinner.View()
 	b.WriteString(style.Title.Render("REMOTE NODES"))

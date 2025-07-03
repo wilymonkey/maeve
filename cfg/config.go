@@ -8,6 +8,8 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+const VERSION = "0.0.1"
+
 var Global MaeveConfig
 
 type MaeveConfig struct {

@@ -1,4 +1,4 @@
-package ssh
+package remote
 
 import (
 	"encoding/gob"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/local/hashsums"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )

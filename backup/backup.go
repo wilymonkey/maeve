@@ -11,12 +11,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/shared"
-	"github.com/wilymonkey/maeve/ssh"
-	"github.com/wilymonkey/maeve/tui/overseer"
-	tuiShared "github.com/wilymonkey/maeve/tui/shared"
-	"github.com/wilymonkey/maeve/tui/style"
+	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/local/hashsums"
+	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/remote"
+	"github.com/wilymonkey/maeve/style"
+	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 const descBackup = "Create backup files"
@@ -117,17 +117,17 @@ func pullChanges() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
-		return tuiShared.NewErrMsg(err)
+		return myerr.NewErrMsg(err)
 	}
 
 	if err := os.MkdirAll(selfDir, 0755); err != nil {
-		return tuiShared.NewErrMsg(err)
+		return myerr.NewErrMsg(err)
 	}
 
 	for _, srcDir := range cfg.Global.SourceDirs {
 		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
-		if err := shared.HardlinkDir(srcDir, destDir); err != nil {
-			return tuiShared.NewErrMsg(err)
+		if err := local.HardlinkDir(srcDir, destDir); err != nil {
+			return myerr.NewErrMsg(err)
 		}
 	}
 
@@ -139,14 +139,14 @@ type doneHashsums struct{}
 func newHashes() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 	if err := hashsums.NewDirFileHash(selfDir); err != nil {
-		return tuiShared.NewErrMsg(err)
+		return myerr.NewErrMsg(err)
 	}
 	return doneHashsums{}
 }
 
 // Pushes changes to a given node address.
 func sendChanges(address string) error {
-	client, err := ssh.NewSSHClient(address)
+	client, err := remote.NewSSHClient(address)
 	if err != nil {
 		return fmt.Errorf("new ssh client ⇒  %w", err)
 	}
