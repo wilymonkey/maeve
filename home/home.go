@@ -35,8 +35,8 @@ func New() Model {
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.spinner.Tick)
-	for _, id := range m.nodeStatus {
-		cmds = append(cmds, id.FetchState)
+	for _, node := range m.nodeStatus {
+		cmds = append(cmds, node.FetchState)
 	}
 	return tea.Batch(cmds...)
 }

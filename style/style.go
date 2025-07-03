@@ -23,6 +23,11 @@ var (
 	Title   = lipgloss.NewStyle().Margin(1, 0).Bold(true).Foreground(pink400)
 	Bright  = lipgloss.NewStyle().Foreground(zinc200)
 
+	// Merged
+	TitlePending = Help.Inherit(Title)
+	TitleSuccess = Success.Inherit(Title)
+	TitleFail    = Fail.Inherit(Title)
+
 	// ICONS
 	ITick  = Success.Margin(0, 1).Render("✔")
 	ICross = Fail.Margin(0, 1).Render("✘")

@@ -3,24 +3,23 @@ package local
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local/hashsums"
+	hs "github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/utils/myerr"
 	"github.com/wilymonkey/maeve/utils/semaphore"
 	"golang.org/x/sync/errgroup"
 )
 
 // Creates hardlinks for all files from source to target.
+//
 // CAUTION: Deletes the target directory if it exists.
-func HardlinkDir(source, target string) error {
+func HardlinkDir(source, target string, sizeChan chan int64) error {
 	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("delete target dir %s ⇒  %w", target, err)
+		return myerr.WrapErr(err)
 	}
 
 	sem := semaphore.NewScaling(20)
@@ -34,8 +33,12 @@ func HardlinkDir(source, target string) error {
 		if err != nil {
 			return err
 		}
-		// Directories are created when files are.
-		if dir.IsDir() {
+		info, err := os.Stat(sourcePath)
+		if err != nil {
+			return myerr.WrapErr(err)
+		}
+		// Ignore dirs, symlinks, sockets etc.
+		if !info.Mode().IsRegular() {
 			return nil
 		}
 
@@ -53,6 +56,7 @@ func HardlinkDir(source, target string) error {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
+				sizeChan <- info.Size()
 				return hardlink(sourcePath, targetPath)
 			}
 
@@ -62,10 +66,10 @@ func HardlinkDir(source, target string) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("walk dir %s ⇒  %w", source, err)
+		return myerr.WrapErr(err)
 	}
 	if err := eGrp.Wait(); err != nil {
-		return myerr.PrintErr(err)
+		return myerr.WrapErr(err)
 	}
 
 	return nil
@@ -76,7 +80,7 @@ func TrimSnapshots(node string) error {
 	dir := cfg.Global.NodeDir(node)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("unable to read entries in node %s ⇒  %w", node, err)
+		return myerr.WrapErr(err)
 	}
 
 	if len(entries) <= maxBackups {
@@ -90,26 +94,26 @@ func TrimSnapshots(node string) error {
 	for _, folder := range entries[:len(entries)-maxBackups] {
 		path := filepath.Join(dir, folder.Name())
 		if err := os.RemoveAll(path); err != nil {
-			return fmt.Errorf("unable to delete snapshot %s ⇒  %w", path, err)
+			return myerr.WrapErr(err)
 		}
 	}
 	return nil
 }
 
-func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]hashsums.FileHash, error) {
-	localMaster, err := hashsums.GetMasterHash(node)
+func LinkFilesFromSnapshots(node string, remoteHashes []hs.FileHash) ([]hs.FileHash, error) {
+	localMaster, err := hs.GetMasterHash(node)
 	if err != nil {
 		switch {
-		case errors.Is(err, os.ErrNotExist) || errors.Is(err, hashsums.ErrInvalidMH):
-			localMaster, err = hashsums.NewMasterHash(node)
+		case errors.Is(err, os.ErrNotExist) || errors.Is(err, hs.ErrInvalidMH):
+			localMaster, err = hs.NewMasterHash(node)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					return remoteHashes, nil
 				}
-				return nil, fmt.Errorf("create MasterHash ⇒  %w", err)
+				return nil, myerr.WrapErr(err)
 			}
 		default:
-			return nil, fmt.Errorf("get MasterHash ⇒  %w", err)
+			return nil, myerr.WrapErr(err)
 		}
 	}
 
@@ -120,8 +124,8 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]ha
 	defer cancel()
 	eGrp, ctx := errgroup.WithContext(ctx)
 
-	missingChan := make(chan hashsums.FileHash, 100)
-	var missing []hashsums.FileHash
+	missingChan := make(chan hs.FileHash, 100)
+	var missing []hs.FileHash
 	go func() {
 		for hash := range missingChan {
 			missing = append(missing, hash)
@@ -151,7 +155,7 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]ha
 	})
 
 	if err := eGrp.Wait(); err != nil {
-		return nil, fmt.Errorf("hardlink snapshot files ⇒  %w", err)
+		return nil, myerr.WrapErr(err)
 	}
 	close(missingChan)
 
@@ -160,56 +164,22 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hashsums.FileHash) ([]ha
 
 // Creates a hardlink from sourcePath to targetPath, creating
 // directories as needed.
+// CAUTION: Assumes the file doesn't exist.
 func hardlink(sourcePath, targetPath string) error {
-	info, err := os.Stat(sourcePath)
-	if err != nil {
-		return fmt.Errorf("stat source path ⇒  %w", err)
-	}
-	// Ignore symlinks, sockets etc.
-	if !info.Mode().IsRegular() {
-		return nil
-	}
+	err := os.Link(sourcePath, targetPath)
 
-	if err = os.Link(sourcePath, targetPath); err == nil {
+	if err == nil {
 		return nil
-	}
-
-	if errors.Is(err, fs.ErrExist) {
-		replaceFile, err := shouldReplace(sourcePath, targetPath)
-		if err != nil {
-			return fmt.Errorf("compare files ⇒  %w", err)
-		}
-		if replaceFile {
-			if err := os.Remove(targetPath); err != nil {
-				return fmt.Errorf("remove existing file ⇒  %w", err)
-			}
-			if err := os.Link(sourcePath, targetPath); err != nil {
-				return fmt.Errorf("replace file link ⇒  %w", err)
-			}
-		}
 	}
 
 	// Assume the error is the base folder not existing
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-		return fmt.Errorf("create base dir ⇒  %v", err)
+		return myerr.WrapErr(err)
 	}
 	// Try to link the file again.
 	if err := os.Link(sourcePath, targetPath); err != nil {
-		return fmt.Errorf("create file link ⇒  %w", err)
+		return myerr.WrapErr(err)
 	}
 
 	return nil
-}
-
-func shouldReplace(source, target string) (bool, error) {
-	sourceInfo, err := os.Stat(source)
-	if err != nil {
-		return false, err
-	}
-	targetInfo, err := os.Stat(target)
-	if err != nil {
-		return false, err
-	}
-
-	return sourceInfo.ModTime().After(targetInfo.ModTime()), nil
 }

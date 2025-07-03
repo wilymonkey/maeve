@@ -1,29 +1,23 @@
 package backup
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
-	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
 	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
-const descBackup = "Create backup files"
-const descHashsums = "Calculating hashsums"
-
 type Model struct {
-	currOp   string
+	linkDone bool
+	hashDone bool
+	sendDone bool
+	linkDirs map[string]linkPathMeta
 	width    int
 	height   int
 	spinner  spinner.Model
@@ -41,97 +35,108 @@ func New() Model {
 		spinner.WithStyle(style.Spinner),
 	)
 	return Model{
-		currOp:   descBackup,
 		spinner:  s,
 		progress: p,
 	}
 }
 
-func (bm Model) Init() tea.Cmd {
-	return tea.Batch(pullChanges, bm.spinner.Tick)
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg { return pullChanges(m.linkDirs) },
+		m.spinner.Tick,
+	)
 }
 
-func (bm Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		bm.width, bm.height = msg.Width, msg.Height
+		m.width, m.height = msg.Width, msg.Height
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
-			return bm, overseer.Back
+			return m, overseer.Back
 		}
 
+	case linkPathMeta:
+		m.linkDirs[msg.path] = msg
+		return m, nil
+
 	case doneBackup:
-		bm.currOp = descHashsums
-		return bm, tea.Sequence(
-			tea.Printf("%s %s", style.ITick, descBackup),
-			newHashes,
-		)
+		m.linkDone = true
+		return m, newHashes
 
 	case doneHashsums:
-		bm.currOp = ""
-		return bm, tea.Sequence(
-			tea.Printf("%s %s", style.ITick, descHashsums),
-			overseer.Back,
-		)
+		m.hashDone = true
+		return m, sendRemote
+
+	case doneSend:
+		m.sendDone = true
+		if cfg.TuiInteractive {
+			return m, nil
+		} else {
+			return m, overseer.Back
+		}
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
-		bm.spinner, cmd = bm.spinner.Update(msg)
-		return bm, cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case progress.FrameMsg:
-		newModel, cmd := bm.progress.Update(msg)
+		newModel, cmd := m.progress.Update(msg)
 		if newModel, ok := newModel.(progress.Model); ok {
-			bm.progress = newModel
+			m.progress = newModel
 		}
-		return bm, cmd
+		return m, cmd
 	}
-	return bm, nil
+	return m, nil
 }
 
 func (m Model) View() string {
-	if m.currOp == "" {
-		return style.Success.Margin(1, 4).Render("Done!")
+	var b strings.Builder
+	spinView := m.spinner.View()
+
+	const linkTitle = "CREATE BACKUP FILES"
+	if m.linkDone {
+		b.WriteString(style.TitleSuccess.Render(linkTitle))
+	} else {
+		b.WriteString(spinView)
+		b.WriteString(style.Title.Render(linkTitle))
 	}
+	b.WriteString("\n")
+	b.WriteString(m.linkDirsView(&b))
 
-	spin := m.spinner.View() + " "
-	prog := m.progress.View()
+	const hashTitle = "CALCULATING HASHSUMS"
+	if m.hashDone {
+		b.WriteString(style.TitleSuccess.Render(hashTitle))
+	} else if m.linkDone {
+		b.WriteString(spinView)
+		b.WriteString(style.Title.Render(hashTitle))
+	} else {
+		b.WriteString(style.TitlePending.Render(hashTitle))
+	}
+	b.WriteString("\n")
 
-	cellsAvail := max(0, m.width-lipgloss.Width(spin+prog))
+	const sendTitle = "SENDING TO REMOTE NODES"
+	if m.sendDone {
+		b.WriteString(style.TitleSuccess.Render(sendTitle))
+	} else if m.hashDone {
+		b.WriteString(spinView)
+		b.WriteString(style.Title.Render(sendTitle))
+	} else {
+		b.WriteString(style.TitlePending.Render(sendTitle))
+	}
+	b.WriteString("\n")
 
-	info := lipgloss.NewStyle().MaxWidth(cellsAvail).Render(m.currOp)
-	cellsRemaining := max(0, m.width-lipgloss.Width(spin+info+prog))
-	gap := strings.Repeat(" ", cellsRemaining)
+	b.WriteString("\n")
+	b.WriteString(style.Help.Render("Press q to stop"))
 
-	help := style.Help.Render("Press q to stop the backup")
-
-	return spin + info + gap + prog + "\n\n" + help
+	return b.String()
 }
 
-type doneBackup struct{}
+func (m *Model) linkDirsView(b *strings.Builder) string {
 
-// Pulls changes from Cfg.SourceDirs and writes hashes to file.
-func pullChanges() tea.Msg {
-	selfDir := cfg.Global.SelfDir()
-
-	if err := os.RemoveAll(selfDir); err != nil {
-		return myerr.NewErrMsg(err)
-	}
-
-	if err := os.MkdirAll(selfDir, 0755); err != nil {
-		return myerr.NewErrMsg(err)
-	}
-
-	for _, srcDir := range cfg.Global.SourceDirs {
-		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
-		if err := local.HardlinkDir(srcDir, destDir); err != nil {
-			return myerr.NewErrMsg(err)
-		}
-	}
-
-	return doneBackup{}
 }
 
 type doneHashsums struct{}
@@ -139,20 +144,13 @@ type doneHashsums struct{}
 func newHashes() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 	if err := hashsums.NewDirFileHash(selfDir); err != nil {
-		return myerr.NewErrMsg(err)
+		return myerr.TuiMsg(err)
 	}
 	return doneHashsums{}
 }
 
-// Pushes changes to a given node address.
-func sendChanges(address string) error {
-	client, err := remote.NewSSHClient(address)
-	if err != nil {
-		return fmt.Errorf("new ssh client ⇒  %w", err)
-	}
-	defer client.Close()
+type doneSend struct{}
 
-	// TODO: Don't know what's happening here.
-
-	return nil
+func sendRemote() tea.Msg {
+	return doneSend{}
 }

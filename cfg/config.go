@@ -5,12 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/goccy/go-yaml"
 )
 
 const VERSION = "0.0.1"
 
 var Global MaeveConfig
+var TuiProgram *tea.Program
+var TuiInteractive bool
 
 type MaeveConfig struct {
 	Name          string   `yaml:"Name"`

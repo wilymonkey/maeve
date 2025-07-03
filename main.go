@@ -59,6 +59,7 @@ func main() {
 		return
 
 	default:
+		cfg.TuiInteractive = true
 		startTui(home.New())
 	}
 }
@@ -76,8 +77,9 @@ func nodePath(dir string) {
 }
 
 func startTui(start tea.Model) {
-	p := tea.NewProgram(overseer.New(start), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	cfg.TuiProgram = tea.NewProgram(overseer.New(start), tea.WithAltScreen())
+
+	if _, err := cfg.TuiProgram.Run(); err != nil {
 		log.Fatalf("Failed to start TUI:  %v", err)
 	}
 }
