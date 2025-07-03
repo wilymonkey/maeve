@@ -68,7 +68,7 @@ func (m Model) View() string {
 	fmt.Fprintf(&b, "Version: %s", cfg.VERSION)
 	b.WriteString("\n")
 	spinView := m.spinner.View()
-	b.WriteString(style.Title.Render("REMOTE NODES"))
+	b.WriteString(style.Title.Margin(1, 0).Render("REMOTE NODES"))
 	b.WriteString("\n")
 	for _, ns := range m.nodeStatus {
 		ns.View(&b, spinView)
@@ -77,7 +77,7 @@ func (m Model) View() string {
 			fmt.Fprintf(&b, "%s %v\n", title, ns.err)
 		}
 	}
-	b.WriteString(style.Title.Render("COMMANDS"))
+	b.WriteString(style.Title.Margin(1, 0).Render("COMMANDS"))
 	b.WriteString("\n")
 	b.WriteString(style.Help.Render("Press b to run backup"))
 	b.WriteString("\n")

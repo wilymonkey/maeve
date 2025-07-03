@@ -16,7 +16,7 @@ type linkPathMeta struct {
 	number int64
 	size   int64
 }
-type doneBackup struct{}
+type doneLinks struct{}
 
 // Pulls changes from Cfg.SourceDirs and writes hashes to file.
 func pullChanges(linkDirs map[string]linkPathMeta) tea.Msg {
@@ -58,5 +58,5 @@ func pullChanges(linkDirs map[string]linkPathMeta) tea.Msg {
 		close(sizeChan)
 	}
 
-	return doneBackup{}
+	return doneLinks{}
 }

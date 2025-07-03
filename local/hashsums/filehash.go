@@ -22,7 +22,7 @@ type FileHash struct {
 	Hash [32]byte
 }
 
-func NewDirFileHash(sourcePath string) error {
+func NewDirFileHash(sourcePath string, progChan chan struct{}) error {
 	sem := semaphore.NewScaling(20)
 	defer sem.Close()
 
@@ -42,7 +42,9 @@ func NewDirFileHash(sourcePath string) error {
 		if err != nil {
 			return err
 		}
-		if dir.IsDir() {
+		if info, err := dir.Info(); err != nil {
+			return err
+		} else if !info.Mode().IsRegular() {
 			return nil
 		}
 
@@ -50,18 +52,14 @@ func NewDirFileHash(sourcePath string) error {
 			sem.Acquire()
 			defer sem.Release()
 
-			if info, err := dir.Info(); err != nil {
-				return err
-			} else if !info.Mode().IsRegular() {
-				return nil
-			}
-
 			hash, err := hashFile(filePath)
 			if err != nil {
 				return err
 			}
 
 			hashChan <- FileHash{Path: mypath.NewSnapshotPath(sourcePath, filePath), Hash: hash}
+			progChan <- struct{}{}
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -110,7 +108,8 @@ func hashFile(path string) ([32]byte, error) {
 		if n == 0 {
 			break
 		}
-		hash.Write(buf[:n])
+		// Never returns an error.
+		_, _ = hash.Write(buf[:n])
 	}
 
 	copy(result[:], hash.Sum(nil))

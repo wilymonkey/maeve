@@ -20,7 +20,7 @@ var (
 	Spinner = lipgloss.NewStyle().Foreground(sky600)
 	Help    = lipgloss.NewStyle().Foreground(zinc500)
 	Fail    = lipgloss.NewStyle().Foreground(red400)
-	Title   = lipgloss.NewStyle().Margin(1, 0).Bold(true).Foreground(pink400)
+	Title   = lipgloss.NewStyle().Bold(true).Foreground(pink400)
 	Bright  = lipgloss.NewStyle().Foreground(zinc200)
 
 	// Merged
@@ -28,9 +28,13 @@ var (
 	TitleSuccess = Success.Inherit(Title)
 	TitleFail    = Fail.Inherit(Title)
 
+	// Margins
+	My = lipgloss.NewStyle().Margin(1, 0)
+	Mx = lipgloss.NewStyle().Margin(0, 1)
+
 	// ICONS
-	ITick  = Success.Margin(0, 1).Render("✔")
-	ICross = Fail.Margin(0, 1).Render("✘")
+	ITick  = Success.Inherit(Mx).Render("✔")
+	ICross = Fail.Inherit(Mx).Render("✘")
 	ILogo  = lipgloss.NewStyle().Foreground(sky700).Render(`
 ███╗   ███╗ █████╗ ███████╗██╗   ██╗███████╗
 ████╗ ████║██╔══██╗██╔════╝██║   ██║██╔════╝

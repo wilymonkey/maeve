@@ -2,6 +2,7 @@ package backup
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -16,15 +17,17 @@ import (
 )
 
 type Model struct {
-	linkDone bool
-	hashDone bool
-	sendDone bool
-	linkDirs map[string]linkPathMeta
-	width    int
-	height   int
-	spinner  spinner.Model
-	progress progress.Model
-	err      *myerr.ErrMsg
+	linkDone   bool
+	linkDirs   map[string]linkPathMeta
+	hashDone   bool
+	totalFiles int64
+	hashProg   int64
+	sendDone   bool
+	width      int
+	height     int
+	spinner    spinner.Model
+	progress   progress.Model
+	err        *myerr.ErrMsg
 }
 
 func New() Model {
@@ -68,11 +71,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case linkPathMeta:
 		m.linkDirs[msg.path] = msg
+		var totalFiles int64
+		for _, value := range m.linkDirs {
+			totalFiles += value.number
+		}
+		m.totalFiles = totalFiles
 		return m, nil
 
-	case doneBackup:
+	case doneLinks:
 		m.linkDone = true
 		return m, newHashes
+
+	case hashProg:
+		m.hashProg = msg.currDone
+		return m, nil
 
 	case doneHashsums:
 		m.hashDone = true
@@ -113,14 +125,16 @@ func (m Model) View() string {
 	var b strings.Builder
 	spinView := m.spinner.View()
 
-	titleWithProgress(&b, "CREATE BACKUP FILES", spinView, m.linkDone, true)
+	b.WriteString(titleWithProgress("CREATE BACKUP FILES", spinView, m.linkDone, true))
 	m.linkDirsView(&b)
 
 	b.WriteString("\n")
-	titleWithProgress(&b, "CALCULATING HASHSUMS", spinView, m.hashDone, m.linkDone)
+	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.linkDone))
+	perc := float32(m.hashProg) / float32(m.totalFiles) * 100
+	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", m.hashProg, m.totalFiles, perc)
 
 	b.WriteString("\n")
-	titleWithProgress(&b, "SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone)
+	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone))
 
 	if m.err != nil {
 		m.err.Print(&b)
@@ -132,32 +146,59 @@ func (m Model) View() string {
 	return b.String()
 }
 
-func titleWithProgress(b *strings.Builder, title, spinView string, isDone, isPending bool) {
+func titleWithProgress(title, spinView string, isDone, isPending bool) string {
+	var s string
 	if isDone {
-		b.WriteString(style.TitleSuccess.Render(title))
+		s = fmt.Sprintf("%s %s", style.ITick, style.TitleSuccess.Render(title))
 	} else if isPending {
-		fmt.Fprintf(b, "%s %s", spinView, style.Title.MarginTop(0).Render(title))
+		s = fmt.Sprintf(" %s %s", spinView, style.Title.Render(title))
 	} else {
-		b.WriteString(style.TitlePending.Render(title))
+		s = style.TitlePending.Render(title)
 	}
-	b.WriteString("\n")
+	return style.My.Render(s) + "\n"
 }
 
 func (m *Model) linkDirsView(b *strings.Builder) {
+	dirs := make([]linkPathMeta, 0, len(m.linkDirs))
 	for _, dir := range m.linkDirs {
-		path := utils.TruncateStr(dir.path, 20)
+		dirs = append(dirs, dir)
+	}
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].path < dirs[j].path
+	})
+
+	for _, dir := range dirs {
+		path := utils.TruncateStr(dir.path, 30)
 		size := utils.BytesToHuman(dir.size)
 		fmt.Fprintf(b, "%s   Files: %d Size: %s\n", path, dir.number, size)
 	}
 }
 
+type hashProg struct {
+	currDone int64
+}
 type doneHashsums struct{}
 
 func newHashes() tea.Msg {
 	selfDir := cfg.Global.SelfDir()
-	if err := hashsums.NewDirFileHash(selfDir); err != nil {
+
+	progChan := make(chan struct{}, 100)
+	var currDone int64
+	utils.Throttle(
+		progChan,
+		func(_ struct{}) {
+			currDone++
+		},
+		func() {
+			cfg.TuiProgram.Send(hashProg{currDone: currDone})
+		},
+	)
+
+	if err := hashsums.NewDirFileHash(selfDir, progChan); err != nil {
 		return myerr.TuiMsg(err)
 	}
+
+	close(progChan)
 	return doneHashsums{}
 }
 
