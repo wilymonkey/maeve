@@ -27,7 +27,7 @@ type Model struct {
 	height     int
 	spinner    spinner.Model
 	progress   progress.Model
-	err        *myerr.ErrMsg
+	err        error
 	ctx        context.Context
 	ctxCancel  context.CancelFunc
 }
@@ -89,7 +89,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneLinks:
 		m.linkDone = true
-		return m, newHashes
+		return m, func() tea.Msg { return newHashes(m.ctx) }
 
 	case hashProg:
 		m.hashProg = msg.currDone
@@ -108,8 +108,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, overseer.Back
 		}
 
-	case myerr.ErrMsg:
-		m.err = &msg
+	case error:
+		m.err = msg
+		m.ctxCancel()
 		if cfg.TuiInteractive {
 			return m, nil
 		} else {
@@ -147,7 +148,7 @@ func (m Model) View() string {
 	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone))
 
 	if m.err != nil {
-		m.err.Print(&b)
+		myerr.Print(m.err, &b)
 	}
 
 	b.WriteString("\n")
@@ -186,7 +187,7 @@ type hashProg struct {
 }
 type doneHashsums struct{}
 
-func newHashes() tea.Msg {
+func newHashes(parentCtx context.Context) tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 
 	progChan := make(chan struct{}, 100)
@@ -201,8 +202,8 @@ func newHashes() tea.Msg {
 		},
 	)
 
-	if err := hashsums.NewDirFileHash(selfDir, progChan); err != nil {
-		return myerr.TuiMsg(err)
+	if err := hashsums.NewDirFileHash(selfDir, progChan, parentCtx); err != nil {
+		return myerr.WrapErr(err)
 	}
 
 	close(progChan)

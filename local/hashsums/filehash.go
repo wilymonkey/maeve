@@ -8,12 +8,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/local/mypath"
-	"github.com/wilymonkey/maeve/utils/semaphore"
+	"github.com/wilymonkey/maeve/utils/myerr"
 	"github.com/zeebo/blake3"
 )
 
@@ -22,15 +23,9 @@ type FileHash struct {
 	Hash [32]byte
 }
 
-func NewDirFileHash(sourcePath string, progChan chan struct{}) error {
-	sem := semaphore.NewScaling(20)
-	defer sem.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	eGrp, ctx := errgroup.WithContext(ctx)
-
+func NewDirFileHash(sourcePath string, progChan chan struct{}, ctx context.Context) error {
 	hashChan := make(chan FileHash, 100)
+	defer close(hashChan)
 	var hashsums []FileHash
 	go func() {
 		for hash := range hashChan {
@@ -38,7 +33,19 @@ func NewDirFileHash(sourcePath string, progChan chan struct{}) error {
 		}
 	}()
 
-	err := filepath.WalkDir(sourcePath, func(filePath string, dir os.DirEntry, err error) error {
+	eGrp, ctx := errgroup.WithContext(ctx)
+	eGrp.SetLimit(20 * runtime.NumCPU())
+
+	walkErr := filepath.WalkDir(sourcePath, func(filePath string, dir os.DirEntry, err error) error {
+		// time.Sleep(20 * time.Millisecond)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Continue
+		}
+
 		if err != nil {
 			return err
 		}
@@ -49,9 +56,6 @@ func NewDirFileHash(sourcePath string, progChan chan struct{}) error {
 		}
 
 		eGrp.Go(func() error {
-			sem.Acquire()
-			defer sem.Release()
-
 			hash, err := hashFile(filePath)
 			if err != nil {
 				return err
@@ -59,28 +63,21 @@ func NewDirFileHash(sourcePath string, progChan chan struct{}) error {
 
 			hashChan <- FileHash{Path: mypath.NewSnapshotPath(sourcePath, filePath), Hash: hash}
 			progChan <- struct{}{}
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				return nil
-			}
+			return nil
 		})
 
 		return nil
 	})
 
-	if err != nil {
-		return fmt.Errorf("walk dir %s ⇒  %w", sourcePath, err)
-	}
 	if err := eGrp.Wait(); err != nil {
-		return fmt.Errorf("hardlink files ⇒  %w", err)
+		return myerr.WrapErr(err)
 	}
-	close(hashChan)
+	if walkErr != nil {
+		return myerr.WrapErr(walkErr)
+	}
 
 	if err := writeFileHashes(hashsums); err != nil {
-		return fmt.Errorf("write hashsums to file ⇒  %w", err)
+		return myerr.WrapErr(err)
 	}
 
 	return nil

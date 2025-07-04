@@ -24,11 +24,11 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 	selfDir := cfg.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
-		return myerr.TuiMsg(err)
+		return myerr.WrapErr(err)
 	}
 
 	if err := os.MkdirAll(selfDir, 0755); err != nil {
-		return myerr.TuiMsg(err)
+		return myerr.WrapErr(err)
 	}
 
 	for srcDir := range linkDirs {
@@ -54,7 +54,7 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 			})
 
 		if err := local.HardlinkDir(srcDir, destDir, sizeChan, ctx); err != nil {
-			return myerr.TuiMsg(err)
+			return myerr.WrapErr(err)
 		}
 		close(sizeChan)
 	}

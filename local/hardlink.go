@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"time"
 
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
@@ -19,16 +18,23 @@ import (
 // Creates hardlinks for all files from source to target.
 //
 // CAUTION: Deletes the target directory if it exists.
-func HardlinkDir(source, target string, sizeChan chan int64, parentCtx context.Context) error {
+func HardlinkDir(source, target string, sizeChan chan int64, ctx context.Context) error {
 	if err := os.RemoveAll(target); err != nil {
 		return myerr.WrapErr(err)
 	}
 
-	eGrp, ctx := errgroup.WithContext(parentCtx)
+	eGrp, ctx := errgroup.WithContext(ctx)
 	eGrp.SetLimit(20 * runtime.NumCPU())
 
 	err := filepath.WalkDir(source, func(sourcePath string, dir os.DirEntry, err error) error {
-		time.Sleep(20 * time.Millisecond)
+		// time.Sleep(20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Continue
+		}
+
 		if err != nil {
 			return err
 		}
@@ -48,25 +54,17 @@ func HardlinkDir(source, target string, sizeChan chan int64, parentCtx context.C
 		targetPath := filepath.Join(target, relPath)
 
 		eGrp.Go(func() error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-parentCtx.Done():
-				return parentCtx.Err()
-			default:
-				sizeChan <- info.Size()
-				return hardlink(sourcePath, targetPath)
-			}
-
+			sizeChan <- info.Size()
+			return hardlink(sourcePath, targetPath)
 		})
 
 		return nil
 	})
 
-	if err != nil {
+	if err := eGrp.Wait(); err != nil {
 		return myerr.WrapErr(err)
 	}
-	if err := eGrp.Wait(); err != nil {
+	if err != nil {
 		return myerr.WrapErr(err)
 	}
 

@@ -17,17 +17,9 @@ func WrapErr(err error) error {
 	return fmt.Errorf("%s@%d: %w", filename, line, err)
 }
 
-type ErrMsg struct {
-	err error
-}
-
-func TuiMsg(e error) ErrMsg {
-	return ErrMsg{err: e}
-}
-
-func (e *ErrMsg) Print(b *strings.Builder) {
+func Print(err error, b *strings.Builder) {
 	fail := style.Fail.Render("Failed!")
-	fmt.Fprintf(b, "\n\n%s %s %v\n\n", style.ICross, fail, e.err)
+	fmt.Fprintf(b, "\n\n%s %s %v\n\n", style.ICross, fail, err)
 }
 
 func BoolView(b bool) string {
