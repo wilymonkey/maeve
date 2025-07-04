@@ -5,7 +5,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"time"
 
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
@@ -17,19 +19,16 @@ import (
 // Creates hardlinks for all files from source to target.
 //
 // CAUTION: Deletes the target directory if it exists.
-func HardlinkDir(source, target string, sizeChan chan int64) error {
+func HardlinkDir(source, target string, sizeChan chan int64, parentCtx context.Context) error {
 	if err := os.RemoveAll(target); err != nil {
 		return myerr.WrapErr(err)
 	}
 
-	sem := semaphore.NewScaling(20)
-	defer sem.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	eGrp, ctx := errgroup.WithContext(ctx)
+	eGrp, ctx := errgroup.WithContext(parentCtx)
+	eGrp.SetLimit(20 * runtime.NumCPU())
 
 	err := filepath.WalkDir(source, func(sourcePath string, dir os.DirEntry, err error) error {
+		time.Sleep(20 * time.Millisecond)
 		if err != nil {
 			return err
 		}
@@ -49,12 +48,11 @@ func HardlinkDir(source, target string, sizeChan chan int64) error {
 		targetPath := filepath.Join(target, relPath)
 
 		eGrp.Go(func() error {
-			sem.Acquire()
-			defer sem.Release()
-
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-parentCtx.Done():
+				return parentCtx.Err()
 			default:
 				sizeChan <- info.Size()
 				return hardlink(sourcePath, targetPath)

@@ -1,8 +1,8 @@
 package backup
 
 import (
+	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -28,6 +28,8 @@ type Model struct {
 	spinner    spinner.Model
 	progress   progress.Model
 	err        *myerr.ErrMsg
+	ctx        context.Context
+	ctxCancel  context.CancelFunc
 }
 
 func New() Model {
@@ -44,17 +46,20 @@ func New() Model {
 	for _, dir := range cfg.Global.SourceDirs {
 		linkDirs[dir] = linkPathMeta{path: dir}
 	}
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	return Model{
-		linkDirs: linkDirs,
-		spinner:  s,
-		progress: p,
+		linkDirs:  linkDirs,
+		spinner:   s,
+		progress:  p,
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		func() tea.Msg { return pullChanges(m.linkDirs) },
+	return tea.Sequence(
 		m.spinner.Tick,
+		func() tea.Msg { return pullChanges(m.linkDirs, m.ctx) },
 	)
 }
 
@@ -66,6 +71,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc", "q":
+			if m.ctx.Err() == nil {
+				m.ctxCancel()
+				return m, nil
+			}
 			return m, overseer.Back
 		}
 
@@ -92,6 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneSend:
 		m.sendDone = true
+		m.ctxCancel()
 		if cfg.TuiInteractive {
 			return m, nil
 		} else {
@@ -141,7 +151,11 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(style.Help.Render("Press q to stop"))
+	if m.ctx.Err() != nil {
+		b.WriteString(style.Success.Render("Press q to go back"))
+	} else {
+		b.WriteString(style.Fail.Render("Press q to stop backup"))
+	}
 
 	return b.String()
 }
@@ -159,15 +173,8 @@ func titleWithProgress(title, spinView string, isDone, isPending bool) string {
 }
 
 func (m *Model) linkDirsView(b *strings.Builder) {
-	dirs := make([]linkPathMeta, 0, len(m.linkDirs))
-	for _, dir := range m.linkDirs {
-		dirs = append(dirs, dir)
-	}
-	sort.Slice(dirs, func(i, j int) bool {
-		return dirs[i].path < dirs[j].path
-	})
-
-	for _, dir := range dirs {
+	for _, dirPath := range cfg.Global.SourceDirs {
+		dir := m.linkDirs[dirPath]
 		path := utils.TruncateStr(dir.path, 30)
 		size := utils.BytesToHuman(dir.size)
 		fmt.Fprintf(b, "%s   Files: %d Size: %s\n", path, dir.number, size)

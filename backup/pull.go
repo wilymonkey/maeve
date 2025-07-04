@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -19,7 +20,7 @@ type linkPathMeta struct {
 type doneLinks struct{}
 
 // Pulls changes from Cfg.SourceDirs and writes hashes to file.
-func pullChanges(linkDirs map[string]linkPathMeta) tea.Msg {
+func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
@@ -52,7 +53,7 @@ func pullChanges(linkDirs map[string]linkPathMeta) tea.Msg {
 				)
 			})
 
-		if err := local.HardlinkDir(srcDir, destDir, sizeChan); err != nil {
+		if err := local.HardlinkDir(srcDir, destDir, sizeChan, ctx); err != nil {
 			return myerr.TuiMsg(err)
 		}
 		close(sizeChan)
