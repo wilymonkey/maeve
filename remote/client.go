@@ -8,29 +8,27 @@ import (
 
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/local/hashsums"
+	"github.com/wilymonkey/maeve/utils/myerr"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func NewSSHClient(address string) (*ssh.Client, error) {
-	user, host, port, err := parseAddress(address)
-	if err != nil {
-		return nil, fmt.Errorf("parse node address ⇒  %w", err)
-	}
+	user, host, port := parseAddress(address)
 
 	key, err := os.ReadFile(cfg.Global.SSHKey)
 	if err != nil {
-		return nil, fmt.Errorf("read ssh key ⇒  %w", err)
+		return nil, myerr.WrapErr(err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil, fmt.Errorf("parse ssh key ⇒  %w", err)
+		return nil, myerr.WrapErr(err)
 	}
 
 	hostKeyCallback, err := knownhosts.New(cfg.Global.SSHKnownHosts)
 	if err != nil {
-		return nil, fmt.Errorf("create host key callback ⇒  %w", err)
+		return nil, myerr.WrapErr(err)
 	}
 
 	config := &ssh.ClientConfig{
@@ -41,15 +39,15 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	client, err := ssh.Dial("tcp", host+":"+port, config)
 	if err != nil {
-		return nil, fmt.Errorf("dial ssh ⇒  %w", err)
+		return nil, myerr.WrapErr(err)
 	}
 	return client, nil
 }
 
-func parseAddress(address string) (user, host, port string, err error) {
+func parseAddress(address string) (user, host, port string) {
 	parts := strings.Split(address, "@")
 	if len(parts) != 2 {
-		return "", "", "", fmt.Errorf("invalid format: missing @")
+		parts = append([]string{""}, parts...)
 	}
 	user = parts[0]
 
@@ -60,7 +58,7 @@ func parseAddress(address string) (user, host, port string, err error) {
 	host = hostPort[0]
 	port = hostPort[1]
 
-	return user, host, port, nil
+	return user, host, port
 }
 
 func remoteHashes(client *ssh.Client) ([]hashsums.FileHash, error) {

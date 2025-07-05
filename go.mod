@@ -7,12 +7,14 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/goccy/go-yaml v1.18.0
+	github.com/pkg/sftp v1.13.9
 	github.com/zeebo/blake3 v0.2.4
 )
 
 require (
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 )
 

@@ -23,7 +23,7 @@ type FileHash struct {
 	Hash [32]byte
 }
 
-func NewDirFileHash(sourcePath string, progChan chan struct{}, ctx context.Context) error {
+func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Context) error {
 	hashChan := make(chan FileHash, 100)
 	defer close(hashChan)
 	var hashsums []FileHash
@@ -56,13 +56,19 @@ func NewDirFileHash(sourcePath string, progChan chan struct{}, ctx context.Conte
 		}
 
 		eGrp.Go(func() error {
-			hash, err := hashFile(filePath)
+			hash, err := GenHash(filePath)
 			if err != nil {
-				return err
+				return myerr.WrapErr(err)
 			}
 
-			hashChan <- FileHash{Path: mypath.NewSnapshotPath(sourcePath, filePath), Hash: hash}
-			progChan <- struct{}{}
+			snapshotPath, err := mypath.NewSnapshotPath(sourcePath, filePath)
+			if err != nil {
+				return myerr.WrapErr(err)
+			}
+
+			fh := FileHash{Path: snapshotPath, Hash: hash}
+			hashChan <- fh
+			progChan <- fh
 			return nil
 		})
 
@@ -84,7 +90,7 @@ func NewDirFileHash(sourcePath string, progChan chan struct{}, ctx context.Conte
 }
 
 // Hash on a file.
-func hashFile(path string) ([32]byte, error) {
+func GenHash(path string) ([32]byte, error) {
 	var result [32]byte
 
 	file, err := os.Open(path)

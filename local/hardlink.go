@@ -86,5 +86,5 @@ func hardlink(sourcePath, targetPath string) error {
 		return myerr.WrapErr(err)
 	}
 
-	return err
+	return nil
 }

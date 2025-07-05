@@ -1,10 +1,10 @@
 package mypath
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type RelativePath struct {
@@ -20,13 +20,13 @@ type SnapshotPath struct {
 	Path string
 }
 
-func NewSnapshotPath(sourcePath, filePath string) SnapshotPath {
+func NewSnapshotPath(sourcePath, filePath string) (SnapshotPath, error) {
 	relPath, err := filepath.Rel(sourcePath, filePath)
 	if err != nil {
-		panic(fmt.Errorf("Critical! Unable to get relative path of: %s and %s", sourcePath, filePath))
+		return SnapshotPath{}, myerr.WrapErr(err)
 	}
 
-	return SnapshotPath{Path: relPath}
+	return SnapshotPath{Path: relPath}, nil
 }
 
 // Resolves to relative path.
@@ -35,6 +35,16 @@ func (s *SnapshotPath) Resolve(snapshot string) RelativePath {
 }
 
 // Resolves to an absolute path with NodeDirTemp as the base.
-func (r *SnapshotPath) ResolveTemp(node string) string {
-	return filepath.Join(cfg.Global.NodeDirTemp(node), r.Path)
+func (s *SnapshotPath) ResolveTemp(node string) string {
+	return filepath.Join(cfg.Global.NodeDirTemp(node), s.Path)
+}
+
+// Resolves to an absolute path with SelfDir as the base.
+func (s *SnapshotPath) ResolveSelf() string {
+	return filepath.Join(cfg.Global.SelfDir(), s.Path)
+}
+
+// Resolves to an absolute path with SelfDir as the base.
+func (s *SnapshotPath) ResolvePrepend(prepend string) string {
+	return filepath.Join(prepend, s.Path)
 }

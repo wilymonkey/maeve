@@ -3,27 +3,53 @@ package remote
 import (
 	"context"
 	"io"
-	"time"
+	"os"
+	"path/filepath"
 
+	"github.com/pkg/sftp"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
+	"github.com/wilymonkey/maeve/rpc"
+	"github.com/wilymonkey/maeve/utils/myerr"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
 
 type SendStatus struct {
-	hash       hs.FileHash
-	curr       int64
-	total      int64
-	isVerified bool
+	hash      hs.FileHash
+	Curr      int64
+	Total     int64
+	Verifying bool
+	IsGood    bool
 }
 
 func SendFiles(
 	hashes []hs.FileHash,
-	client *ssh.Client,
+	sshClient *ssh.Client,
 	ctx context.Context,
 	progChan chan SendStatus,
-) {
+) error {
 	eGrp, ctx := errgroup.WithContext(ctx)
+
+	rpcSesh, err := sshClient.NewSession()
+	if err != nil {
+		return myerr.WrapErr(err)
+	}
+	defer rpcSesh.Close()
+	rpcClient, err := rpc.New(rpcSesh)
+	if err != nil {
+		return myerr.WrapErr(err)
+	}
+	defer rpcClient.Close()
+	sftpClient, err := sftp.NewClient(sshClient)
+	if err != nil {
+		return myerr.WrapErr(err)
+	}
+	defer sftpClient.Close()
+
+	remoteDir, err := rpc.SelfNodeTempLoc(rpcClient)
+	if err != nil {
+		return myerr.WrapErr(err)
+	}
 
 	downChan := make(chan hs.FileHash, 2)
 	defer close(downChan)
@@ -33,8 +59,10 @@ func SendFiles(
 
 	eGrp.Go(func() error {
 		for hash := range downChan {
-			status := SendStatus{hash: hash}
-			// TODO: Send the file.
+			status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
+			if err != nil {
+				return myerr.WrapErr(err)
+			}
 			verifyChan <- status
 		}
 		return nil
@@ -42,9 +70,26 @@ func SendFiles(
 
 	eGrp.Go(func() error {
 		for status := range verifyChan {
-			// TODO: Ask the remote if the file is correct.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				// Continue
+			}
+
+			status.Verifying = true
 			progChan <- status
-			if len(hashes) < i {
+
+			isGood, err := rpc.VerifyFile(rpcClient, status.hash)
+			if err != nil {
+				return myerr.WrapErr(err)
+			}
+			status.IsGood = isGood
+			progChan <- status
+
+			if !status.IsGood {
+				downChan <- status.hash
+			} else if len(hashes) < i {
 				downChan <- hashes[i]
 				i++
 			}
@@ -61,30 +106,76 @@ func SendFiles(
 			i++
 		}
 	}
+
+	return nil
+}
+
+func pushFile(
+	sftpClient *sftp.Client,
+	hash hs.FileHash,
+	remoteDir string,
+	ctx context.Context,
+	progChan chan SendStatus,
+) (SendStatus, error) {
+	status := SendStatus{hash: hash}
+
+	localFile, err := os.Open(hash.Path.ResolveSelf())
+	if err != nil {
+		return status, myerr.WrapErr(err)
+	}
+	defer localFile.Close()
+	fileInfo, err := localFile.Stat()
+	if err != nil {
+		return status, myerr.WrapErr(err)
+	}
+	status.Total = fileInfo.Size()
+
+	remotePath := hash.Path.ResolvePrepend(remoteDir)
+	parentDir := filepath.Dir(remotePath)
+	if err := sftpClient.MkdirAll(parentDir); err != nil {
+		return status, myerr.WrapErr(err)
+	}
+
+	remoteFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		return status, myerr.WrapErr(err)
+	}
+	pw := &ProgressWriter{
+		Writer: remoteFile,
+		Total:  status.Total,
+		ctx:    ctx,
+		Progress: func(written int64) {
+			status.Curr = written
+			progChan <- status
+		},
+	}
+
+	if _, err := io.Copy(pw, localFile); err != nil {
+		return status, myerr.WrapErr(err)
+	}
+	return status, nil
 }
 
 type ProgressWriter struct {
-	ID           int
-	Writer       io.Writer
-	Total        int64
-	Transferred  int64
-	Percent      int
-	LastReported time.Time
+	Writer   io.Writer
+	Total    int64
+	Written  int64
+	Progress func(written int64)
+	ctx      context.Context
 }
 
-func NewProgressWriter(id int, total int64, writer io.Writer) ProgressWriter {
-	return ProgressWriter{ID: id, Writer: writer, Total: total}
-}
-
-func (pw *ProgressWriter) Write(p []byte) (int, error) {
-	n, err := pw.Writer.Write(p)
-	pw.Transferred += int64(n)
-
-	now := time.Now()
-	if now.Sub(pw.LastReported) > time.Second || pw.Transferred == pw.Total {
-		pw.Percent = int(float64(pw.Transferred) / float64(pw.Total) * 100)
-		pw.LastReported = now
+// Write implements the io.Writer interface.
+// Assumes the Progress field is not nil.
+func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
+	select {
+	case <-pw.ctx.Done():
+		return 0, pw.ctx.Err()
+	default:
+		// Continue
 	}
 
+	n, err = pw.Writer.Write(p)
+	pw.Written += int64(n)
+	pw.Progress(pw.Written)
 	return n, err
 }

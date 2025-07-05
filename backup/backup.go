@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local/hashsums"
+	hs "github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/style"
 	"github.com/wilymonkey/maeve/utils"
@@ -21,7 +21,7 @@ type Model struct {
 	linkDirs   map[string]linkPathMeta
 	hashDone   bool
 	totalFiles int64
-	hashProg   int64
+	hashProg   []hs.FileHash
 	sendDone   bool
 	width      int
 	height     int
@@ -89,15 +89,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneLinks:
 		m.linkDone = true
-		return m, func() tea.Msg { return newHashes(m.ctx) }
+		return m, func() tea.Msg { return newHashes(m.ctx, m.totalFiles) }
 
 	case hashProg:
-		m.hashProg = msg.currDone
+		m.hashProg = msg.hashes
 		return m, nil
 
 	case doneHashsums:
 		m.hashDone = true
-		return m, sendRemote
+		return m, func() tea.Msg { return pushChanges(m.ctx, m.hashProg) }
 
 	case doneSend:
 		m.sendDone = true
@@ -141,8 +141,8 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.linkDone))
-	perc := float32(m.hashProg) / float32(m.totalFiles) * 100
-	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", m.hashProg, m.totalFiles, perc)
+	perc := float32(len(m.hashProg)) / float32(m.totalFiles) * 100
+	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashProg), m.totalFiles, perc)
 
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone))
@@ -183,35 +183,29 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 }
 
 type hashProg struct {
-	currDone int64
+	hashes []hs.FileHash
 }
 type doneHashsums struct{}
 
-func newHashes(parentCtx context.Context) tea.Msg {
+func newHashes(parentCtx context.Context, total int64) tea.Msg {
 	selfDir := cfg.Global.SelfDir()
 
-	progChan := make(chan struct{}, 100)
-	var currDone int64
+	progChan := make(chan hs.FileHash, 100)
+	hashes := make([]hs.FileHash, 0, total)
 	utils.Throttle(
 		progChan,
-		func(_ struct{}) {
-			currDone++
+		func(hash hs.FileHash) {
+			hashes = append(hashes, hash)
 		},
 		func() {
-			cfg.TuiProgram.Send(hashProg{currDone: currDone})
+			cfg.TuiProgram.Send(hashProg{hashes: hashes})
 		},
 	)
 
-	if err := hashsums.NewDirFileHash(selfDir, progChan, parentCtx); err != nil {
+	if err := hs.NewDirFileHash(selfDir, progChan, parentCtx); err != nil {
 		return myerr.WrapErr(err)
 	}
 
 	close(progChan)
 	return doneHashsums{}
-}
-
-type doneSend struct{}
-
-func sendRemote() tea.Msg {
-	return doneSend{}
 }

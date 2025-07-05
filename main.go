@@ -11,6 +11,7 @@ import (
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/home"
 	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/rpc"
 )
 
 func main() {
@@ -30,8 +31,7 @@ func main() {
 	flagVersion := fs.Bool("version", false, "Print the current version")
 
 	// Hidden, internal use only
-	flagHashes := fs.String("latest-hashes", "", "")
-	flagNodePath := fs.String("node-path", "", "")
+	flagServer := fs.Bool("server", false, "")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("Failed to parse args: %v", err)
@@ -50,12 +50,12 @@ func main() {
 		printVersion()
 		return
 
-	case *flagNodePath != "":
-		nodePath(*flagNodePath)
-		return
-
-	case *flagHashes != "":
-		latestHashes(*flagHashes)
+	case *flagServer:
+		log.Println("RPC Server: Starting...")
+		if err := rpc.RunServer(); err != nil {
+			log.Fatalf("RPC Server Failed:  %v", err)
+		}
+		log.Println("RPC Server: Exiting.")
 		return
 
 	default:
@@ -64,16 +64,9 @@ func main() {
 	}
 }
 
-func latestHashes(node string) {
-}
-
 func printVersion() {
 	fmt.Printf("%s\n", cfg.VERSION)
 	os.Exit(0)
-}
-
-func nodePath(dir string) {
-	// TODO: Are we keeping this?
 }
 
 func startTui(start tea.Model) {
