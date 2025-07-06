@@ -1,22 +1,20 @@
 package utils
 
 import (
-	"strings"
+	"github.com/charmbracelet/lipgloss"
 )
 
-func TruncateStr(s string, targetLen int) string {
-	runes := []rune(s)
-	paddingNeeded := targetLen - len(runes)
+func TruncateStr(s string, width int) string {
+	sWidth := lipgloss.Width(s)
+	if sWidth > width {
+		// We need space for the ellipsis.
+		availWidth := width - 2
 
-	if len(runes) > targetLen {
-		shortenBy := max(len(runes)-targetLen, 3)
-		runes = append([]rune("..."), runes[shortenBy+1:]...)
-		if len(runes) == targetLen {
-			return string(runes)
+		// Convert to runes for proper Unicode character handling.
+		runes := []rune(s)
+		if len(runes) > availWidth {
+			return "… " + string(runes[len(runes)-availWidth:])
 		}
-		paddingNeeded = len(runes) - targetLen
 	}
-
-	// runes can change in if, so can't assign len to variable.
-	return string(runes) + strings.Repeat(" ", paddingNeeded)
+	return s
 }

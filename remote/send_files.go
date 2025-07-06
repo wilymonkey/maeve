@@ -52,59 +52,80 @@ func SendFiles(
 	}
 
 	downChan := make(chan hs.FileHash, 2)
-	defer close(downChan)
 	i := 0
 	verifyChan := make(chan SendStatus, 1)
-	defer close(verifyChan)
+	doneChan := make(chan struct{}, 1)
+	go func() {
+		<-doneChan
+		close(downChan)
+		close(verifyChan)
+	}()
+	defer close(doneChan)
 
 	eGrp.Go(func() error {
-		for hash := range downChan {
-			status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
-			if err != nil {
-				return myerr.WrapErr(err)
-			}
-			verifyChan <- status
-		}
-		return nil
-	})
-
-	eGrp.Go(func() error {
-		for status := range verifyChan {
+		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			default:
-				// Continue
+			case hash, ok := <-downChan:
+				if !ok {
+					return nil
+				}
+				status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
+				if err != nil {
+					return myerr.WrapErr(err)
+				}
+				verifyChan <- status
 			}
+		}
+	})
 
-			status.Verifying = true
-			progChan <- status
-
-			isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
-			if err != nil {
-				return myerr.WrapErr(err)
-			}
-			status.IsGood = isGood
-			progChan <- status
-
-			if !status.IsGood {
-				downChan <- status.Hash
-			} else if len(hashes) < i {
+	eGrp.Go(func() error {
+		// Init the downloads
+		if i < len(hashes) {
+			downChan <- hashes[i]
+			i++
+			if i < len(hashes) {
+				return myerr.DummyErr()
 				downChan <- hashes[i]
 				i++
 			}
 		}
-		return nil
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case status, ok := <-verifyChan:
+				if !ok {
+					return nil
+				}
+
+				status.Verifying = true
+				progChan <- status
+
+				isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
+				if err != nil {
+					return myerr.WrapErr(err)
+				}
+				status.IsGood = isGood
+				progChan <- status
+
+				if !status.IsGood {
+					downChan <- status.Hash
+				} else if i < len(hashes) {
+					downChan <- hashes[i]
+					i++
+				} else {
+					doneChan <- struct{}{}
+				}
+			}
+		}
 	})
 
-	// Init the downloads
-	if len(hashes) < i {
-		downChan <- hashes[i]
-		i++
-		if len(hashes) < i {
-			downChan <- hashes[i]
-			i++
-		}
+	if err := eGrp.Wait(); err != nil {
+		doneChan <- struct{}{}
+		return myerr.WrapErr(err)
 	}
 
 	return nil

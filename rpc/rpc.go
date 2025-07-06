@@ -40,8 +40,8 @@ func (c *sshPipeConn) SetWriteDeadline(t time.Time) error { return nil }
 func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 
 func RunServer() error {
-	hashFuncs := new(RPCFuncs)
-	if err := rpc.Register(hashFuncs); err != nil {
+	rpcFuncs := new(RPCFuncs)
+	if err := rpc.Register(rpcFuncs); err != nil {
 		return myerr.WrapErr(err)
 	}
 
@@ -128,7 +128,7 @@ func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
 		Node: cfg.Global.Name,
 	}
 	var reply VerifyFuncReply
-	if err := rpc.Call("RPCFuncs.VerifyTempFile", args, &reply); err != nil {
+	if err := rpc.Call("RPCFuncs.VerifyTempfile", args, &reply); err != nil {
 		return false, myerr.WrapErr(err)
 	}
 	return reply.HashGood, nil

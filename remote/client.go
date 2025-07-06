@@ -1,13 +1,10 @@
 package remote
 
 import (
-	"encoding/gob"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/utils/myerr"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -59,34 +56,4 @@ func parseAddress(address string) (user, host, port string) {
 	port = hostPort[1]
 
 	return user, host, port
-}
-
-func remoteHashes(client *ssh.Client) ([]hashsums.FileHash, error) {
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("new ssh session ⇒  %w", err)
-	}
-	defer session.Close()
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("getting stdOut pipe for session ⇒  %w", err)
-	}
-
-	err = session.Start(fmt.Sprintf("maeve --latest-hashes %s", cfg.Global.Name))
-	if err != nil {
-		return nil, fmt.Errorf("start maeve through ssh ⇒  %w", err)
-	}
-
-	var hashes []hashsums.FileHash
-	err = gob.NewDecoder(stdout).Decode(&hashes)
-	if err != nil {
-		return nil, fmt.Errorf("decode stdout ⇒  %w", err)
-	}
-
-	if err = session.Wait(); err != nil {
-		return nil, fmt.Errorf("session wait for cmd ⇒  %w", err)
-	}
-
-	return hashes, nil
 }

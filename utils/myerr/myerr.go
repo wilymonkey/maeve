@@ -17,6 +17,13 @@ func WrapErr(err error) error {
 	return fmt.Errorf("%s@%d: %w", filename, line, err)
 }
 
+func DummyErr() error {
+	_, file, line, _ := runtime.Caller(1)
+	filename := filepath.Base(file)
+
+	return fmt.Errorf("%s@%d: DummyErr", filename, line)
+}
+
 func Print(err error, b *strings.Builder) {
 	fail := style.Fail.Render("Failed!")
 	fmt.Fprintf(b, "\n\n%s %s %v\n\n", style.ICross, fail, err)

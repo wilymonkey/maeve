@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -23,7 +24,7 @@ type Model struct {
 	linkDirs    map[string]linkPathMeta
 	hashDone    bool
 	totalFiles  int64
-	hashProg    []hs.FileHash
+	hashes      []hs.FileHash
 	pushProg    pushProgress
 	pushingNode int
 	pushDone    bool
@@ -97,12 +98,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return newHashes(m.ctx, m.totalFiles) }
 
 	case hashProg:
-		m.hashProg = msg.hashes
+		m.hashes = msg.hashes
 		return m, nil
 
 	case doneHashsums:
 		m.hashDone = true
-		return m, func() tea.Msg { return pushChanges(m.ctx, m.hashProg) }
+		return m, func() tea.Msg { return pushChanges(m.ctx, m.hashes) }
 
 	case pushingNode:
 		m.pushingNode = msg.index
@@ -127,7 +128,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cfg.TuiInteractive {
 			return m, nil
 		} else {
-			return m, overseer.Back
+			return m, nil
+			// return m, overseer.Back
 		}
 
 	case spinner.TickMsg:
@@ -154,8 +156,8 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.pullDone))
-	perc := float32(len(m.hashProg)) / float32(m.totalFiles) * 100
-	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashProg), m.totalFiles, perc)
+	perc := float32(len(m.hashes)) / float32(m.totalFiles) * 100
+	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashes), m.totalFiles, perc)
 
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
@@ -188,11 +190,33 @@ func titleWithProgress(title, spinView string, isDone, isPending bool) string {
 }
 
 func (m *Model) linkDirsView(b *strings.Builder) {
+	columns := []table.Column{
+		{Title: "Dir", Width: 40},
+		{Title: "Files", Width: 10},
+		{Title: "Size", Width: 10},
+	}
+	var rows []table.Row
 	for _, dirPath := range cfg.Global.SourceDirs {
 		dir := m.linkDirs[dirPath]
 		path := utils.TruncateStr(dir.path, 30)
 		size := utils.BytesToHuman(dir.size)
-		fmt.Fprintf(b, "%s   Files: %d Size: %s\n", path, dir.number, size)
+		r := table.Row{
+			path,
+			strconv.FormatInt(dir.number, 10),
+			size,
+		}
+		rows = append(rows, r)
+	}
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithHeight(len(cfg.Global.SourceDirs)),
+	)
+	s := table.DefaultStyles()
+	s.Header = style.Table
+	t.SetStyles(s)
+	if m.hashDone && !m.pushDone {
+		b.WriteString(t.View())
 	}
 }
 
@@ -201,16 +225,16 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		if m.pushingNode == i {
 			fmt.Fprintf(b, "%s %s", node, spinView)
 		} else {
-			fmt.Fprintf(b, style.Fade.Render(node))
+			fmt.Fprint(b, style.Fade.Render(node))
 		}
 		b.WriteString("\n")
 	}
 
 	columns := []table.Column{
-		{Title: "File", Width: 20},
-		{Title: "Size", Width: 5},
-		{Title: "%", Width: 5},
-		{Title: "Verified", Width: 5},
+		{Title: "File", Width: 40},
+		{Title: "Size", Width: 10},
+		{Title: "%", Width: 10},
+		{Title: "Verified", Width: 10},
 	}
 	var rows []table.Row
 	m.pushProg.operations.ForEach(func(item remote.SendStatus) {
@@ -222,7 +246,7 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 			verified = style.ITick
 		}
 		r := table.Row{
-			item.Hash.Path.Path,
+			utils.TruncateStr(item.Hash.Path.Path, 30),
 			utils.BytesToHuman(item.Total),
 			fmt.Sprintf("%0.2f%%", perc),
 			verified,
