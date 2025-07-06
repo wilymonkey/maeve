@@ -7,29 +7,33 @@ import (
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type Model struct {
-	linkDone   bool
-	linkDirs   map[string]linkPathMeta
-	hashDone   bool
-	totalFiles int64
-	hashProg   []hs.FileHash
-	sendDone   bool
-	width      int
-	height     int
-	spinner    spinner.Model
-	progress   progress.Model
-	err        error
-	ctx        context.Context
-	ctxCancel  context.CancelFunc
+	pullDone    bool
+	linkDirs    map[string]linkPathMeta
+	hashDone    bool
+	totalFiles  int64
+	hashProg    []hs.FileHash
+	pushProg    pushProgress
+	pushingNode int
+	pushDone    bool
+	width       int
+	height      int
+	spinner     spinner.Model
+	progress    progress.Model
+	err         error
+	ctx         context.Context
+	ctxCancel   context.CancelFunc
 }
 
 func New() Model {
@@ -53,6 +57,7 @@ func New() Model {
 		progress:  p,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
+		pushProg:  newPushProgress(0),
 	}
 }
 
@@ -88,7 +93,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case doneLinks:
-		m.linkDone = true
+		m.pullDone = true
 		return m, func() tea.Msg { return newHashes(m.ctx, m.totalFiles) }
 
 	case hashProg:
@@ -99,8 +104,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hashDone = true
 		return m, func() tea.Msg { return pushChanges(m.ctx, m.hashProg) }
 
+	case pushingNode:
+		m.pushingNode = msg.index
+		return m, nil
+
+	case pushProgress:
+		m.pushProg = msg
+		return m, nil
+
 	case doneSend:
-		m.sendDone = true
+		m.pushDone = true
 		m.ctxCancel()
 		if cfg.TuiInteractive {
 			return m, nil
@@ -136,16 +149,17 @@ func (m Model) View() string {
 	var b strings.Builder
 	spinView := m.spinner.View()
 
-	b.WriteString(titleWithProgress("CREATE BACKUP FILES", spinView, m.linkDone, true))
+	b.WriteString(titleWithProgress("CREATE BACKUP FILES", spinView, m.pullDone, true))
 	m.linkDirsView(&b)
 
 	b.WriteString("\n")
-	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.linkDone))
+	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.pullDone))
 	perc := float32(len(m.hashProg)) / float32(m.totalFiles) * 100
 	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashProg), m.totalFiles, perc)
 
 	b.WriteString("\n")
-	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.sendDone, m.hashDone))
+	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
+	m.pushView(&b, spinView)
 
 	if m.err != nil {
 		myerr.Print(m.err, &b)
@@ -179,6 +193,53 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 		path := utils.TruncateStr(dir.path, 30)
 		size := utils.BytesToHuman(dir.size)
 		fmt.Fprintf(b, "%s   Files: %d Size: %s\n", path, dir.number, size)
+	}
+}
+
+func (m *Model) pushView(b *strings.Builder, spinView string) {
+	for i, node := range cfg.Global.RemoteNodes {
+		if m.pushingNode == i {
+			fmt.Fprintf(b, "%s %s", node, spinView)
+		} else {
+			fmt.Fprintf(b, style.Fade.Render(node))
+		}
+		b.WriteString("\n")
+	}
+
+	columns := []table.Column{
+		{Title: "File", Width: 20},
+		{Title: "Size", Width: 5},
+		{Title: "%", Width: 5},
+		{Title: "Verified", Width: 5},
+	}
+	var rows []table.Row
+	m.pushProg.operations.ForEach(func(item remote.SendStatus) {
+		perc := float32(item.Curr) / float32(item.Total) * 100
+		var verified string
+		if item.Verifying {
+			verified = spinView
+		} else if item.IsGood {
+			verified = style.ITick
+		}
+		r := table.Row{
+			item.Hash.Path.Path,
+			utils.BytesToHuman(item.Total),
+			fmt.Sprintf("%0.2f%%", perc),
+			verified,
+		}
+		rows = append(rows, r)
+	})
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithHeight(7),
+	)
+	s := table.DefaultStyles()
+	s.Header = style.Table
+	t.SetStyles(s)
+	if m.hashDone && !m.pushDone {
+		b.WriteString(t.View())
 	}
 }
 

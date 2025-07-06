@@ -12,8 +12,13 @@ import (
 
 type doneSend struct{}
 
+type pushingNode struct {
+	index int
+}
+
 func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
-	for _, node := range cfg.Global.RemoteNodes {
+	for i, node := range cfg.Global.RemoteNodes {
+		cfg.TuiProgram.Send(pushingNode{index: i})
 		if err := pushToNode(ctx, hashes, node); err != nil {
 			return myerr.WrapErr(err)
 		}
@@ -21,10 +26,17 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 	return nil
 }
 
-type doneProgress struct {
-	operations utils.UniqueCircSlice[remote.SendStatus]
+type pushProgress struct {
+	operations *utils.UniqueCircSlice[remote.SendStatus]
 	curr       int
 	total      int
+}
+
+func newPushProgress(total int) pushProgress {
+	return pushProgress{
+		operations: utils.NewUniqueCircSlice[remote.SendStatus](5),
+		total:      total,
+	}
 }
 
 func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
@@ -36,18 +48,18 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 
 	progChan := make(chan remote.SendStatus, 100)
 	defer close(progChan)
-	doneProg := doneProgress{total: len(hashes)}
+	pushProg := newPushProgress(len(hashes))
 
 	utils.Throttle(
 		progChan,
 		func(status remote.SendStatus) {
 			if status.IsGood {
-				doneProg.curr++
+				pushProg.curr++
 			}
-			doneProg.operations.Push(status)
+			pushProg.operations.Push(status)
 		},
 		func() {
-			cfg.TuiProgram.Send(doneProg)
+			cfg.TuiProgram.Send(pushProg)
 		})
 
 	if err := remote.SendFiles(hashes, sshClient, ctx, progChan); err != nil {

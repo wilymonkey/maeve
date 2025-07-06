@@ -15,7 +15,7 @@ import (
 )
 
 type SendStatus struct {
-	hash      hs.FileHash
+	Hash      hs.FileHash
 	Curr      int64
 	Total     int64
 	Verifying bool
@@ -80,7 +80,7 @@ func SendFiles(
 			status.Verifying = true
 			progChan <- status
 
-			isGood, err := rpc.VerifyFile(rpcClient, status.hash)
+			isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
 			if err != nil {
 				return myerr.WrapErr(err)
 			}
@@ -88,7 +88,7 @@ func SendFiles(
 			progChan <- status
 
 			if !status.IsGood {
-				downChan <- status.hash
+				downChan <- status.Hash
 			} else if len(hashes) < i {
 				downChan <- hashes[i]
 				i++
@@ -117,7 +117,7 @@ func pushFile(
 	ctx context.Context,
 	progChan chan SendStatus,
 ) (SendStatus, error) {
-	status := SendStatus{hash: hash}
+	status := SendStatus{Hash: hash}
 
 	localFile, err := os.Open(hash.Path.ResolveSelf())
 	if err != nil {

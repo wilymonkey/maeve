@@ -1,6 +1,7 @@
 package style
 
 import (
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -18,19 +19,26 @@ const zinc500 = lipgloss.Color("#71717a")
 var (
 	Success = lipgloss.NewStyle().Foreground(green600)
 	Spinner = lipgloss.NewStyle().Foreground(sky600)
-	Help    = lipgloss.NewStyle().Foreground(zinc500)
+	Fade    = lipgloss.NewStyle().Foreground(zinc500)
 	Fail    = lipgloss.NewStyle().Foreground(red400)
 	Title   = lipgloss.NewStyle().Bold(true).Foreground(pink400)
 	Bright  = lipgloss.NewStyle().Foreground(zinc200)
 
 	// Merged
-	TitlePending = Help.Inherit(Title)
+	TitlePending = Fade.Inherit(Title)
 	TitleSuccess = Success.Inherit(Title)
 	TitleFail    = Fail.Inherit(Title)
 
 	// Margins
 	My = lipgloss.NewStyle().Margin(1, 0)
 	Mx = lipgloss.NewStyle().Margin(0, 1)
+
+	// TABLES
+	Table = table.DefaultStyles().Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(pink400).
+		BorderBottom(true).
+		Bold(false)
 
 	// ICONS
 	ITick  = Success.Inherit(Mx).Render("✔")

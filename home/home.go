@@ -79,8 +79,8 @@ func (m Model) View() string {
 	}
 	b.WriteString(style.Title.Margin(1, 0).Render("COMMANDS"))
 	b.WriteString("\n")
-	b.WriteString(style.Help.Render("Press b to run backup"))
+	b.WriteString(style.Fade.Render("Press b to run backup"))
 	b.WriteString("\n")
-	b.WriteString(style.Help.Render("Press q to quit"))
+	b.WriteString(style.Fade.Render("Press q to quit"))
 	return b.String()
 }
