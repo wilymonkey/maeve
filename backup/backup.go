@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
@@ -156,13 +155,17 @@ func (m Model) View() string {
 	m.linkDirsView(&b)
 
 	b.WriteString("\n")
-	b.WriteString(titleWithProgress("CALCULATING HASHSUMS", spinView, m.hashDone, m.pullDone))
-	perc := float32(len(m.hashes)) / float32(m.totalFiles) * 100
-	fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashes), m.totalFiles, perc)
+	b.WriteString(titleWithProgress("CALCULATE HASHSUMS", spinView, m.hashDone, m.pullDone))
+	if m.pullDone {
+		perc := float32(len(m.hashes)) / float32(m.totalFiles) * 100
+		fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashes), m.totalFiles, perc)
+	}
 
 	b.WriteString("\n")
-	b.WriteString(titleWithProgress("SENDING TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
-	m.pushView(&b, spinView)
+	b.WriteString(titleWithProgress("SEND TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
+	if m.pushDone && m.hashDone {
+		m.pushView(&b, spinView)
+	}
 
 	if m.err != nil {
 		myerr.Print(m.err, &b)
@@ -199,26 +202,20 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 	var rows []table.Row
 	for _, dirPath := range cfg.Global.SourceDirs {
 		dir := m.linkDirs[dirPath]
-		path := utils.TruncateStr(dir.path, 30)
-		size := utils.BytesToHuman(dir.size)
 		r := table.Row{
-			path,
+			utils.TruncateStr(dir.path, 30),
 			strconv.FormatInt(dir.number, 10),
-			size,
+			utils.BytesToHuman(dir.size),
 		}
 		rows = append(rows, r)
 	}
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(len(cfg.Global.SourceDirs)),
+		table.WithHeight(len(cfg.Global.SourceDirs)+1),
+		table.WithStyles(style.Table),
 	)
-	s := table.DefaultStyles()
-	s.Header = style.Table
-	t.SetStyles(s)
-	if m.hashDone && !m.pushDone {
-		b.WriteString(t.View())
-	}
+	b.WriteString(t.View())
 }
 
 func (m *Model) pushView(b *strings.Builder, spinView string) {
@@ -261,13 +258,8 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithHeight(7),
-		table.WithFocused(false),
+		table.WithStyles(style.Table),
 	)
-	t.SetCursor(-1)
-	s := table.DefaultStyles()
-	s.Header = style.Table
-	s.Selected = lipgloss.NewStyle()
-	t.SetStyles(s)
 	if m.hashDone && !m.pushDone {
 		b.WriteString(t.View())
 		b.WriteString("\n")

@@ -48,6 +48,8 @@ func HardlinkDir(source, target string, sizeChan chan int64, ctx context.Context
 		}
 		targetPath := filepath.Join(target, relPath)
 
+		myerr.Sleep(1000)
+
 		eGrp.Go(func() error {
 			sizeChan <- info.Size()
 			return hardlink(sourcePath, targetPath)

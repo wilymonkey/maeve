@@ -35,11 +35,11 @@ var (
 	Mx = lipgloss.NewStyle().Margin(0, 1)
 
 	// TABLES
-	Table = table.DefaultStyles().Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(pink400).
-		BorderBottom(true).
-		Bold(false)
+	Table = table.Styles{
+		Selected: lipgloss.NewStyle(),
+		Header:   lipgloss.NewStyle().BorderBottom(true).BorderStyle(lipgloss.NormalBorder()).BorderForeground(pink400),
+		Cell:     lipgloss.NewStyle(),
+	}
 
 	// ICONS
 	ITick  = Success.Inherit(Mx).Render("✔")
