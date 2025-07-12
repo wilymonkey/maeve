@@ -53,32 +53,36 @@ func (cs *CircSlice[T]) ForEach(fn func(item T)) {
 	}
 }
 
-type UniqueCircSlice[T comparable] struct {
-	slice   *CircSlice[T]
-	indices map[T]int
+type UniqueCircSlice[K, T comparable] struct {
+	slice    *CircSlice[T]
+	indices  map[K]int
+	keyMaker func(T) K
 }
 
-func NewUniqueCircSlice[T comparable](capacity int) *UniqueCircSlice[T] {
-	return &UniqueCircSlice[T]{
-		slice:   NewCircSlice[T](capacity),
-		indices: make(map[T]int, capacity),
+func NewUniqueCircSlice[K, T comparable](capacity int, keyMaker func(item T) K) *UniqueCircSlice[K, T] {
+	return &UniqueCircSlice[K, T]{
+		slice:    NewCircSlice[T](capacity),
+		indices:  make(map[K]int, capacity),
+		keyMaker: keyMaker,
 	}
 }
 
 // Updates in place or pushes to the slice.
-func (usc *UniqueCircSlice[T]) Push(item T) {
-	if i, exists := usc.indices[item]; exists {
+func (usc *UniqueCircSlice[K, T]) Push(item T) {
+	key := usc.keyMaker(item)
+	if i, exists := usc.indices[key]; exists {
 		usc.slice.data[i] = item
 		return
 	}
 	if usc.slice.size == usc.slice.cap {
-		removed, _ := usc.slice.Pop()
-		delete(usc.indices, removed)
+		rem, _ := usc.slice.Pop()
+		delete(usc.indices, usc.keyMaker(rem))
 	}
+	// Take the tail before it is reassigned by push.
+	usc.indices[key] = usc.slice.tail
 	usc.slice.Push(item)
-	usc.indices[item] = usc.slice.tail
 }
 
-func (ucs *UniqueCircSlice[T]) ForEach(fn func(item T)) {
+func (ucs *UniqueCircSlice[K, T]) ForEach(fn func(item T)) {
 	ucs.slice.ForEach(fn)
 }

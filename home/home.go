@@ -14,6 +14,7 @@ import (
 
 type Model struct {
 	spinner    spinner.Model
+	selfStatus map[SelfParam]bool
 	nodeStatus map[string]nodeStatus
 }
 
@@ -84,3 +85,10 @@ func (m Model) View() string {
 	b.WriteString(style.Fade.Render("Press q to quit"))
 	return b.String()
 }
+
+type SelfParam int
+
+const (
+	SSHKey SelfParam = iota
+	KnownHosts
+)

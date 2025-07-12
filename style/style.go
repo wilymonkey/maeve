@@ -17,6 +17,7 @@ const zinc200 = lipgloss.Color("#e4e4e7")
 const zinc500 = lipgloss.Color("#71717a")
 
 var (
+	Reset   = "\x1b[0m"
 	Success = lipgloss.NewStyle().Foreground(green600)
 	Spinner = lipgloss.NewStyle().Foreground(sky600)
 	Fade    = lipgloss.NewStyle().Foreground(zinc500)

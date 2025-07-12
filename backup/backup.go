@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/local/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
@@ -41,7 +42,6 @@ func New() Model {
 	p := progress.New(
 		progress.WithDefaultGradient(),
 		progress.WithWidth(40),
-		progress.WithoutPercentage(),
 	)
 	s := spinner.New(
 		spinner.WithSpinner(spinner.MiniDot),
@@ -103,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneHashsums:
 		m.hashDone = true
-		return m, func() tea.Msg { return pushChanges(m.ctx, m.hashes) }
+		return m, func() tea.Msg { return pushChanges(m.ctx, msg.hashes) }
 
 	case pushingNode:
 		m.pushingNode = msg.index
@@ -111,7 +111,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pushProgress:
 		m.pushProg = msg
-		return m, nil
+		progressCmd := m.progress.SetPercent(float64(msg.curr) / float64(msg.total))
+		return m, progressCmd
 
 	case doneSend:
 		m.pushDone = true
@@ -234,7 +235,7 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		{Title: "File", Width: 40},
 		{Title: "Size", Width: 10},
 		{Title: "%", Width: 10},
-		{Title: "Verified", Width: 10},
+		{Title: "Verified", Width: 18},
 	}
 	var rows []table.Row
 	m.pushProg.operations.ForEach(func(item remote.SendStatus) {
@@ -242,11 +243,13 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		var verified string
 		if item.Verifying {
 			verified = spinView
-		} else if item.IsGood {
-			verified = style.ITick
+			if item.IsGood {
+				verified = style.ITick
+			}
 		}
+
 		r := table.Row{
-			utils.TruncateStr(item.Hash.Path.Path, 30),
+			style.Reset + utils.TruncateStr(item.Hash.Path.Path, 30),
 			utils.BytesToHuman(item.Total),
 			fmt.Sprintf("%0.2f%%", perc),
 			verified,
@@ -258,19 +261,26 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithHeight(7),
+		table.WithFocused(false),
 	)
+	t.SetCursor(-1)
 	s := table.DefaultStyles()
 	s.Header = style.Table
+	s.Selected = lipgloss.NewStyle()
 	t.SetStyles(s)
 	if m.hashDone && !m.pushDone {
 		b.WriteString(t.View())
+		b.WriteString("\n")
+		b.WriteString(m.progress.View())
 	}
 }
 
 type hashProg struct {
 	hashes []hs.FileHash
 }
-type doneHashsums struct{}
+type doneHashsums struct {
+	hashes []hs.FileHash
+}
 
 func newHashes(parentCtx context.Context, total int64) tea.Msg {
 	selfDir := cfg.Global.SelfDir()
@@ -292,5 +302,5 @@ func newHashes(parentCtx context.Context, total int64) tea.Msg {
 	}
 
 	close(progChan)
-	return doneHashsums{}
+	return doneHashsums{hashes: hashes}
 }

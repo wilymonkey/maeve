@@ -23,19 +23,24 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 			return myerr.WrapErr(err)
 		}
 	}
+
+	cfg.TuiProgram.Send(doneSend{})
 	return nil
 }
 
 type pushProgress struct {
-	operations *utils.UniqueCircSlice[remote.SendStatus]
+	operations *utils.UniqueCircSlice[hs.FileHash, remote.SendStatus]
 	curr       int
 	total      int
 }
 
 func newPushProgress(total int) pushProgress {
 	return pushProgress{
-		operations: utils.NewUniqueCircSlice[remote.SendStatus](5),
-		total:      total,
+		operations: utils.NewUniqueCircSlice(
+			5,
+			func(item remote.SendStatus) hs.FileHash { return item.Hash },
+		),
+		total: total,
 	}
 }
 

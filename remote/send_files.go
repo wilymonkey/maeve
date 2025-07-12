@@ -52,27 +52,22 @@ func SendFiles(
 	}
 
 	downChan := make(chan hs.FileHash, 2)
-	i := 0
 	verifyChan := make(chan SendStatus, 1)
-	doneChan := make(chan struct{}, 1)
-	go func() {
-		<-doneChan
-		close(downChan)
-		close(verifyChan)
-	}()
-	defer close(doneChan)
 
 	eGrp.Go(func() error {
 		for {
 			select {
 			case <-ctx.Done():
+				close(verifyChan)
 				return ctx.Err()
 			case hash, ok := <-downChan:
 				if !ok {
+					close(verifyChan)
 					return nil
 				}
 				status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
 				if err != nil {
+					close(verifyChan)
 					return myerr.WrapErr(err)
 				}
 				verifyChan <- status
@@ -80,24 +75,25 @@ func SendFiles(
 		}
 	})
 
-	eGrp.Go(func() error {
-		// Init the downloads
+	i := 0
+	// Init the downloads
+	if i < len(hashes) {
+		downChan <- hashes[i]
+		i++
 		if i < len(hashes) {
-			downChan <- hashes[i]
 			i++
-			if i < len(hashes) {
-				return myerr.DummyErr()
-				downChan <- hashes[i]
-				i++
-			}
 		}
+	}
 
+	eGrp.Go(func() error {
 		for {
 			select {
 			case <-ctx.Done():
+				close(downChan)
 				return ctx.Err()
 			case status, ok := <-verifyChan:
 				if !ok {
+					close(downChan)
 					return nil
 				}
 
@@ -106,6 +102,7 @@ func SendFiles(
 
 				isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
 				if err != nil {
+					close(downChan)
 					return myerr.WrapErr(err)
 				}
 				status.IsGood = isGood
@@ -117,14 +114,14 @@ func SendFiles(
 					downChan <- hashes[i]
 					i++
 				} else {
-					doneChan <- struct{}{}
+					close(downChan)
+					return nil
 				}
 			}
 		}
 	})
 
 	if err := eGrp.Wait(); err != nil {
-		doneChan <- struct{}{}
 		return myerr.WrapErr(err)
 	}
 
@@ -158,8 +155,9 @@ func pushFile(
 	}
 
 	remoteFile, err := sftpClient.Create(remotePath)
+	defer remoteFile.Close()
 	if err != nil {
-		return status, myerr.WrapErr(err)
+		return status, myerr.WrapErrWithInfo(err, remotePath)
 	}
 	pw := &ProgressWriter{
 		Writer: remoteFile,
