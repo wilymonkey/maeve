@@ -111,6 +111,9 @@ func genMasterHash(node string) (MasterHash, error) {
 	baseDir := cfg.Global.NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return mh, nil
+		}
 		return mh, utils.WrapErr(err)
 	}
 	tempEntry := filepath.Base(cfg.Global.NodeDirTemp(node))

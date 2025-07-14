@@ -71,13 +71,11 @@ func (m Model) View() string {
 	spinView := m.spinner.View()
 	b.WriteString(style.Title.Margin(1, 0).Render("REMOTE NODES"))
 	b.WriteString("\n")
-	for _, ns := range m.nodeStatus {
-		ns.View(&b, spinView)
-		if ns.err != nil {
-			title := style.Fail.Render("Error:")
-			fmt.Fprintf(&b, "%s %v\n", title, ns.err)
-		}
+	for _, node := range cfg.Global.RemoteNodes {
+		status := m.nodeStatus[node]
+		status.View(&b, spinView)
 	}
+	b.WriteString("\n")
 	b.WriteString(style.Title.Margin(1, 0).Render("COMMANDS"))
 	b.WriteString("\n")
 	b.WriteString(style.Fade.Render("Press b to run backup"))

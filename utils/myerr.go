@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/wilymonkey/maeve/style"
@@ -36,10 +35,10 @@ func Sleep(t time.Duration) {
 	time.Sleep(time.Millisecond * t)
 }
 
-func PrintErr(err error, b *strings.Builder) {
+func PrintErr(err error) string {
 	fail := style.Fail.Render("Failed!")
-	s := fmt.Sprintf("\n\n%s %s %v\n\n", style.ICross, fail, err)
-	b.WriteString(style.Wrap(s))
+	s := fmt.Sprintf("%s %s %v", style.ICross, fail, err)
+	return style.Wrap(s)
 }
 
 func BoolView(b bool) string {

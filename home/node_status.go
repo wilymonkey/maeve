@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 type nodeStatus struct {
@@ -21,9 +22,12 @@ type nodeStatus struct {
 func (ns *nodeStatus) View(b *strings.Builder, spinView string) {
 	name := style.Bright.Render(ns.name)
 	if ns.isDone {
-		fmt.Fprintf(b, "%s: %s SSH %s Maeve\n", name, style.BoolView(ns.canSSH), style.BoolView(ns.canMaeve))
+		fmt.Fprintf(b, "%s: %s  SSH %s  Maeve\n", name, style.BoolView(ns.canSSH), style.BoolView(ns.canMaeve))
 	} else {
 		fmt.Fprintf(b, "%s: %s\n", name, spinView)
+	}
+	if ns.err != nil {
+		b.WriteString(utils.PrintErr(ns.err))
 	}
 }
 

@@ -165,7 +165,7 @@ func (m Model) View() string {
 	}
 
 	if m.err != nil {
-		utils.PrintErr(m.err, &b)
+		b.WriteString(utils.PrintErr(m.err))
 	}
 
 	b.WriteString("\n")
