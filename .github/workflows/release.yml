@@ -1,0 +1,71 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Build Binary
+        run: |
+          mkdir -p dist/
+          GOOS=linux GOARCH=amd64 go build -o dist/maeve-linux-amd64
+          GOOS=darwin GOARCH=amd64 go build -o dist/maeve-darwin-amd64
+          GOOS=windows GOARCH=amd64 go build -o dist/maeve-windows-amd64.exe
+          GOOS=linux GOARCH=arm64 go build -o dist/maeve-linux-arm64
+          GOOS=darwin GOARCH=arm64 go build -o dist/maeve-darwin-arm64
+          GOOS=windows GOARCH=arm64 go build -o dist/maeve-windows-arm64.exe
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/*
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - name: Get tag name
+        id: get_tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: Release ${{ steps.get_tag.outputs.tag }}
+          body: |
+            Automated release for ${{ steps.get_tag.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: Release ${{ steps.get_tag.outputs.tag }}
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
