@@ -65,7 +65,7 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Printf("%s\n", cfg.VERSION)
+	fmt.Printf("%s\n", cfg.Version)
 	os.Exit(0)
 }
 

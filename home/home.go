@@ -66,7 +66,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Version: %s", cfg.VERSION)
+	fmt.Fprintf(&b, "Version: %s", cfg.Version)
 	b.WriteString("\n")
 	spinView := m.spinner.View()
 	b.WriteString(style.Title.Margin(1, 0).Render("REMOTE NODES"))

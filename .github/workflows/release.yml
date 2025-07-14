@@ -13,6 +13,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Get latest Git tag
+        id: get_tag
+        run: |
+          git fetch --tags
+          TAG=$(git tag --sort=-v:refname | head -n 1)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -21,12 +28,14 @@ jobs:
       - name: Build Binary
         run: |
           mkdir -p dist/
-          GOOS=linux GOARCH=amd64 go build -o dist/maeve-linux-amd64
-          GOOS=darwin GOARCH=amd64 go build -o dist/maeve-darwin-amd64
-          GOOS=windows GOARCH=amd64 go build -o dist/maeve-windows-amd64.exe
-          GOOS=linux GOARCH=arm64 go build -o dist/maeve-linux-arm64
-          GOOS=darwin GOARCH=arm64 go build -o dist/maeve-darwin-arm64
-          GOOS=windows GOARCH=arm64 go build -o dist/maeve-windows-arm64.exe
+          # x64 Builds
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-linux-amd64
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-darwin-amd64
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-windows-amd64.exe
+          # ARM Builds
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-linux-arm64
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-darwin-arm64
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X github.com/wilymonkey/maeve/cfg.Version=${{ steps.get_tag.outputs.tag }}" -o dist/maeve-windows-arm64.exe
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4

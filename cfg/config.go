@@ -11,7 +11,8 @@ import (
 	"github.com/wilymonkey/maeve/utils"
 )
 
-const VERSION = "0.1.1"
+var Version = "DEV"
+
 const TIMEFORMAT = "02Jan2006-1504"
 
 var Global MaeveConfig
