@@ -1,1 +1,1 @@
-# Maeve - Simple Backups through SSH and RSYNC
+# Maeve - Multiplatform backups through SSH

@@ -18,7 +18,7 @@ var ErrInvalidMH = errors.New("invalid MasterHash file")
 
 type MasterHash struct {
 	dirs map[string]struct{}
-	// hash as key, relPath as value
+	// hash as key
 	hashes map[[32]byte]local.RelativePath
 }
 
@@ -84,7 +84,7 @@ func NewMasterHash(node string) (*MasterHash, error) {
 	hashes := make(map[[32]byte]local.RelativePath)
 	for _, e := range entries {
 		if e.IsDir() {
-			hFile, err := ReadFileHashes(filepath.Join(baseDir, e.Name()))
+			hFile, err := readFileHashes(filepath.Join(baseDir, e.Name()))
 			if err != nil {
 				if err == os.ErrNotExist {
 					err = ErrMissingHashFile

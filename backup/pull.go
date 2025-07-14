@@ -14,7 +14,7 @@ import (
 
 type linkPathMeta struct {
 	path   string
-	number int64
+	number int
 	size   int64
 }
 type doneLinks struct{}
@@ -36,7 +36,7 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 
 		sizeChan := make(chan int64, 100)
 		var totalSize int64
-		var totalFiles int64
+		var totalFiles int
 		utils.Throttle(
 			sizeChan,
 			func(size int64) {

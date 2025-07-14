@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"io"
+	netRPC "net/rpc"
 	"os"
 	"path/filepath"
 
@@ -10,7 +11,6 @@ import (
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/rpc"
 	"github.com/wilymonkey/maeve/utils"
-	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,35 +22,37 @@ type SendStatus struct {
 	IsGood    bool
 }
 
+func NewDoneStatus(hash hs.FileHash) (SendStatus, error) {
+	localFile, err := os.Open(hash.Path.ResolveSelf())
+	if err != nil {
+		return SendStatus{}, utils.WrapErr(err)
+	}
+	defer localFile.Close()
+	fileInfo, err := localFile.Stat()
+	if err != nil {
+		return SendStatus{}, utils.WrapErr(err)
+	}
+	size := fileInfo.Size()
+	return SendStatus{
+		Hash:      hash,
+		Curr:      size,
+		Total:     size,
+		Verifying: true,
+		IsGood:    true,
+	}, nil
+}
+
 func SendFiles(
 	hashes []hs.FileHash,
-	sshClient *ssh.Client,
+	sftpClient *sftp.Client,
+	rpcClient *netRPC.Client,
 	ctx context.Context,
 	progChan chan SendStatus,
 ) error {
 	eGrp, ctx := errgroup.WithContext(ctx)
 
-	rpcSesh, err := sshClient.NewSession()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer rpcSesh.Close()
-	rpcClient, err := rpc.New(rpcSesh)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer rpcClient.Close()
-	sftpClient, err := sftp.NewClient(sshClient)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer sftpClient.Close()
-
 	remoteDir, err := rpc.TempLocation(rpcClient)
 	if err != nil {
-		return utils.WrapErr(err)
-	}
-	if err = rpc.LoadMaster(rpcClient); err != nil {
 		return utils.WrapErr(err)
 	}
 

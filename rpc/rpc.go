@@ -115,11 +115,11 @@ type VerifyFuncReply struct {
 
 func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) error {
 	path := args.Hash.Path.ResolveTemp(args.Node)
-	newHash, err := hs.GenHash(path)
+	hashGood, err := args.Hash.Validate(path)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
-	reply.HashGood = newHash == args.Hash.Hash
+	reply.HashGood = hashGood
 	return nil
 }
 
@@ -155,4 +155,33 @@ func LoadMaster(rpc *rpc.Client) error {
 		return utils.WrapErr(err)
 	}
 	return nil
+}
+
+type ValiExistingArgs struct {
+	Hashes []hs.FileHash
+	Node   string
+}
+type ValiExistingReply struct {
+	Hashes []hs.FileHash
+}
+
+func (h *RPCFuncs) ValiExisting(args *ValiExistingArgs, reply *ValiExistingReply) error {
+	hashes, err := hs.ValidateExisting(args.Hashes, args.Node)
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	reply.Hashes = hashes
+	return nil
+}
+
+func ValiExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
+	args := &ValiExistingArgs{
+		Hashes: hashes,
+		Node:   cfg.Global.Name,
+	}
+	var reply ValiExistingReply
+	if err := rpc.Call("RPCFuncs.ValiExisting", args, &reply); err != nil {
+		return hashes, utils.WrapErr(err)
+	}
+	return reply.Hashes, nil
 }

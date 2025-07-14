@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
-	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
@@ -22,8 +21,8 @@ type Model struct {
 	pullDone    bool
 	linkDirs    map[string]linkPathMeta
 	hashDone    bool
-	totalFiles  int64
-	hashes      []hs.FileHash
+	totalFiles  int
+	hashNum     int
 	pushProg    pushProgress
 	pushingNode int
 	pushDone    bool
@@ -84,7 +83,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case linkPathMeta:
 		m.linkDirs[msg.path] = msg
-		var totalFiles int64
+		var totalFiles int
 		for _, value := range m.linkDirs {
 			totalFiles += value.number
 		}
@@ -93,10 +92,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneLinks:
 		m.pullDone = true
-		return m, func() tea.Msg { return newHashes(m.ctx, m.totalFiles) }
+		return m, func() tea.Msg { return newHashes(m.ctx) }
 
 	case hashProg:
-		m.hashes = msg.hashes
+		m.hashNum = msg.hashNum
 		return m, nil
 
 	case doneHashsums:
@@ -155,13 +154,13 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("CALCULATE HASHSUMS", spinView, m.hashDone, m.pullDone))
 	if m.pullDone {
-		perc := float32(len(m.hashes)) / float32(m.totalFiles) * 100
-		fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", len(m.hashes), m.totalFiles, perc)
+		perc := float32(m.hashNum) / float32(m.totalFiles) * 100
+		fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", m.hashNum, m.totalFiles, perc)
 	}
 
 	b.WriteString("\n")
 	b.WriteString(titleWithProgress("SEND TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
-	if m.pushDone && m.hashDone {
+	if m.pullDone && m.hashDone {
 		m.pushView(&b, spinView)
 	}
 
@@ -202,7 +201,7 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 		dir := m.linkDirs[dirPath]
 		r := table.Row{
 			utils.TruncateStr(dir.path, 30),
-			strconv.FormatInt(dir.number, 10),
+			strconv.Itoa(dir.number),
 			utils.BytesToHuman(dir.size),
 		}
 		rows = append(rows, r)
@@ -230,7 +229,7 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 		{Title: "File", Width: 40},
 		{Title: "Size", Width: 10},
 		{Title: "%", Width: 10},
-		{Title: "Verified", Width: 18},
+		{Title: "Verified", Width: 20},
 	}
 	var rows []table.Row
 	m.pushProg.operations.ForEach(func(item remote.SendStatus) {
@@ -255,42 +254,11 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(7),
+		table.WithHeight(len(rows)),
 		table.WithStyles(style.Table),
 	)
-	if m.hashDone && !m.pushDone {
-		b.WriteString(t.View())
-		b.WriteString("\n")
-		b.WriteString(m.progress.View())
-	}
-}
 
-type hashProg struct {
-	hashes []hs.FileHash
-}
-type doneHashsums struct {
-	hashes []hs.FileHash
-}
-
-func newHashes(parentCtx context.Context, total int64) tea.Msg {
-	selfDir := cfg.Global.SelfDir()
-
-	progChan := make(chan hs.FileHash, 100)
-	hashes := make([]hs.FileHash, 0, total)
-	utils.Throttle(
-		progChan,
-		func(hash hs.FileHash) {
-			hashes = append(hashes, hash)
-		},
-		func() {
-			overseer.Global.Send(hashProg{hashes: hashes})
-		},
-	)
-
-	if err := hs.NewDirFileHash(selfDir, progChan, parentCtx); err != nil {
-		return utils.WrapErr(err)
-	}
-
-	close(progChan)
-	return doneHashsums{hashes: hashes}
+	b.WriteString(t.View())
+	b.WriteString("\n")
+	b.WriteString(m.progress.View())
 }
