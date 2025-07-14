@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
@@ -135,26 +136,30 @@ func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
 	return reply.HashGood, nil
 }
 
-type LoadMasterArgs struct {
-	Node string
+type LinkExistingArgs struct {
+	Hashes []hs.FileHash
+	Node   string
+}
+type LinkExistingReply struct {
+	Hashes []hs.FileHash
 }
 
-func (h *RPCFuncs) LoadMaster(args *LoadMasterArgs, reply *struct{}) error {
-	master, err := hs.GetMaster(args.Node)
+func (h *RPCFuncs) LinkExisting(args *LinkExistingArgs, reply *LinkExistingReply) error {
+	hashes, err := hs.LinkExisting(args.Node, args.Hashes)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
-	hs.Global = *master
+	reply.Hashes = hashes
 	return nil
 }
 
-func LoadMaster(rpc *rpc.Client) error {
-	var ignore struct{}
-	args := &LoadMasterArgs{Node: cfg.Global.Name}
-	if err := rpc.Call("RPCFuncs.LoadMaster", args, &ignore); err != nil {
-		return utils.WrapErr(err)
+func LinkExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
+	args := &LinkExistingArgs{Node: cfg.Global.Name, Hashes: hashes}
+	var reply LinkExistingReply
+	if err := rpc.Call("RPCFuncs.LinkExisting", args, &reply); err != nil {
+		return nil, utils.WrapErr(err)
 	}
-	return nil
+	return reply.Hashes, nil
 }
 
 type ValiExistingArgs struct {
@@ -184,4 +189,32 @@ func ValiExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) 
 		return hashes, utils.WrapErr(err)
 	}
 	return reply.Hashes, nil
+}
+
+type FinSnapshotArgs struct {
+	Node string
+}
+
+func (h *RPCFuncs) FinSnapshot(args *FinSnapshotArgs, reply *struct{}) error {
+	snapshot, err := local.StampDate(args.Node)
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	if err := hs.UpdateMaster(args.Node, snapshot); err != nil {
+		return utils.WrapErr(err)
+	}
+	if err := local.CullSnapshots(args.Node); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	return nil
+}
+
+func FinSnapshot(rpc *rpc.Client) error {
+	args := &FinSnapshotArgs{Node: cfg.Global.Name}
+	var reply struct{}
+	if err := rpc.Call("RPCFuncs.FinSnapshot", args, &reply); err != nil {
+		return utils.WrapErr(err)
+	}
+	return nil
 }

@@ -217,7 +217,7 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 
 func (m *Model) pushView(b *strings.Builder, spinView string) {
 	for i, node := range cfg.Global.RemoteNodes {
-		if m.pushingNode == i {
+		if m.pushingNode == i && !m.pushDone {
 			fmt.Fprintf(b, "%s %s", node, spinView)
 		} else {
 			fmt.Fprint(b, style.Fade.Render(node))

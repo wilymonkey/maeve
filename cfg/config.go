@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/wilymonkey/maeve/utils"
 )
 
 const VERSION = "0.0.1"
+const TIMEFORMAT = "02Jan2006-1504"
 
 var Global MaeveConfig
 
@@ -45,35 +48,40 @@ func (c *MaeveConfig) NodeDirTemp(node string) string {
 	return filepath.Join(c.NodeDir(node), "temp")
 }
 
-// Gets the latest snapshot in a given node.
-// CAUTION: Deletes files (not directories) found in the given node.
-func (c *MaeveConfig) NodeDirLatest(node string) (string, error) {
+func (c *MaeveConfig) NodeSnapshotDir(node, snapshot string) string {
+	return filepath.Join(c.NodeDir(node), snapshot)
+}
+
+// Lists snapshots for a given node from oldest to newest.
+// Returns absolute paths to those snapshots.
+func (c *MaeveConfig) NodeSnapshots(node string) ([]string, error) {
 	baseDir := c.NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
-		return "", fmt.Errorf("unable to read %s directory ⇒  %w", node, err)
+		return nil, utils.WrapErr(err)
 	}
 	if len(entries) == 0 {
-		return "", os.ErrNotExist
+		return nil, utils.WrapErr(os.ErrNotExist)
 	}
 
-	var latest os.DirEntry
-	for _, dir := range entries {
-		if dir.Name() > latest.Name() {
-			latest = dir
+	var result []string
+	for _, d := range entries {
+		if d.IsDir() {
+			result = append(result, d.Name())
 		}
 	}
-	latestPath := filepath.Join(baseDir, latest.Name())
-
-	if !latest.IsDir() {
-		if err := os.RemoveAll(latestPath); err != nil {
-			return "", fmt.Errorf("unable to delete problem file found in %s directory ⇒  %w", node, err)
+	sort.Slice(result, func(i, j int) bool {
+		ti, err1 := time.Parse(TIMEFORMAT, result[i])
+		tj, err2 := time.Parse(TIMEFORMAT, result[j])
+		if err1 != nil || err2 != nil {
+			return result[i] < result[j]
 		}
-		// Keep deleting offending files until a dir is returned.
-		return c.NodeDirLatest(node)
+		return ti.Before(tj)
+	})
+	for i, snapshot := range result {
+		result[i] = c.NodeSnapshotDir(node, snapshot)
 	}
-
-	return filepath.Join(latestPath), nil
+	return result, nil
 }
 
 // Reads the config file and makes it available globally.

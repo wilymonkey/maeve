@@ -27,7 +27,6 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 
 	for i, node := range cfg.Global.RemoteNodes {
 		overseer.Global.Send(pushingNode{index: i})
-
 		if err := pushToNode(ctx, hashes, node); err != nil {
 			return utils.WrapErr(err)
 		}
@@ -95,24 +94,38 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 	if err != nil {
 		return utils.WrapErr(err)
 	}
-	currSet := utils.SliceToSet(currHashes)
-	for _, h := range hashes {
+	hashes, err = updateProg(hashes, currHashes, progChan)
+
+	currHashes, err = rpc.LinkExisting(rpcClient, hashes)
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	hashes, err = updateProg(hashes, currHashes, progChan)
+
+	if len(hashes) > 0 {
+		if err := remote.SendFiles(hashes, sftpClient, rpcClient, ctx, progChan); err != nil {
+			return utils.WrapErr(err)
+		}
+	}
+
+	if err := rpc.FinSnapshot(rpcClient); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	return nil
+}
+
+// Updates progChan using what hashes are missing.
+func updateProg(prev, curr []hs.FileHash, progChan chan remote.SendStatus) ([]hs.FileHash, error) {
+	currSet := utils.SliceToSet(curr)
+	for _, h := range prev {
 		if _, exists := currSet[h]; !exists {
 			status, err := remote.NewDoneStatus(h)
 			if err != nil {
-				return utils.WrapErr(err)
+				return nil, utils.WrapErr(err)
 			}
 			progChan <- status
 		}
 	}
-	hashes = currHashes
-
-	if err = rpc.LoadMaster(rpcClient); err != nil {
-		return utils.WrapErr(err)
-	}
-
-	if err := remote.SendFiles(hashes, sftpClient, rpcClient, ctx, progChan); err != nil {
-		return utils.WrapErr(err)
-	}
-	return nil
+	return curr, nil
 }

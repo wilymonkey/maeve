@@ -60,60 +60,68 @@ func SendFiles(
 	verifyChan := make(chan SendStatus, 1)
 
 	eGrp.Go(func() error {
-		for range ctx.Done() {
-			close(verifyChan)
-			close(downChan)
-			return ctx.Err()
+		defer close(verifyChan)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case hash, ok := <-downChan:
+				if !ok {
+					return nil
+				}
+				status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
+				if err != nil {
+					return utils.WrapErr(err)
+				}
+				verifyChan <- status
+			}
 		}
-		return nil
 	})
 
 	eGrp.Go(func() error {
-		for hash := range downChan {
-			status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
-			if err != nil {
-				return utils.WrapErr(err)
-			}
-			verifyChan <- status
-		}
-		return nil
-	})
+		defer close(downChan)
 
-	i := 0
-	// Init the downloads
-	if i < len(hashes) {
-		downChan <- hashes[i]
-		i++
+		i := 0
 		if i < len(hashes) {
+			downChan <- hashes[i]
 			i++
 		}
-	}
+		if i < len(hashes) {
+			downChan <- hashes[i]
+			i++
+		}
 
-	eGrp.Go(func() error {
-		for status := range verifyChan {
-			status.Verifying = true
-			progChan <- status
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case status, ok := <-verifyChan:
+				if !ok {
+					return nil
+				}
 
-			isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
-			if err != nil {
-				return utils.WrapErr(err)
-			}
-			status.IsGood = isGood
-			progChan <- status
+				status.Verifying = true
+				progChan <- status
 
-			return utils.DummyErr()
+				isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
+				if err != nil {
+					return utils.WrapErr(err)
+				}
+				status.IsGood = isGood
+				progChan <- status
 
-			if !status.IsGood {
-				downChan <- status.Hash
-			} else if i < len(hashes) {
-				downChan <- hashes[i]
-				i++
-			} else {
-				close(downChan)
-				return nil
+				switch {
+				case !status.IsGood:
+					downChan <- status.Hash
+				case i < len(hashes):
+					downChan <- hashes[i]
+					i++
+				default:
+					return nil
+				}
 			}
 		}
-		return nil
 	})
 
 	if err := eGrp.Wait(); err != nil {

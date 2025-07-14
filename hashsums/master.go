@@ -3,7 +3,6 @@ package hashsums
 import (
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -12,18 +11,16 @@ import (
 	"github.com/wilymonkey/maeve/utils"
 )
 
-var Global MasterHash
-
-var ErrInvalidMH = errors.New("invalid MasterHash file")
+var ErrNeedsRecreate = errors.New("MasterHash needs to be recreated")
 
 type MasterHash struct {
-	dirs map[string]struct{}
+	Dirs map[string]struct{}
 	// hash as key
-	hashes map[[32]byte]local.RelativePath
+	HashMap map[[32]byte]local.RelativePath
 }
 
 func (mh *MasterHash) Exists(fileHash FileHash) *local.RelativePath {
-	if relPath, exists := mh.hashes[fileHash.Hash]; exists {
+	if relPath, exists := mh.HashMap[fileHash.Hash]; exists {
 		return &relPath
 	}
 	return nil
@@ -40,8 +37,8 @@ func (mh *MasterHash) validate(node string) error {
 
 	for _, e := range entries {
 		if e.IsDir() {
-			if _, exists := mh.dirs[e.Name()]; !exists {
-				return ErrInvalidMH
+			if _, exists := mh.Dirs[e.Name()]; !exists {
+				return ErrNeedsRecreate
 			}
 		}
 	}
@@ -49,65 +46,109 @@ func (mh *MasterHash) validate(node string) error {
 	return nil
 }
 
-// Retrieves the MasterHash of a given node.
-func GetMaster(node string) (*MasterHash, error) {
-	var masterHash *MasterHash
+// Updates the MasterHash with a given snapshot folder name.
+func UpdateMaster(node, snapshot string) error {
+	hashes, err := readFileHashes(cfg.Global.NodeSnapshotDir(node, snapshot))
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	mh, err := getMaster(node)
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	for _, h := range hashes {
+		mh.HashMap[h.Hash] = h.Path.Resolve(snapshot)
+	}
+	mh.Dirs[snapshot] = struct{}{}
+	return nil
+}
+
+// Retrieves the MasterHash of a given node, creating it if necessary.
+func getMaster(node string) (MasterHash, error) {
+	mh, err := readMaster(node)
+	if err != nil {
+		if errors.Is(err, ErrNeedsRecreate) {
+			mh, err = genMasterHash(node)
+			if err != nil {
+				return mh, utils.WrapErr(err)
+			}
+			err := writeMaster(&mh, node)
+			if err != nil {
+				return mh, utils.WrapErr(err)
+			}
+		} else {
+			return mh, utils.WrapErr(err)
+		}
+	}
+	return mh, nil
+}
+
+func readMaster(node string) (MasterHash, error) {
+	var mh MasterHash
 
 	f, err := os.Open(cfg.Global.MasterHashFile(node))
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		if errors.Is(err, os.ErrNotExist) {
+			return mh, ErrNeedsRecreate
+		}
+		return mh, utils.WrapErr(err)
 	}
 	defer f.Close()
 
-	if err := gob.NewDecoder(f).Decode(masterHash); err != nil {
-		return nil, utils.WrapErr(err)
+	if err := gob.NewDecoder(f).Decode(&mh); err != nil {
+		return mh, utils.WrapErr(err)
 	}
-	if err := masterHash.validate(node); err != nil {
-		return nil, utils.WrapErr(err)
+	if err := mh.validate(node); err != nil {
+		return mh, utils.WrapErr(err)
 	}
 
-	return masterHash, nil
+	return mh, nil
 }
 
-var ErrMissingHashFile = errors.New("hash file is missing")
+func genMasterHash(node string) (MasterHash, error) {
+	var mh MasterHash
 
-// Creates a MasterHash file for a given node.
-func NewMasterHash(node string) (*MasterHash, error) {
 	baseDir := cfg.Global.NodeDir(node)
-
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
-		return nil, fmt.Errorf("read entries in node %s ⇒  %w", node, err)
+		return mh, utils.WrapErr(err)
 	}
+	tempEntry := filepath.Base(cfg.Global.NodeDirTemp(node))
 
 	dirs := make(map[string]struct{})
-	hashes := make(map[[32]byte]local.RelativePath)
+	hashMap := make(map[[32]byte]local.RelativePath)
 	for _, e := range entries {
 		if e.IsDir() {
-			hFile, err := readFileHashes(filepath.Join(baseDir, e.Name()))
-			if err != nil {
-				if err == os.ErrNotExist {
-					err = ErrMissingHashFile
-				}
-				return nil, fmt.Errorf("read hash file in snapshot %s ⇒  %w", e.Name(), err)
+			if e.Name() == tempEntry {
+				continue
 			}
-			for _, h := range hFile {
-				hashes[h.Hash] = h.Path.Resolve(e.Name())
+
+			hashes, err := readFileHashes(filepath.Join(baseDir, e.Name()))
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return mh, utils.WrapErr(err)
+			}
+			for _, h := range hashes {
+				hashMap[h.Hash] = h.Path.Resolve(e.Name())
 			}
 			dirs[e.Name()] = struct{}{}
 		}
 	}
-	mh := MasterHash{dirs: dirs, hashes: hashes}
 
-	f, err := os.Create(cfg.Global.MasterHashFile(node))
+	return MasterHash{Dirs: dirs, HashMap: hashMap}, nil
+}
+
+func writeMaster(mh *MasterHash, node string) error {
+	f, err := local.Create(cfg.Global.MasterHashFile(node))
 	if err != nil {
-		return nil, fmt.Errorf("open MasterHash file ⇒  %w", err)
+		return utils.WrapErr(err)
 	}
 	defer f.Close()
 
 	if err := gob.NewEncoder(f).Encode(mh); err != nil {
-		return nil, fmt.Errorf("write MasterHash file ⇒  %w", err)
+		return utils.WrapErr(err)
 	}
-
-	return &mh, nil
+	return nil
 }

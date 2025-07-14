@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -68,23 +69,24 @@ func HardlinkDir(source, target string, sizeChan chan int64, ctx context.Context
 
 // Creates a Hardlink from sourcePath to targetPath, creating
 // directories as needed.
-//
-// CAUTION: Assumes the file doesn't exist.
 func Hardlink(sourcePath, targetPath string) error {
 	err := os.Link(sourcePath, targetPath)
-
 	if err == nil {
 		return nil
 	}
-
-	// Assume the error is the base folder not existing
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-		return utils.WrapErr(err)
+	if errors.Is(err, os.ErrExist) {
+		return nil
 	}
-	// Try to link the file again.
-	if err := os.Link(sourcePath, targetPath); err != nil {
-		return utils.WrapErr(err)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return utils.WrapErr(err)
+		}
+		// Try to link the file again.
+		if err := os.Link(sourcePath, targetPath); err != nil {
+			return utils.WrapErr(err)
+		}
+		return nil
 	}
 
-	return nil
+	return utils.WrapErr(err)
 }

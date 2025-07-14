@@ -52,6 +52,13 @@ func GetSelfHashGob() (FileHash, error) {
 
 func ValidateExisting(hashes []FileHash, node string) ([]FileHash, error) {
 	dir := cfg.Global.NodeDirTemp(node)
+	exists, err := local.PathExists(dir)
+	if err != nil {
+		return nil, utils.WrapErr(err)
+	}
+	if !exists {
+		return hashes, nil
+	}
 
 	emptyChan := make(chan FileHash)
 	defer close(emptyChan)
