@@ -2,6 +2,8 @@ package hashsums
 
 import (
 	"context"
+	"errors"
+	"os"
 	"runtime"
 
 	"github.com/wilymonkey/maeve/local"
@@ -36,6 +38,10 @@ func LinkExisting(node string, hashes []FileHash) ([]FileHash, error) {
 				sourcePath := relPath.Resolve(node)
 				targetPath := h.Path.ResolveTemp(node)
 				if err := local.Hardlink(sourcePath, targetPath); err != nil {
+					if errors.Is(err, os.ErrNotExist) {
+						missingChan <- h
+						return nil
+					}
 					return utils.WrapErr(err)
 				}
 			} else {
