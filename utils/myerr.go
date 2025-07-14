@@ -1,4 +1,4 @@
-package myerr
+package utils
 
 import (
 	"fmt"
@@ -36,9 +36,10 @@ func Sleep(t time.Duration) {
 	time.Sleep(time.Millisecond * t)
 }
 
-func Print(err error, b *strings.Builder) {
+func PrintErr(err error, b *strings.Builder) {
 	fail := style.Fail.Render("Failed!")
-	fmt.Fprintf(b, "\n\n%s %s %v\n\n", style.ICross, fail, err)
+	s := fmt.Sprintf("\n\n%s %s %v\n\n", style.ICross, fail, err)
+	b.WriteString(style.Wrap(s))
 }
 
 func BoolView(b bool) string {

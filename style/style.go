@@ -3,6 +3,7 @@ package style
 import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const VERSION = "0.1.0"
@@ -53,3 +54,7 @@ var (
 ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝  ╚═══╝  ╚══════╝
 `)
 )
+
+func Wrap(s string) string {
+	return ansi.Wrap(s, 80, "")
+}

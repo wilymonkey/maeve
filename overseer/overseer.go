@@ -8,6 +8,9 @@ import (
 	"github.com/wilymonkey/maeve/style"
 )
 
+var Global *tea.Program
+var GlobalInteractive bool
+
 type msgPush struct {
 	next tea.Model
 }

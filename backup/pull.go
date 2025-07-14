@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
 	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
-	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type linkPathMeta struct {
@@ -24,11 +24,11 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 	selfDir := cfg.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	if err := os.MkdirAll(selfDir, 0755); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	for srcDir := range linkDirs {
@@ -44,7 +44,7 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 				totalSize += size
 			},
 			func() {
-				cfg.TuiProgram.Send(
+				overseer.Global.Send(
 					linkPathMeta{
 						path:   srcDir,
 						number: totalFiles,
@@ -54,7 +54,7 @@ func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg 
 			})
 
 		if err := local.HardlinkDir(srcDir, destDir, sizeChan, ctx); err != nil {
-			return myerr.WrapErr(err)
+			return utils.WrapErr(err)
 		}
 		close(sizeChan)
 	}

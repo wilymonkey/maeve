@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/utils/myerr"
+	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -15,17 +15,17 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	key, err := os.ReadFile(cfg.Global.SSHKey)
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 
 	hostKeyCallback, err := knownhosts.New(cfg.Global.SSHKnownHosts)
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 
 	config := &ssh.ClientConfig{
@@ -36,7 +36,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	client, err := ssh.Dial("tcp", host+":"+port, config)
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	return client, nil
 }

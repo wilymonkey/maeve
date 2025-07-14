@@ -11,8 +11,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
-	hs "github.com/wilymonkey/maeve/local/hashsums"
-	"github.com/wilymonkey/maeve/utils/myerr"
+	hs "github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -42,7 +43,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -53,27 +54,27 @@ func RunServer() error {
 func New(session *ssh.Session) (*rpc.Client, error) {
 	stdinPipe, err := session.StdinPipe()
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	stdoutPipe, err := session.StdoutPipe()
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	stderrPipe, err := session.StderrPipe()
 	if err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 
 	if err := session.Start("maeve --server"); err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 
 	// Report to TUI
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			cfg.TuiProgram.Send(func() tea.Msg {
-				return myerr.WrapErr(fmt.Errorf("remote stderr: %s", scanner.Text()))
+			overseer.Global.Send(func() tea.Msg {
+				return utils.WrapErr(fmt.Errorf("remote stderr: %s", scanner.Text()))
 			})
 		}
 	}()
@@ -83,23 +84,23 @@ func New(session *ssh.Session) (*rpc.Client, error) {
 
 type RPCFuncs int
 
-type NodeFuncArgs struct {
+type TempLocationArgs struct {
 	Node string
 }
-type NodeFuncReply struct {
+type TempLocationReply struct {
 	Path string
 }
 
-func (h *RPCFuncs) NodeLocation(args *NodeFuncArgs, reply *NodeFuncReply) error {
+func (h *RPCFuncs) TempLocation(args *TempLocationArgs, reply *TempLocationReply) error {
 	reply.Path = cfg.Global.NodeDirTemp(args.Node)
 	return nil
 }
 
-func SelfNodeTempLoc(rpc *rpc.Client) (string, error) {
-	args := &NodeFuncArgs{Node: cfg.Global.Name}
-	var reply NodeFuncReply
-	if err := rpc.Call("RPCFuncs.NodeLocation", args, &reply); err != nil {
-		return "", myerr.WrapErr(err)
+func TempLocation(rpc *rpc.Client) (string, error) {
+	args := &TempLocationArgs{Node: cfg.Global.Name}
+	var reply TempLocationReply
+	if err := rpc.Call("RPCFuncs.TempLocation", args, &reply); err != nil {
+		return "", utils.WrapErr(err)
 	}
 	return reply.Path, nil
 }
@@ -116,7 +117,7 @@ func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) 
 	path := args.Hash.Path.ResolveTemp(args.Node)
 	newHash, err := hs.GenHash(path)
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	reply.HashGood = newHash == args.Hash.Hash
 	return nil
@@ -129,7 +130,29 @@ func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
 	}
 	var reply VerifyFuncReply
 	if err := rpc.Call("RPCFuncs.VerifyTempfile", args, &reply); err != nil {
-		return false, myerr.WrapErr(err)
+		return false, utils.WrapErr(err)
 	}
 	return reply.HashGood, nil
+}
+
+type LoadMasterArgs struct {
+	Node string
+}
+
+func (h *RPCFuncs) LoadMaster(args *LoadMasterArgs, reply *struct{}) error {
+	master, err := hs.GetMaster(args.Node)
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	hs.Global = *master
+	return nil
+}
+
+func LoadMaster(rpc *rpc.Client) error {
+	var ignore struct{}
+	args := &LoadMasterArgs{Node: cfg.Global.Name}
+	if err := rpc.Call("RPCFuncs.LoadMaster", args, &ignore); err != nil {
+		return utils.WrapErr(err)
+	}
+	return nil
 }

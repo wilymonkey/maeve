@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/sftp"
-	hs "github.com/wilymonkey/maeve/local/hashsums"
+	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/rpc"
-	"github.com/wilymonkey/maeve/utils/myerr"
+	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
@@ -32,47 +32,49 @@ func SendFiles(
 
 	rpcSesh, err := sshClient.NewSession()
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	defer rpcSesh.Close()
 	rpcClient, err := rpc.New(rpcSesh)
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	defer rpcClient.Close()
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	defer sftpClient.Close()
 
-	remoteDir, err := rpc.SelfNodeTempLoc(rpcClient)
+	remoteDir, err := rpc.TempLocation(rpcClient)
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
+	}
+	if err = rpc.LoadMaster(rpcClient); err != nil {
+		return utils.WrapErr(err)
 	}
 
 	downChan := make(chan hs.FileHash, 2)
 	verifyChan := make(chan SendStatus, 1)
 
 	eGrp.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				close(verifyChan)
-				return ctx.Err()
-			case hash, ok := <-downChan:
-				if !ok {
-					close(verifyChan)
-					return nil
-				}
-				status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
-				if err != nil {
-					close(verifyChan)
-					return myerr.WrapErr(err)
-				}
-				verifyChan <- status
-			}
+		for range ctx.Done() {
+			close(verifyChan)
+			close(downChan)
+			return ctx.Err()
 		}
+		return nil
+	})
+
+	eGrp.Go(func() error {
+		for hash := range downChan {
+			status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
+			if err != nil {
+				return utils.WrapErr(err)
+			}
+			verifyChan <- status
+		}
+		return nil
 	})
 
 	i := 0
@@ -86,43 +88,34 @@ func SendFiles(
 	}
 
 	eGrp.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
+		for status := range verifyChan {
+			status.Verifying = true
+			progChan <- status
+
+			isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
+			if err != nil {
+				return utils.WrapErr(err)
+			}
+			status.IsGood = isGood
+			progChan <- status
+
+			return utils.DummyErr()
+
+			if !status.IsGood {
+				downChan <- status.Hash
+			} else if i < len(hashes) {
+				downChan <- hashes[i]
+				i++
+			} else {
 				close(downChan)
-				return ctx.Err()
-			case status, ok := <-verifyChan:
-				if !ok {
-					close(downChan)
-					return nil
-				}
-
-				status.Verifying = true
-				progChan <- status
-
-				isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
-				if err != nil {
-					close(downChan)
-					return myerr.WrapErr(err)
-				}
-				status.IsGood = isGood
-				progChan <- status
-
-				if !status.IsGood {
-					downChan <- status.Hash
-				} else if i < len(hashes) {
-					downChan <- hashes[i]
-					i++
-				} else {
-					close(downChan)
-					return nil
-				}
+				return nil
 			}
 		}
+		return nil
 	})
 
 	if err := eGrp.Wait(); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	return nil
@@ -139,25 +132,25 @@ func pushFile(
 
 	localFile, err := os.Open(hash.Path.ResolveSelf())
 	if err != nil {
-		return status, myerr.WrapErr(err)
+		return status, utils.WrapErr(err)
 	}
 	defer localFile.Close()
 	fileInfo, err := localFile.Stat()
 	if err != nil {
-		return status, myerr.WrapErr(err)
+		return status, utils.WrapErr(err)
 	}
 	status.Total = fileInfo.Size()
 
 	remotePath := hash.Path.ResolvePrepend(remoteDir)
 	parentDir := filepath.Dir(remotePath)
 	if err := sftpClient.MkdirAll(parentDir); err != nil {
-		return status, myerr.WrapErr(err)
+		return status, utils.WrapErr(err)
 	}
 
 	remoteFile, err := sftpClient.Create(remotePath)
 	defer remoteFile.Close()
 	if err != nil {
-		return status, myerr.WrapErrWithInfo(err, remotePath)
+		return status, utils.WrapErrWithInfo(err, remotePath)
 	}
 	pw := &ProgressWriter{
 		Writer: remoteFile,
@@ -170,7 +163,7 @@ func pushFile(
 	}
 
 	if _, err := io.Copy(pw, localFile); err != nil {
-		return status, myerr.WrapErr(err)
+		return status, utils.WrapErr(err)
 	}
 	return status, nil
 }

@@ -11,12 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/cfg"
-	hs "github.com/wilymonkey/maeve/local/hashsums"
+	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
 	"github.com/wilymonkey/maeve/utils"
-	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type Model struct {
@@ -116,7 +115,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case doneSend:
 		m.pushDone = true
 		m.ctxCancel()
-		if cfg.TuiInteractive {
+		if overseer.GlobalInteractive {
 			return m, nil
 		} else {
 			return m, overseer.Back
@@ -125,11 +124,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case error:
 		m.err = msg
 		m.ctxCancel()
-		if cfg.TuiInteractive {
+		if overseer.GlobalInteractive {
 			return m, nil
 		} else {
-			return m, nil
-			// return m, overseer.Back
+			return m, overseer.Back
 		}
 
 	case spinner.TickMsg:
@@ -168,7 +166,7 @@ func (m Model) View() string {
 	}
 
 	if m.err != nil {
-		myerr.Print(m.err, &b)
+		utils.PrintErr(m.err, &b)
 	}
 
 	b.WriteString("\n")
@@ -186,7 +184,7 @@ func titleWithProgress(title, spinView string, isDone, isPending bool) string {
 	if isDone {
 		s = fmt.Sprintf("%s %s", style.ITick, style.TitleSuccess.Render(title))
 	} else if isPending {
-		s = fmt.Sprintf(" %s %s", spinView, style.Title.Render(title))
+		s = fmt.Sprintf("%s %s", spinView, style.Title.Render(title))
 	} else {
 		s = style.TitlePending.Render(title)
 	}
@@ -285,12 +283,12 @@ func newHashes(parentCtx context.Context, total int64) tea.Msg {
 			hashes = append(hashes, hash)
 		},
 		func() {
-			cfg.TuiProgram.Send(hashProg{hashes: hashes})
+			overseer.Global.Send(hashProg{hashes: hashes})
 		},
 	)
 
 	if err := hs.NewDirFileHash(selfDir, progChan, parentCtx); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	close(progChan)

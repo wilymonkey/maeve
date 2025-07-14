@@ -59,7 +59,7 @@ func main() {
 		return
 
 	default:
-		cfg.TuiInteractive = true
+		overseer.GlobalInteractive = true
 		startTui(home.New())
 	}
 }
@@ -70,9 +70,9 @@ func printVersion() {
 }
 
 func startTui(start tea.Model) {
-	cfg.TuiProgram = tea.NewProgram(overseer.New(start), tea.WithAltScreen())
+	overseer.Global = tea.NewProgram(overseer.New(start), tea.WithAltScreen())
 
-	if _, err := cfg.TuiProgram.Run(); err != nil {
+	if _, err := overseer.Global.Run(); err != nil {
 		log.Fatalf("Failed to start TUI:  %v", err)
 	}
 }

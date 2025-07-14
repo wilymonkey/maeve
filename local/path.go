@@ -1,10 +1,10 @@
-package mypath
+package local
 
 import (
 	"path/filepath"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/utils/myerr"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 type RelativePath struct {
@@ -23,7 +23,7 @@ type SnapshotPath struct {
 func NewSnapshotPath(sourcePath, filePath string) (SnapshotPath, error) {
 	relPath, err := filepath.Rel(sourcePath, filePath)
 	if err != nil {
-		return SnapshotPath{}, myerr.WrapErr(err)
+		return SnapshotPath{}, utils.WrapErr(err)
 	}
 
 	return SnapshotPath{Path: relPath}, nil

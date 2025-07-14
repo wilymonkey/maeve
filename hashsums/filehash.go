@@ -13,13 +13,13 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local/mypath"
-	"github.com/wilymonkey/maeve/utils/myerr"
+	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
 )
 
 type FileHash struct {
-	Path mypath.SnapshotPath
+	Path local.SnapshotPath
 	Hash [32]byte
 }
 
@@ -37,8 +37,6 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 	eGrp.SetLimit(20 * runtime.NumCPU())
 
 	walkErr := filepath.WalkDir(sourcePath, func(filePath string, dir os.DirEntry, err error) error {
-		// time.Sleep(20 * time.Millisecond)
-
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -58,12 +56,12 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 		eGrp.Go(func() error {
 			hash, err := GenHash(filePath)
 			if err != nil {
-				return myerr.WrapErr(err)
+				return utils.WrapErr(err)
 			}
 
-			snapshotPath, err := mypath.NewSnapshotPath(sourcePath, filePath)
+			snapshotPath, err := local.NewSnapshotPath(sourcePath, filePath)
 			if err != nil {
-				return myerr.WrapErr(err)
+				return utils.WrapErr(err)
 			}
 
 			fh := FileHash{Path: snapshotPath, Hash: hash}
@@ -76,14 +74,14 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 	})
 
 	if err := eGrp.Wait(); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	if walkErr != nil {
-		return myerr.WrapErr(walkErr)
+		return utils.WrapErr(walkErr)
 	}
 
 	if err := writeFileHashes(hashsums); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 
 	return nil

@@ -8,18 +8,21 @@ import (
 	"path/filepath"
 
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/local/mypath"
+	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/utils"
 )
+
+var Global MasterHash
 
 var ErrInvalidMH = errors.New("invalid MasterHash file")
 
 type MasterHash struct {
 	dirs map[string]struct{}
 	// hash as key, relPath as value
-	hashes map[[32]byte]mypath.RelativePath
+	hashes map[[32]byte]local.RelativePath
 }
 
-func (mh *MasterHash) Exists(fileHash FileHash) *mypath.RelativePath {
+func (mh *MasterHash) Exists(fileHash FileHash) *local.RelativePath {
 	if relPath, exists := mh.hashes[fileHash.Hash]; exists {
 		return &relPath
 	}
@@ -32,7 +35,7 @@ func (mh *MasterHash) Exists(fileHash FileHash) *mypath.RelativePath {
 func (mh *MasterHash) validate(node string) error {
 	entries, err := os.ReadDir(cfg.Global.NodeDir(node))
 	if err != nil {
-		return fmt.Errorf("read entries in node %s ⇒  %w", node, err)
+		return utils.WrapErr(err)
 	}
 
 	for _, e := range entries {
@@ -47,20 +50,20 @@ func (mh *MasterHash) validate(node string) error {
 }
 
 // Retrieves the MasterHash of a given node.
-func GetMasterHash(node string) (*MasterHash, error) {
+func GetMaster(node string) (*MasterHash, error) {
 	var masterHash *MasterHash
 
 	f, err := os.Open(cfg.Global.MasterHashFile(node))
 	if err != nil {
-		return nil, fmt.Errorf("open MasterHash file ⇒  %w", err)
+		return nil, utils.WrapErr(err)
 	}
 	defer f.Close()
 
 	if err := gob.NewDecoder(f).Decode(masterHash); err != nil {
-		return nil, fmt.Errorf("decode MasterHash file ⇒  %w", err)
+		return nil, utils.WrapErr(err)
 	}
 	if err := masterHash.validate(node); err != nil {
-		return nil, fmt.Errorf("validate MasterHash ⇒  %w", err)
+		return nil, utils.WrapErr(err)
 	}
 
 	return masterHash, nil
@@ -78,7 +81,7 @@ func NewMasterHash(node string) (*MasterHash, error) {
 	}
 
 	dirs := make(map[string]struct{})
-	hashes := make(map[[32]byte]mypath.RelativePath)
+	hashes := make(map[[32]byte]local.RelativePath)
 	for _, e := range entries {
 		if e.IsDir() {
 			hFile, err := ReadFileHashes(filepath.Join(baseDir, e.Name()))

@@ -5,15 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/goccy/go-yaml"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 const VERSION = "0.0.1"
 
 var Global MaeveConfig
-var TuiProgram *tea.Program
-var TuiInteractive bool
 
 type MaeveConfig struct {
 	Name          string   `yaml:"Name"`
@@ -82,7 +80,7 @@ func (c *MaeveConfig) NodeDirLatest(node string) (string, error) {
 func ReadConfig() error {
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
-		return fmt.Errorf("unable to get user config dir ⇒  %v", err)
+		return utils.WrapErr(err)
 	}
 	configPath := filepath.Join(userConfigDir, "maeve", "config.yaml")
 
@@ -90,28 +88,28 @@ func ReadConfig() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err := DefaultConfig(configPath); err != nil {
-				return fmt.Errorf("unable to create default config ⇒  %v", err)
+				return utils.WrapErr(err)
 			}
 			// Try to read the newly created config file.
 			data, err = os.ReadFile(configPath)
 			if err != nil {
-				return fmt.Errorf("unable to read default config ⇒  %v", err)
+				return utils.WrapErr(err)
 			}
 		} else {
-			return fmt.Errorf("unable to load config ⇒  %v", err)
+			return utils.WrapErr(err)
 		}
 	}
 
 	err = yaml.Unmarshal(data, &Global)
 	if err != nil {
-		return fmt.Errorf("unable to parse ⇒  %w", err)
+		return utils.WrapErr(err)
 	}
 
 	if Global.BackupDir == "" {
-		return fmt.Errorf("BackupDir not specified")
+		return utils.WrapErr(err)
 	}
 	if Global.MaxBackups < 1 {
-		return fmt.Errorf("MaxBackups of %d is not valid", Global.MaxBackups)
+		return utils.WrapErr(err)
 	}
 
 	return nil

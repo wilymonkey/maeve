@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/wilymonkey/maeve/cfg"
-	hs "github.com/wilymonkey/maeve/local/hashsums"
+	hs "github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/utils"
-	"github.com/wilymonkey/maeve/utils/myerr"
 )
 
 type doneSend struct{}
@@ -18,13 +18,13 @@ type pushingNode struct {
 
 func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 	for i, node := range cfg.Global.RemoteNodes {
-		cfg.TuiProgram.Send(pushingNode{index: i})
+		overseer.Global.Send(pushingNode{index: i})
 		if err := pushToNode(ctx, hashes, node); err != nil {
-			return myerr.WrapErr(err)
+			return utils.WrapErr(err)
 		}
 	}
 
-	cfg.TuiProgram.Send(doneSend{})
+	overseer.Global.Send(doneSend{})
 	return nil
 }
 
@@ -47,7 +47,7 @@ func newPushProgress(total int) pushProgress {
 func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 	sshClient, err := remote.NewSSHClient(node)
 	if err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	defer sshClient.Close()
 
@@ -64,11 +64,11 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 			pushProg.operations.Push(status)
 		},
 		func() {
-			cfg.TuiProgram.Send(pushProg)
+			overseer.Global.Send(pushProg)
 		})
 
 	if err := remote.SendFiles(hashes, sshClient, ctx, progChan); err != nil {
-		return myerr.WrapErr(err)
+		return utils.WrapErr(err)
 	}
 	return nil
 }

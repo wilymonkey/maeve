@@ -1,4 +1,4 @@
-package semaphore
+package utils
 
 import "runtime"
 
@@ -7,7 +7,7 @@ type Semaphore struct {
 }
 
 // Creates a Semaphore with n permits that scale with cpu number.
-func NewScaling(n int) *Semaphore {
+func NewScalingSema(n int) *Semaphore {
 	return New(runtime.NumCPU() * n)
 }
 

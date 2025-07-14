@@ -1,42 +1,41 @@
-package local
+package hashsums
 
 import (
 	"context"
 	"errors"
 	"os"
 
-	hs "github.com/wilymonkey/maeve/local/hashsums"
-	"github.com/wilymonkey/maeve/utils/myerr"
-	"github.com/wilymonkey/maeve/utils/semaphore"
+	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
 
-func LinkFilesFromSnapshots(node string, remoteHashes []hs.FileHash) ([]hs.FileHash, error) {
-	localMaster, err := hs.GetMasterHash(node)
+func LinkFilesFromSnapshots(node string, remoteHashes []FileHash) ([]FileHash, error) {
+	localMaster, err := GetMaster(node)
 	if err != nil {
 		switch {
-		case errors.Is(err, os.ErrNotExist) || errors.Is(err, hs.ErrInvalidMH):
-			localMaster, err = hs.NewMasterHash(node)
+		case errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrInvalidMH):
+			localMaster, err = NewMasterHash(node)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					return remoteHashes, nil
 				}
-				return nil, myerr.WrapErr(err)
+				return nil, utils.WrapErr(err)
 			}
 		default:
-			return nil, myerr.WrapErr(err)
+			return nil, utils.WrapErr(err)
 		}
 	}
 
-	sem := semaphore.NewScaling(20)
+	sem := utils.NewScalingSema(20)
 	defer sem.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eGrp, ctx := errgroup.WithContext(ctx)
 
-	missingChan := make(chan hs.FileHash, 100)
-	var missing []hs.FileHash
+	missingChan := make(chan FileHash, 100)
+	var missing []FileHash
 	go func() {
 		for hash := range missingChan {
 			missing = append(missing, hash)
@@ -50,7 +49,7 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hs.FileHash) ([]hs.FileH
 			if relPath := localMaster.Exists(rHash); relPath != nil {
 				sourcePath := relPath.Resolve(node)
 				targetPath := rHash.Path.ResolveTemp(node)
-				if err := hardlink(sourcePath, targetPath); err != nil {
+				if err := local.Hardlink(sourcePath, targetPath); err != nil {
 					return err
 				}
 			} else {
@@ -66,7 +65,7 @@ func LinkFilesFromSnapshots(node string, remoteHashes []hs.FileHash) ([]hs.FileH
 	})
 
 	if err := eGrp.Wait(); err != nil {
-		return nil, myerr.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	close(missingChan)
 
