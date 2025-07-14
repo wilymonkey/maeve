@@ -23,7 +23,6 @@ func HardlinkDir(source, target string, sizeChan chan int64, ctx context.Context
 	eGrp.SetLimit(20 * runtime.NumCPU())
 
 	err := filepath.WalkDir(source, func(sourcePath string, dir os.DirEntry, err error) error {
-		// time.Sleep(20 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

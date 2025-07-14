@@ -2,36 +2,15 @@ package utils
 
 import (
 	"fmt"
+	"math"
 )
 
-// Takes an int64 filesize in bytes and returns a human-readable string.
 func BytesToHuman(bytes int64) string {
-	if bytes < 0 {
-		return "Invalid size" // Or handle as an error
+	if bytes < 1000 {
+		return fmt.Sprintf("%d B", bytes)
 	}
-	if bytes == 0 {
-		return "0 B"
-	}
-
-	const (
-		kb = 1024
-		mb = kb * 1024
-		gb = mb * 1024
-		tb = gb * 1024
-	)
-
-	units := []string{"B", "KB", "MB", "GB", "TB"}
-	thresholds := []int64{1, kb, mb, gb, tb} // The 1 is for "Bytes"
-
-	// Iterate backwards
-	var i int
-	for i = len(thresholds) - 1; i >= 0; i-- {
-		if bytes >= thresholds[i] {
-			break
-		}
-	}
-
-	// Calculate the value and format
-	val := float64(bytes) / float64(thresholds[i])
-	return fmt.Sprintf("%.2f %s", val, units[i])
+	units := []string{"KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
+	exponent := min(int(math.Floor(math.Log10(float64(bytes))/math.Log10(1000))), len(units))
+	decimal := float64(bytes) / math.Pow(1000, float64(exponent))
+	return fmt.Sprintf("%.2f %s", decimal, units[exponent-1])
 }
