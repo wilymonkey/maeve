@@ -164,6 +164,7 @@ func pushFile(
 	if err != nil {
 		return status, utils.WrapErrWithInfo(err, remotePath)
 	}
+	rateKB := cfg.Global.MaxUpload * 1024
 	pw := &progWriter{
 		writer: remoteFile,
 		total:  status.Total,
@@ -172,9 +173,9 @@ func pushFile(
 			status.Curr = written
 			progChan <- status
 		},
-		rate:       cfg.Global.MaxUpload,
-		burstSize:  cfg.Global.MaxUpload / 2,
-		tokens:     cfg.Global.MaxUpload,
+		rate:       rateKB,
+		burstSize:  rateKB / 2,
+		tokens:     rateKB,
 		lastRefill: time.Now(),
 	}
 

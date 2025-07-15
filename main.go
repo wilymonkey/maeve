@@ -37,7 +37,7 @@ func main() {
 		log.Fatalf("Failed to parse args: %v", err)
 	}
 
-	if err := cfg.ReadConfig(); err != nil {
+	if err := cfg.GetConfig(); err != nil {
 		log.Fatalf("Failed to read config:  %v", err)
 	}
 

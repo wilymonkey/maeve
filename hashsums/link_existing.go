@@ -18,13 +18,12 @@ func LinkExisting(node string, hashes []FileHash) ([]FileHash, error) {
 	}
 
 	missingChan := make(chan FileHash, 100)
-	defer close(missingChan)
 	var missing []FileHash
-	go func() {
+	wg := utils.GoWait(func() {
 		for hash := range missingChan {
 			missing = append(missing, hash)
 		}
-	}()
+	})
 
 	eGrp, ctx := errgroup.WithContext(context.Background())
 	eGrp.SetLimit(20 * runtime.NumCPU())
@@ -50,8 +49,10 @@ func LinkExisting(node string, hashes []FileHash) ([]FileHash, error) {
 			return nil
 		})
 	}
-
-	if err := eGrp.Wait(); err != nil {
+	err = eGrp.Wait()
+	close(missingChan)
+	wg.Wait()
+	if err != nil {
 		return nil, utils.WrapErr(err)
 	}
 

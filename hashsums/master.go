@@ -144,7 +144,7 @@ func genMasterHash(node string) (MasterHash, error) {
 }
 
 func writeMaster(mh *MasterHash, node string) error {
-	f, err := local.Create(cfg.Global.MasterHashFile(node))
+	f, err := utils.Create(cfg.Global.MasterHashFile(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}

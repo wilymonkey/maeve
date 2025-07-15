@@ -254,7 +254,7 @@ func (m *Model) pushView(b *strings.Builder, spinView string) {
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(len(rows)),
+		table.WithHeight(len(rows)+1),
 		table.WithStyles(style.Table),
 	)
 

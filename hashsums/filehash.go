@@ -86,13 +86,12 @@ func ValidateExisting(hashes []FileHash, node string) ([]FileHash, error) {
 
 func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Context) ([]FileHash, error) {
 	hashChan := make(chan FileHash, 100)
-	defer close(hashChan)
 	var hashes []FileHash
-	go func() {
+	wg := utils.GoWait(func() {
 		for hash := range hashChan {
 			hashes = append(hashes, hash)
 		}
-	}()
+	})
 
 	eGrp, ctx := errgroup.WithContext(ctx)
 	eGrp.SetLimit(20 * runtime.NumCPU())
@@ -132,7 +131,10 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 		return nil
 	})
 
-	if err := eGrp.Wait(); err != nil {
+	err := eGrp.Wait()
+	close(hashChan)
+	wg.Wait()
+	if err != nil {
 		return hashes, utils.WrapErr(err)
 	}
 	if walkErr != nil {

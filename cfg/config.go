@@ -1,7 +1,7 @@
 package cfg
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -86,92 +86,122 @@ func (c *MaeveConfig) NodeSnapshots(node string) ([]string, error) {
 	return result, nil
 }
 
-// Reads the config file and makes it available globally.
-func ReadConfig() error {
-	userConfigDir, err := os.UserConfigDir()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	configPath := filepath.Join(userConfigDir, "maeve", "config.yaml")
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := DefaultConfig(configPath); err != nil {
-				return utils.WrapErr(err)
-			}
-			// Try to read the newly created config file.
-			data, err = os.ReadFile(configPath)
-			if err != nil {
-				return utils.WrapErr(err)
-			}
-		} else {
-			return utils.WrapErr(err)
-		}
-	}
-
-	err = yaml.Unmarshal(data, &Global)
+func (c *MaeveConfig) commit(path string) error {
+	data, err := yaml.Marshal(c)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
 
-	if Global.BackupDir == "" {
+	f, err := utils.Create(path)
+	if err != nil {
 		return utils.WrapErr(err)
 	}
-	if Global.MaxBackups < 1 {
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
 		return utils.WrapErr(err)
 	}
+	return nil
+}
+
+func (cfg *MaeveConfig) applyDefaults() error {
+	def, err := defaultConfig()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+
+	if cfg.Name == "" {
+		cfg.Name = def.Name
+	}
+	if cfg.SSHKey == "" {
+		cfg.SSHKey = def.SSHKey
+	}
+	if cfg.SSHKnownHosts == "" {
+		cfg.SSHKnownHosts = def.SSHKnownHosts
+	}
+	if cfg.BackupDir == "" {
+		cfg.BackupDir = def.BackupDir
+	}
+	if cfg.MaxBackups == 0 {
+		cfg.MaxBackups = def.MaxBackups
+	}
+
+	// Ignore: MaxUpload, RemoteNodes, SourceDirs
 
 	return nil
 }
 
-// Create default config file and write it to the path given.
-func DefaultConfig(configPath string) error {
+// Reads/Creates the config file and makes it available globally.
+func GetConfig() error {
+	userDir, err := os.UserConfigDir()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	cfgPath := filepath.Join(userDir, "maeve", "config.yaml")
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return utils.WrapErr(err)
+		}
+
+		// Create the config file.
+		Global, err = defaultConfig()
+		if err != nil {
+			return utils.WrapErr(err)
+		}
+		if err := Global.commit(cfgPath); err != nil {
+			return utils.WrapErr(err)
+		}
+		return nil
+	}
+
+	if err := yaml.Unmarshal(data, &Global); err != nil {
+		return utils.WrapErr(err)
+	}
+	if err := Global.applyDefaults(); err != nil {
+		return utils.WrapErr(err)
+	}
+	if err := Global.commit(cfgPath); err != nil {
+		return utils.WrapErr(err)
+	}
+	return nil
+}
+
+func defaultConfig() (MaeveConfig, error) {
+	mc := MaeveConfig{
+		MaxBackups:  5,
+		MaxUpload:   0,
+		RemoteNodes: make([]string, 0),
+		SourceDirs:  make([]string, 0),
+	}
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("get hostname ⇒  %w", err)
+		return mc, utils.WrapErr(err)
 	}
+	mc.Name = hostname
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("get home dir ⇒  %w", err)
+		return mc, utils.WrapErr(err)
 	}
+	mc.BackupDir = filepath.Join(homeDir, "Maeve")
 
 	sshDir := filepath.Join(homeDir, ".ssh")
 	sshKey, err := findSSHKeys(sshDir)
 	if err != nil {
-		return fmt.Errorf("find a private ssh key ⇒  %w", err)
+		return mc, utils.WrapErr(err)
 	}
+	mc.SSHKey = sshKey
+
 	sshKnownHosts := filepath.Join(sshDir, "known_hosts")
 	_, err = os.Stat(sshKnownHosts)
 	if err != nil {
-		return fmt.Errorf("find a ssh known hosts ⇒  %w", err)
+		return mc, utils.WrapErr(err)
 	}
+	mc.SSHKnownHosts = sshKnownHosts
 
-	var config = MaeveConfig{
-		Name:          hostname,
-		BackupDir:     filepath.Join(homeDir, "Maeve"),
-		SSHKey:        sshKey,
-		SSHKnownHosts: sshKnownHosts,
-		MaxBackups:    5,
-		RemoteNodes:   make([]string, 0),
-		SourceDirs:    make([]string, 0),
-	}
-
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("convert config to yaml ⇒  %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return fmt.Errorf("create config dir ⇒  %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0755); err != nil {
-		return fmt.Errorf("unable to write config file ⇒  %w", err)
-	}
-
-	return nil
+	return mc, nil
 }
 
 func findSSHKeys(sshDir string) (string, error) {

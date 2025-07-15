@@ -24,11 +24,11 @@ func WrapErrWithInfo(err error, info string) error {
 	return fmt.Errorf("%s@%d: (%s) %w", filename, line, info, err)
 }
 
-func DummyErr() error {
+func DummyErr(s string) error {
 	_, file, line, _ := runtime.Caller(1)
 	filename := filepath.Base(file)
 
-	return fmt.Errorf("%s@%d: DummyErr", filename, line)
+	return fmt.Errorf("%s@%d: DummyErr: %s", filename, line, s)
 }
 
 func Sleep(t time.Duration) {
