@@ -102,7 +102,7 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 			return utils.WrapErr(err)
 		}
 		if err := ctx.Err(); err != nil {
-			return err // err is from somewhere else
+			return err
 		}
 		info, err := dir.Info()
 		if err != nil {

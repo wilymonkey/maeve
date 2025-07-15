@@ -6,8 +6,10 @@ import (
 	netRPC "net/rpc"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/sftp"
+	"github.com/wilymonkey/maeve/cfg"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/rpc"
 	"github.com/wilymonkey/maeve/utils"
@@ -162,14 +164,18 @@ func pushFile(
 	if err != nil {
 		return status, utils.WrapErrWithInfo(err, remotePath)
 	}
-	pw := &ProgressWriter{
-		Writer: remoteFile,
-		Total:  status.Total,
+	pw := &progWriter{
+		writer: remoteFile,
+		total:  status.Total,
 		ctx:    ctx,
-		Progress: func(written int64) {
+		progress: func(written int64) {
 			status.Curr = written
 			progChan <- status
 		},
+		rate:       cfg.Global.MaxUpload,
+		burstSize:  cfg.Global.MaxUpload / 2,
+		tokens:     cfg.Global.MaxUpload,
+		lastRefill: time.Now(),
 	}
 
 	if _, err := io.Copy(pw, localFile); err != nil {
@@ -178,26 +184,63 @@ func pushFile(
 	return status, nil
 }
 
-type ProgressWriter struct {
-	Writer   io.Writer
-	Total    int64
-	Written  int64
-	Progress func(written int64)
-	ctx      context.Context
+type progWriter struct {
+	writer     io.Writer
+	total      int64
+	written    int64
+	progress   func(written int64)
+	ctx        context.Context
+	rate       int64
+	burstSize  int64
+	tokens     int64
+	lastRefill time.Time
 }
 
-// Write implements the io.Writer interface.
-// Assumes the Progress field is not nil.
-func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
-	select {
-	case <-pw.ctx.Done():
-		return 0, pw.ctx.Err()
-	default:
-		// Continue
+func (pw *progWriter) Write(p []byte) (int, error) {
+	if err := pw.ctx.Err(); err != nil {
+		return 0, utils.WrapErr(err)
+	}
+	if pw.rate < 1 {
+		n, err := pw.writer.Write(p)
+		pw.written += int64(n)
+		pw.progress(pw.written)
+		return n, err
 	}
 
-	n, err = pw.Writer.Write(p)
-	pw.Written += int64(n)
-	pw.Progress(pw.Written)
-	return n, err
+	var writtenNow int
+	for len(p) > 0 {
+		pw.refillTokens()
+		toWrite := min(int64(len(p)), pw.tokens)
+		if toWrite > 0 {
+			n, err := pw.writer.Write(p[:toWrite])
+			if err != nil {
+				return int(pw.written), utils.WrapErr(err)
+			}
+			p = p[n:]
+			writtenNow += n
+
+			bytes := int64(n)
+			pw.tokens -= bytes
+			pw.written += bytes
+			pw.progress(pw.written)
+		}
+
+		if len(p) > 0 {
+			utils.Sleep(10) // Allow tokens to refill
+		}
+	}
+	return writtenNow, nil
+}
+
+func (pw *progWriter) refillTokens() {
+	now := time.Now()
+	elapsed := now.Sub(pw.lastRefill)
+	newTokens := int64(float64(pw.rate) * elapsed.Seconds())
+	if newTokens > 0 {
+		pw.tokens += newTokens
+		if pw.tokens > pw.burstSize {
+			pw.tokens = pw.burstSize
+		}
+		pw.lastRefill = now
+	}
 }

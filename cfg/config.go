@@ -23,6 +23,7 @@ type MaeveConfig struct {
 	SSHKnownHosts string   `yaml:"SSHKnownHosts"`
 	BackupDir     string   `yaml:"BackupDir"`
 	MaxBackups    int      `yaml:"MaxBackups"`
+	MaxUpload     int64    `yaml:"MaxUpload"`
 	RemoteNodes   []string `yaml:"RemoteNodes"`
 	SourceDirs    []string `yaml:"SourceDirs"`
 }
