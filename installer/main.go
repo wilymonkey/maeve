@@ -2,12 +2,14 @@ package main
 
 import (
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/installer/theme"
 )
 
 func main() {
 	a := app.New()
+	a.Settings().SetTheme(&theme.Theme{})
 	w := a.NewWindow("Maeve Installer")
-	w.SetContent(widget.NewLabel("Maeve Installer"))
+	w.SetPadded(false)
+	w.SetContent(makeGUI())
 	w.ShowAndRun()
 }
