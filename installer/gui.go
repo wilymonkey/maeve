@@ -12,20 +12,42 @@ func makeGUI() fyne.CanvasObject {
 	return container.NewBorder(
 		nil,
 		nil,
-		theme.BlueBg(
+		theme.PrimaryBox(
 			container.NewCenter(
-				container.NewVBox(
-					theme.NewH1("Components"),
-					widget.NewLabel("SSH Installed"),
-					widget.NewLabel("SSH Running"),
-					widget.NewLabel("Maeve"),
+				container.NewPadded(
+					container.NewVBox(
+						theme.NewH1("Components"),
+						container.New(
+							layout.NewCustomPaddedHBoxLayout(0),
+							theme.BoolImg(Global.hasSSH),
+							widget.NewLabel("SSH Installed"),
+						),
+						container.New(
+							layout.NewCustomPaddedHBoxLayout(0),
+							theme.BoolImg(Global.sshRunning),
+							widget.NewLabel("SSH Running"),
+						),
+						container.New(
+							layout.NewCustomPaddedHBoxLayout(0),
+							theme.BoolImg(Global.hasMaeve),
+							widget.NewLabel("Maeve"),
+						),
+					),
 				),
 			),
 		),
-		layout.NewSpacer(),
-		container.NewVBox(
-			theme.NewH1("Maeve Installer"),
-			theme.HighButton("Install", func() {}),
+		nil,
+		container.NewPadded(
+			container.NewBorder(
+				container.NewHBox(
+					theme.Icon(64),
+					theme.NewH1("Maeve Installer"),
+				),
+				theme.HighButton("Install", func() {}),
+				nil,
+				nil,
+				nil,
+			),
 		),
 	)
 }

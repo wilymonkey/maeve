@@ -64,7 +64,14 @@ func HighButton(label string, tapped func()) *widget.Button {
 	return btn
 }
 
-func BlueBg(objects fyne.CanvasObject) *fyne.Container {
-	background := canvas.NewRectangle(color.Green400)
+func PrimaryBox(objects fyne.CanvasObject) *fyne.Container {
+	background := canvas.NewRectangle(theme.Color(theme.ColorNamePrimary))
 	return container.NewStack(background, objects)
+}
+
+func Icon(size float32) *canvas.Image {
+	img := canvas.NewImageFromFile("icon.svg")
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(size, size))
+	return img
 }

@@ -1,0 +1,19 @@
+package main
+
+import "fyne.io/fyne/v2/data/binding"
+
+var Global State
+
+type State struct {
+	hasSSH     binding.Bool
+	sshRunning binding.Bool
+	hasMaeve   binding.Bool
+}
+
+func NewState() State {
+	return State{
+		hasSSH:     binding.NewBool(),
+		sshRunning: binding.NewBool(),
+		hasMaeve:   binding.NewBool(),
+	}
+}
