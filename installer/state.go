@@ -8,6 +8,7 @@ type State struct {
 	hasSSH     binding.Bool
 	sshRunning binding.Bool
 	hasMaeve   binding.Bool
+	logs       binding.StringList
 }
 
 func NewState() State {
@@ -15,5 +16,6 @@ func NewState() State {
 		hasSSH:     binding.NewBool(),
 		sshRunning: binding.NewBool(),
 		hasMaeve:   binding.NewBool(),
+		logs:       binding.NewStringList(),
 	}
 }

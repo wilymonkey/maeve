@@ -10,7 +10,7 @@ func BoolImg(data binding.Bool) *canvas.Image {
 	const check = "img/check.svg"
 	const cancel = "img/cancel.svg"
 	img := canvas.NewImageFromFile(check)
-	img.SetMinSize(fyne.NewSize(35, 35))
+	img.SetMinSize(fyne.NewSize(20, 25))
 
 	data.AddListener(binding.NewDataListener(func() {
 		val, err := data.Get()

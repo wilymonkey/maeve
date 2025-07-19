@@ -16,7 +16,7 @@ type Theme struct{}
 func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgColor.Color {
 	switch name {
 	case theme.ColorNameBackground:
-		return color.Zinc100
+		return imgColor.White
 	case theme.ColorNameForeground:
 		return color.Zinc950
 	case theme.ColorNameButton:
@@ -25,6 +25,12 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 		return color.Green400
 	case theme.ColorNameForegroundOnPrimary:
 		return color.Zinc100
+	case theme.ColorNameScrollBar:
+		return color.Zinc950
+	case theme.ColorNameSeparator:
+		return color.Zinc200
+	case theme.ColorNameShadow:
+		return color.Zinc300
 	default:
 		return theme.DefaultTheme().Color(name, variant)
 	}
@@ -66,6 +72,12 @@ func HighButton(label string, tapped func()) *widget.Button {
 
 func PrimaryBox(objects fyne.CanvasObject) *fyne.Container {
 	background := canvas.NewRectangle(theme.Color(theme.ColorNamePrimary))
+	return container.NewStack(background, objects)
+}
+
+func LowPriorBox(objects fyne.CanvasObject) *fyne.Container {
+	background := canvas.NewRectangle(color.Zinc100)
+	background.CornerRadius = 8.0
 	return container.NewStack(background, objects)
 }
 

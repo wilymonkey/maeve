@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"fyne.io/fyne/v2/app"
 	"github.com/wilymonkey/maeve/installer/theme"
 )
@@ -15,14 +13,6 @@ func main() {
 	w := a.NewWindow("Maeve Installer")
 	w.SetPadded(false)
 	w.SetContent(makeGUI())
-
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			currentVal, _ := Global.hasSSH.Get()
-			Global.hasSSH.Set(!currentVal)
-		}
-	}()
 
 	w.ShowAndRun()
 }
