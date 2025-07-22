@@ -41,21 +41,31 @@ func body() *fyne.Container {
 			}),
 	)
 	logs.SetMinSize(fyne.NewSize(200, 200))
-	return container.NewVBox(
-		widget.NewLabel("Logs"),
-		theme.LowPriorBox(
-			logs,
+
+	sshKeys := container.NewScroll(
+		container.NewCenter(
+			theme.NewH2("Only for Servers"),
 		),
-		widget.NewProgressBarInfinite(),
+	)
+	sshKeys.SetMinSize(fyne.NewSize(200, 200))
+
+	return container.NewVBox(
+		theme.NewH2("Install as Server?"),
+		widget.NewLabel(`Install as a server to allow files to be received by this PC.
+It will only allow connections from PCs which have one of the KEYS below.
+Remove keys that are no longer used.`),
+		widget.NewCheck("Install as Server", func(b bool) {}),
+		theme.NewH2("SSH Keys"),
+		theme.LowPriorBox(sshKeys),
+		theme.NewH2("Logs"),
+		theme.LowPriorBox(logs),
 	)
 }
 
 func statusAndLabel(t string, b binding.Bool) *fyne.Container {
 	return container.New(
 		layout.NewCustomPaddedHBoxLayout(0),
-		container.NewCenter(
-			theme.BoolImg(b),
-		),
+		theme.BoolImg(b),
 		widget.NewLabel(t),
 	)
 }
@@ -64,7 +74,9 @@ func sideBanner() *fyne.Container {
 	return theme.PrimaryBox(
 		container.NewCenter(
 			container.NewVBox(
-				theme.NewH1("Components"),
+				container.NewPadded(
+					theme.NewH1("Components"),
+				),
 				container.NewPadded(
 					container.NewVBox(
 						statusAndLabel("SSH Installed", Global.hasSSH),

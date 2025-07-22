@@ -1,6 +1,7 @@
 package theme
 
 import (
+	_ "embed"
 	imgColor "image/color"
 
 	"fyne.io/fyne/v2"
@@ -10,6 +11,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/installer/theme/internal/color"
 )
+
+//go:embed img/cancel.svg
+var uncheckedIcon []byte
 
 type Theme struct{}
 
@@ -41,7 +45,12 @@ func (m *Theme) Font(style fyne.TextStyle) fyne.Resource {
 }
 
 func (m *Theme) Icon(name fyne.ThemeIconName) fyne.Resource {
-	return theme.DefaultTheme().Icon(name) // replace icons if needed
+	switch name {
+	case theme.IconNameCheckButton:
+		return fyne.NewStaticResource("unchecked.svg", uncheckedIcon)
+	default:
+		return theme.DefaultTheme().Icon(name)
+	}
 }
 
 func (m *Theme) Size(name fyne.ThemeSizeName) float32 {
@@ -51,17 +60,6 @@ func (m *Theme) Size(name fyne.ThemeSizeName) float32 {
 	default:
 		return theme.DefaultTheme().Size(name)
 	}
-}
-
-func NewH1(text string) *fyne.Container {
-	return container.NewPadded(
-		&canvas.Text{
-			Color:     theme.Color(theme.ColorNameForeground),
-			Text:      text,
-			TextSize:  24.0,
-			TextStyle: fyne.TextStyle{Bold: true},
-		},
-	)
 }
 
 func HighButton(label string, tapped func()) *widget.Button {
