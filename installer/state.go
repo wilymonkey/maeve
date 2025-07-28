@@ -1,29 +1,27 @@
 package main
 
 import (
-	"os/exec"
-	"strings"
-
 	"fyne.io/fyne/v2/data/binding"
+	"github.com/wilymonkey/maeve/installer/utils"
 )
 
 var Global State
 
 type State struct {
-	hasSSH     binding.Bool
-	sshRunning binding.Bool
-	hasMaeve   binding.Bool
-	logs       binding.StringList
-	logChan    chan string
+	percSSH       binding.Float
+	percMaeve     binding.Float
+	percIntegrity binding.Float
+	logs          binding.StringList
+	logChan       chan string
 }
 
 func NewState() State {
 	s := State{
-		hasSSH:     binding.NewBool(),
-		sshRunning: binding.NewBool(),
-		hasMaeve:   binding.NewBool(),
-		logs:       binding.NewStringList(),
-		logChan:    make(chan string),
+		percSSH:       binding.NewFloat(),
+		percMaeve:     binding.NewFloat(),
+		percIntegrity: binding.NewFloat(),
+		logs:          binding.NewStringList(),
+		logChan:       make(chan string),
 	}
 
 	go func() {
@@ -40,7 +38,7 @@ func (s *State) Close() {
 }
 
 func (s *State) LogErr(err error) {
-	s.logChan <- PrintErr(err)
+	s.logChan <- utils.PrintErr(err)
 }
 
 func (s *State) GetCurrent() {
@@ -48,51 +46,13 @@ func (s *State) GetCurrent() {
 	if err != nil {
 		s.LogErr(err)
 	}
-	s.hasSSH.Set(hasSSH)
 	sshRunning, err := checkSSHRunning()
 	if err != nil {
 		s.LogErr(err)
 	}
-	s.sshRunning.Set(sshRunning)
-}
-
-func checkSSH() (bool, error) {
-	cmd := exec.Command("powershell.exe",
-		"-NoProfile",
-		"-Command",
-		"Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH*'",
-	)
-	output, err := cmd.Output()
-	if err != nil {
-		return false, WrapErr(err)
+	if hasSSH && sshRunning {
+		s.percSSH.Set(1)
 	}
-
-	outputStr := string(output)
-	hasClient := strings.Contains(outputStr, "Name : OpenSSH.Client")
-	hasServer := strings.Contains(outputStr, "Name : OpenSSH.Server")
-	isInstalled := strings.Contains(outputStr, "State : Installed")
-
-	return hasClient && hasServer && isInstalled, nil
-}
-
-func checkSSHRunning() (bool, error) {
-	cmd := exec.Command("powershell.exe",
-		"-NoProfile",
-		"-Command",
-		"Get-Service -Name 'sshd'",
-	)
-
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			errOutput := string(exitErr.Stderr)
-			if strings.Contains(errOutput, "find any service") {
-				return false, nil
-			}
-		}
-		return false, WrapErr(err)
-	}
-
-	outputStr := string(output)
-	return strings.Contains(outputStr, "Running"), nil
+	s.percIntegrity.Set(0.4)
+	s.percMaeve.Set(1)
 }

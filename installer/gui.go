@@ -62,10 +62,12 @@ Remove keys that are no longer used.`),
 	)
 }
 
-func statusAndLabel(t string, b binding.Bool) *fyne.Container {
+func statusAndLabel(t string, b binding.Float) *fyne.Container {
+	x := theme.NewPercStatus(b)
+	x.Resize(fyne.NewSize(20, 20))
 	return container.New(
 		layout.NewCustomPaddedHBoxLayout(0),
-		theme.BoolImg(b),
+		x,
 		widget.NewLabel(t),
 	)
 }
@@ -79,9 +81,9 @@ func sideBanner() *fyne.Container {
 				),
 				container.NewPadded(
 					container.NewVBox(
-						statusAndLabel("SSH Installed", Global.hasSSH),
-						statusAndLabel("SSH Running", Global.sshRunning),
-						statusAndLabel("Maeve", Global.hasMaeve),
+						statusAndLabel("SSH", Global.percSSH),
+						statusAndLabel("Maeve", Global.percMaeve),
+						statusAndLabel("Integrity", Global.percIntegrity),
 					),
 				),
 			),

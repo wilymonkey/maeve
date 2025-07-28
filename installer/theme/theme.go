@@ -52,6 +52,8 @@ func (m *Theme) Icon(name fyne.ThemeIconName) fyne.Resource {
 		return resource.CheckboxSvg
 	case theme.IconNameConfirm:
 		return resource.CheckSvg
+	case theme.IconNameContentClear:
+		return resource.CancelSvg
 	default:
 		return theme.DefaultTheme().Icon(name)
 	}
