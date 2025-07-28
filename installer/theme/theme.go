@@ -22,7 +22,7 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 	case theme.ColorNameForeground:
 		return color.Zinc950
 	case theme.ColorNameButton:
-		return color.Zinc300
+		return color.Green400
 	case theme.ColorNamePrimary:
 		return color.Green400
 	case theme.ColorNameForegroundOnPrimary:
@@ -32,6 +32,12 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 	case theme.ColorNameSeparator:
 		return color.Zinc200
 	case theme.ColorNameShadow:
+		return color.Zinc300
+	case theme.ColorNameInputBackground:
+		return color.Zinc300
+	case theme.ColorNameInputBorder:
+		return color.Zinc400
+	case theme.ColorNameDisabledButton:
 		return color.Zinc300
 	default:
 		return theme.DefaultTheme().Color(name, variant)

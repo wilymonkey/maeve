@@ -8,20 +8,24 @@ import (
 var Global State
 
 type State struct {
+	logs          binding.StringList
+	logChan       chan string
 	percSSH       binding.Float
 	percMaeve     binding.Float
 	percIntegrity binding.Float
-	logs          binding.StringList
-	logChan       chan string
+	sshKeys       binding.StringList
+	isServer      binding.Bool
 }
 
 func NewState() State {
 	s := State{
+		logs:          binding.NewStringList(),
+		logChan:       make(chan string),
 		percSSH:       binding.NewFloat(),
 		percMaeve:     binding.NewFloat(),
 		percIntegrity: binding.NewFloat(),
-		logs:          binding.NewStringList(),
-		logChan:       make(chan string),
+		sshKeys:       binding.NewStringList(),
+		isServer:      binding.NewBool(),
 	}
 
 	go func() {
@@ -50,9 +54,12 @@ func (s *State) GetCurrent() {
 	if err != nil {
 		s.LogErr(err)
 	}
+	sshKeys, err := readSSHKeys()
+	if err != nil {
+		s.LogErr(err)
+	}
+	s.sshKeys.Set(sshKeys)
 	if hasSSH && sshRunning {
 		s.percSSH.Set(1)
 	}
-	s.percIntegrity.Set(0.4)
-	s.percMaeve.Set(1)
 }
