@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/wilymonkey/maeve/installer/utils"
+	"golang.org/x/crypto/ssh"
 )
 
 func checkSSH() (bool, error) {
@@ -88,6 +89,10 @@ func readSSHKeys() ([]string, error) {
 
 func isValidKey(key string) bool {
 	if len(key) < 1 {
+		return false
+	}
+	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key))
+	if err != nil {
 		return false
 	}
 	return true

@@ -63,3 +63,31 @@ func (s *State) GetCurrent() {
 		s.percSSH.Set(1)
 	}
 }
+
+func (s *State) Install() error {
+	percSSH, err := s.percSSH.Get()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	if percSSH != 1 {
+
+	}
+
+	percMaeve, err := s.percMaeve.Get()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	if percMaeve != 1 {
+
+	}
+
+	percIntegrity, err := s.percIntegrity.Get()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	if percIntegrity != 1 {
+
+	}
+
+	return nil
+}

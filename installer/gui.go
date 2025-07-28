@@ -15,14 +15,14 @@ func makeGUI() fyne.CanvasObject {
 		nil,
 		sideBanner(),
 		nil,
-		container.NewPadded(
-			container.NewScroll(
+		container.NewScroll(
+			container.NewPadded(
 				container.NewBorder(
 					container.NewHBox(
 						theme.Favicon(64),
 						theme.NewH1("Maeve Installer"),
 					),
-					theme.HighButton("Install", func() {}),
+					theme.HighBtn("Install", func() {}),
 					nil,
 					nil,
 					body(),
@@ -47,16 +47,38 @@ func body() *fyne.Container {
 	keysDisabled := container.NewCenter(theme.NewH2("Backup PCs Only"))
 	keyTable := widget.NewListWithData(Global.sshKeys,
 		func() fyne.CanvasObject {
-			return widget.NewLabel("Key")
+			label := widget.NewLabel("")
+			deleteBtn := theme.DeleteBtn(func() {})
+			return container.NewBorder(
+				nil,
+				nil,
+				nil,
+				deleteBtn,
+				label,
+			)
 		},
+
 		func(i binding.DataItem, o fyne.CanvasObject) {
-			o.(*widget.Label).Bind(i.(binding.String))
+			row := o.(*fyne.Container)
+			label := row.Objects[0].(*widget.Label)
+			label.Bind(i.(binding.String))
+			label.Truncation = fyne.TextTruncateEllipsis
+			deleteBtn := row.Objects[1].(*widget.Button)
+			deleteBtn.OnTapped = func() {
+				val, err := i.(binding.String).Get()
+				if err != nil {
+					panic(err)
+				}
+				Global.sshKeys.Remove(val)
+			}
 		})
 	keyTable.Hide()
 	sshKeys := container.NewScroll(
-		container.NewStack(
-			keysDisabled,
-			keyTable,
+		container.NewPadded(
+			container.NewStack(
+				keysDisabled,
+				keyTable,
+			),
 		),
 	)
 	sshKeys.SetMinSize(fyne.NewSquareSize(200))
@@ -81,7 +103,7 @@ If a key is no longer being used please remove it.`)
 
 	return container.NewVBox(
 		theme.NewH2("Is this a Backup PC?"),
-		widget.NewCheckWithData("Install as Backup PC", Global.isServer),
+		widget.NewCheckWithData("Yes, this is where backups will be kept.", Global.isServer),
 		theme.NewH2("Maeve Keys"),
 		serverExp,
 		theme.LowPriorBox(sshKeys),
@@ -122,9 +144,23 @@ func sideBanner() *fyne.Container {
 
 func inputSSH() *fyne.Container {
 	inputEntry := widget.NewEntry()
-	inputEntry.SetPlaceHolder("Paste key here...")
+	inputEntry.Disable()
+	Global.isServer.AddListener(binding.NewDataListener(func() {
+		isServer, err := Global.isServer.Get()
+		if err != nil {
+			panic(err)
+		}
+		inputEntry.SetText("")
+		if isServer {
+			inputEntry.Enable()
+			inputEntry.SetPlaceHolder("Paste key here...")
+		} else {
+			inputEntry.Disable()
+			inputEntry.SetPlaceHolder("")
+		}
+	}))
 
-	addButton := theme.HighButton("  +  ", func() {
+	addButton := theme.HighBtn("  +  ", func() {
 		Global.sshKeys.Append(inputEntry.Text)
 		inputEntry.SetText("")
 	})

@@ -2,7 +2,10 @@ module github.com/wilymonkey/maeve/installer
 
 go 1.24.3
 
-require fyne.io/fyne/v2 v2.6.1
+require (
+	fyne.io/fyne/v2 v2.6.1
+	golang.org/x/crypto v0.33.0
+)
 
 require (
 	fyne.io/systray v1.11.0 // indirect

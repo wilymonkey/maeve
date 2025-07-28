@@ -39,3 +39,10 @@ var FaviconSvg = &fyne.StaticResource{
 	StaticName:    "favicon.svg",
 	StaticContent: faviconIcon,
 }
+
+//go:embed icons/trash.svg
+var trashIcon []byte
+var TrashSvg = &fyne.StaticResource{
+	StaticName:    "trash.svg",
+	StaticContent: trashIcon,
+}

@@ -5,10 +5,7 @@ import (
 	imgColor "image/color"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/installer/resource"
 	"github.com/wilymonkey/maeve/installer/theme/internal/color"
 )
@@ -21,6 +18,8 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 		return imgColor.White
 	case theme.ColorNameForeground:
 		return color.Zinc950
+	case theme.ColorNameDisabled:
+		return color.Zinc400
 	case theme.ColorNameButton:
 		return color.Green400
 	case theme.ColorNamePrimary:
@@ -36,7 +35,7 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 	case theme.ColorNameInputBackground:
 		return color.Zinc300
 	case theme.ColorNameInputBorder:
-		return color.Zinc400
+		return color.Zinc950
 	case theme.ColorNameDisabledButton:
 		return color.Zinc300
 	default:
@@ -72,28 +71,4 @@ func (m *Theme) Size(name fyne.ThemeSizeName) float32 {
 	default:
 		return theme.DefaultTheme().Size(name)
 	}
-}
-
-func HighButton(label string, tapped func()) *widget.Button {
-	btn := widget.NewButton(label, tapped)
-	btn.Importance = widget.HighImportance
-	return btn
-}
-
-func PrimaryBox(objects fyne.CanvasObject) *fyne.Container {
-	background := canvas.NewRectangle(theme.Color(theme.ColorNamePrimary))
-	return container.NewStack(background, objects)
-}
-
-func LowPriorBox(objects fyne.CanvasObject) *fyne.Container {
-	background := canvas.NewRectangle(color.Zinc100)
-	background.CornerRadius = 8.0
-	return container.NewStack(background, objects)
-}
-
-func Favicon(size float32) *canvas.Image {
-	img := canvas.NewImageFromResource(resource.FaviconSvg)
-	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(size, size))
-	return img
 }
