@@ -3,6 +3,7 @@ package main
 import (
 	"fyne.io/fyne/v2/data/binding"
 	"github.com/wilymonkey/maeve/installer/utils"
+	"slices"
 )
 
 var Global State
@@ -45,6 +46,17 @@ func (s *State) LogErr(err error) {
 	s.logChan <- utils.PrintErr(err)
 }
 
+// Ensures the key add is unique.
+func (s *State) AddKey(key string) {
+	sshKeys, err := s.sshKeys.Get()
+	if err != nil {
+		panic(err)
+	}
+	if !slices.Contains(sshKeys, key) {
+		s.sshKeys.Append(key)
+	}
+}
+
 func (s *State) GetCurrent() {
 	hasSSH, err := checkSSH()
 	if err != nil {
@@ -70,7 +82,11 @@ func (s *State) Install() error {
 		return utils.WrapErr(err)
 	}
 	if percSSH != 1 {
-
+		err := InstallSSH()
+		if err != nil {
+			s.percSSH.Set(0)
+			return utils.WrapErr(err)
+		}
 	}
 
 	percMaeve, err := s.percMaeve.Get()

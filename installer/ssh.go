@@ -97,3 +97,29 @@ func isValidKey(key string) bool {
 	}
 	return true
 }
+
+func InstallSSH() error {
+	Global.percSSH.Set(0.1)
+
+	if err := utils.RunPS(`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	Global.percSSH.Set(0.5)
+	if err := utils.RunPS(`Start-Service sshd`); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	Global.percSSH.Set(0.7)
+	if err := utils.RunPS(`Set-Service -Name sshd -StartupType 'Automatic'`); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	Global.percSSH.Set(0.9)
+	if err := utils.RunPS(`New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22`); err != nil {
+		return utils.WrapErr(err)
+	}
+
+	Global.percSSH.Set(1)
+	return nil
+}
