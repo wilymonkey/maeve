@@ -9,11 +9,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/installer/resource"
 	"github.com/wilymonkey/maeve/installer/theme/internal/color"
 )
-
-//go:embed img/cancel.svg
-var uncheckedIcon []byte
 
 type Theme struct{}
 
@@ -41,13 +39,19 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgCo
 }
 
 func (m *Theme) Font(style fyne.TextStyle) fyne.Resource {
-	return theme.DefaultTheme().Font(style) // replace with your own fonts
+	return theme.DefaultTheme().Font(style)
 }
 
 func (m *Theme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	switch name {
+	case theme.IconNameCheckButtonFill:
+		return resource.CheckboxSvg
+	case theme.IconNameCheckButtonChecked:
+		return resource.CheckboxCheckedSvg
 	case theme.IconNameCheckButton:
-		return fyne.NewStaticResource("unchecked.svg", uncheckedIcon)
+		return resource.CheckboxSvg
+	case theme.IconNameConfirm:
+		return resource.CheckSvg
 	default:
 		return theme.DefaultTheme().Icon(name)
 	}
@@ -79,8 +83,8 @@ func LowPriorBox(objects fyne.CanvasObject) *fyne.Container {
 	return container.NewStack(background, objects)
 }
 
-func Icon(size float32) *canvas.Image {
-	img := canvas.NewImageFromFile("icon.svg")
+func Favicon(size float32) *canvas.Image {
+	img := canvas.NewImageFromResource(resource.FaviconSvg)
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(size, size))
 	return img

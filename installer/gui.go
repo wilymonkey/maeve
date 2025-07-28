@@ -18,7 +18,7 @@ func makeGUI() fyne.CanvasObject {
 		container.NewPadded(
 			container.NewBorder(
 				container.NewHBox(
-					theme.Icon(64),
+					theme.Favicon(64),
 					theme.NewH1("Maeve Installer"),
 				),
 				theme.HighButton("Install", func() {}),

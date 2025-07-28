@@ -5,6 +5,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/theme"
+	"github.com/wilymonkey/maeve/installer/resource"
 )
 
 func NewH1(text string) *canvas.Text {
@@ -26,9 +27,7 @@ func NewH2(text string) *canvas.Text {
 }
 
 func BoolImg(data binding.Bool) *canvas.Image {
-	const check = "img/check.svg"
-	const cancel = "img/cancel.svg"
-	img := canvas.NewImageFromFile(check)
+	img := canvas.NewImageFromResource(resource.CheckSvg)
 	img.FillMode = canvas.ImageFillOriginal
 	img.SetMinSize(fyne.NewSize(20, 25))
 
@@ -38,9 +37,9 @@ func BoolImg(data binding.Bool) *canvas.Image {
 			panic(err)
 		}
 		if val {
-			img.File = check
+			img.Resource = resource.CheckSvg
 		} else {
-			img.File = cancel
+			img.Resource = resource.CancelSvg
 		}
 		img.Refresh()
 	}))
