@@ -86,6 +86,9 @@ func (c *MaeveConfig) NodeSnapshots(node string) ([]string, error) {
 	return result, nil
 }
 
+func (c *MaeveConfig) Close() {
+}
+
 func (c *MaeveConfig) commit(path string) error {
 	data, err := yaml.Marshal(c)
 	if err != nil {

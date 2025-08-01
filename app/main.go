@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 
+	"fyne.io/fyne/v2/app"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/cfg"
-	"github.com/wilymonkey/maeve/home"
+	"github.com/wilymonkey/maeve/gui"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/rpc"
+	"github.com/wilymonkey/maeve/theme"
 )
 
 func main() {
@@ -40,6 +42,7 @@ func main() {
 	if err := cfg.GetConfig(); err != nil {
 		log.Fatalf("Failed to read config:  %v", err)
 	}
+	defer cfg.Global.Close()
 
 	switch {
 	case *flagBackupAll:
@@ -60,7 +63,7 @@ func main() {
 
 	default:
 		overseer.GlobalInteractive = true
-		startTui(home.New())
+		startGUI()
 	}
 }
 
@@ -75,4 +78,14 @@ func startTui(start tea.Model) {
 	if _, err := overseer.Global.Run(); err != nil {
 		log.Fatalf("Failed to start TUI:  %v", err)
 	}
+}
+
+func startGUI() {
+	a := app.New()
+	a.Settings().SetTheme(&theme.Theme{})
+	w := a.NewWindow("Maeve")
+	w.SetPadded(false)
+	w.SetContent(gui.Render())
+
+	w.ShowAndRun()
 }
