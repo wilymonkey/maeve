@@ -6,8 +6,8 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/wilymonkey/maeve/installer/resource"
-	"github.com/wilymonkey/maeve/installer/theme/internal/color"
+	"github.com/wilymonkey/maeve/theme/internal/color"
+	"github.com/wilymonkey/maeve/theme/internal/resource"
 )
 
 type Theme struct{}

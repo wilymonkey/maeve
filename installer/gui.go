@@ -6,7 +6,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/installer/theme"
+	"github.com/wilymonkey/maeve/theme"
 )
 
 func makeGUI() fyne.CanvasObject {

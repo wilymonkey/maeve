@@ -6,8 +6,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/installer/resource"
-	"github.com/wilymonkey/maeve/installer/theme/internal/color"
+	"github.com/wilymonkey/maeve/theme/internal/color"
+	"github.com/wilymonkey/maeve/theme/internal/resource"
 )
 
 func NewH1(text string) *canvas.Text {
