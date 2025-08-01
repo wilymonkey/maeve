@@ -7,7 +7,6 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/goccy/go-yaml v1.18.0
 	github.com/pkg/sftp v1.13.9
 	github.com/wilymonkey/maeve/theme v0.0.0-20250801011338-4046d72cd4c6
 	github.com/zeebo/blake3 v0.2.4

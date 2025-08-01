@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/utils"
 )
@@ -30,7 +30,7 @@ func (mh *MasterHash) Exists(fileHash FileHash) *local.RelativePath {
 // dirs as well (i.e. they have been added to the hashes map).
 // Only returns a value if it's invalid.
 func (mh *MasterHash) validate(node string) error {
-	entries, err := os.ReadDir(cfg.Global.NodeDir(node))
+	entries, err := os.ReadDir(conf.Global.NodeDir(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -48,7 +48,7 @@ func (mh *MasterHash) validate(node string) error {
 
 // Updates the MasterHash with a given snapshot folder name.
 func UpdateMaster(node, snapshot string) error {
-	hashes, err := readFileHashes(cfg.Global.NodeSnapshotDir(node, snapshot))
+	hashes, err := readFileHashes(conf.Global.NodeSnapshotDir(node, snapshot))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -86,7 +86,7 @@ func getMaster(node string) (MasterHash, error) {
 func readMaster(node string) (MasterHash, error) {
 	var mh MasterHash
 
-	f, err := os.Open(cfg.Global.MasterHashFile(node))
+	f, err := os.Open(conf.Global.MasterHashFile(node))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return mh, ErrNeedsRecreate
@@ -108,7 +108,7 @@ func readMaster(node string) (MasterHash, error) {
 func genMasterHash(node string) (MasterHash, error) {
 	var mh MasterHash
 
-	baseDir := cfg.Global.NodeDir(node)
+	baseDir := conf.Global.NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -116,7 +116,7 @@ func genMasterHash(node string) (MasterHash, error) {
 		}
 		return mh, utils.WrapErr(err)
 	}
-	tempEntry := filepath.Base(cfg.Global.NodeDirTemp(node))
+	tempEntry := filepath.Base(conf.Global.NodeDirTemp(node))
 
 	dirs := make(map[string]struct{})
 	hashMap := make(map[[32]byte]local.RelativePath)
@@ -144,7 +144,7 @@ func genMasterHash(node string) (MasterHash, error) {
 }
 
 func writeMaster(mh *MasterHash, node string) error {
-	f, err := utils.Create(cfg.Global.MasterHashFile(node))
+	f, err := utils.Create(conf.Global.MasterHashFile(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}

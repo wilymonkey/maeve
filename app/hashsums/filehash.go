@@ -11,7 +11,7 @@ import (
 	"github.com/zeebo/blake3"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/utils"
 )
@@ -33,8 +33,8 @@ func (fh *FileHash) Validate(path string) (bool, error) {
 // the SelfDir
 func GetSelfHashGob() (FileHash, error) {
 	var result FileHash
-	dir := cfg.Global.SelfDir()
-	path := cfg.Global.HashFile(dir)
+	dir := conf.Global.SelfDir()
+	path := conf.Global.HashFile(dir)
 	hash, err := genHash(path)
 	if err != nil {
 		return result, utils.WrapErr(err)
@@ -51,7 +51,7 @@ func GetSelfHashGob() (FileHash, error) {
 }
 
 func ValidateExisting(hashes []FileHash, node string) ([]FileHash, error) {
-	dir := cfg.Global.NodeDirTemp(node)
+	dir := conf.Global.NodeDirTemp(node)
 	exists, err := local.PathExists(dir)
 	if err != nil {
 		return nil, utils.WrapErr(err)
@@ -163,7 +163,7 @@ func genHash(path string) ([32]byte, error) {
 
 // Write the given []FileHash to the SelfDir.
 func WriteFileHashes(hashes []FileHash) error {
-	f, err := os.Create(cfg.Global.HashFile(cfg.Global.SelfDir()))
+	f, err := os.Create(conf.Global.HashFile(conf.Global.SelfDir()))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -173,7 +173,7 @@ func WriteFileHashes(hashes []FileHash) error {
 }
 
 func readFileHashes(dir string) ([]FileHash, error) {
-	f, err := os.Open(cfg.Global.HashFile(dir))
+	f, err := os.Open(conf.Global.HashFile(dir))
 	if err != nil {
 		return nil, utils.WrapErr(err)
 	}

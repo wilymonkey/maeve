@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/backup"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/style"
 )
@@ -24,7 +24,7 @@ func New() Model {
 		spinner.WithStyle(style.Spinner),
 	)
 	ns := make(map[string]nodeStatus)
-	for _, node := range cfg.Global.RemoteNodes {
+	for _, node := range conf.Global.RemoteNodes {
 		ns[node] = nodeStatus{name: node}
 	}
 	return Model{
@@ -66,12 +66,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Version: %s", cfg.Version)
+	fmt.Fprintf(&b, "Version: %s", conf.Version)
 	b.WriteString("\n")
 	spinView := m.spinner.View()
 	b.WriteString(style.Title.Margin(1, 0).Render("REMOTE NODES"))
 	b.WriteString("\n")
-	for _, node := range cfg.Global.RemoteNodes {
+	for _, node := range conf.Global.RemoteNodes {
 		status := m.nodeStatus[node]
 		status.View(&b, spinView)
 	}

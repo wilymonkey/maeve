@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/style"
@@ -45,7 +45,7 @@ func New() Model {
 		spinner.WithStyle(style.Spinner),
 	)
 	linkDirs := make(map[string]linkPathMeta)
-	for _, dir := range cfg.Global.SourceDirs {
+	for _, dir := range conf.Global.SourceDirs {
 		linkDirs[dir] = linkPathMeta{path: dir}
 	}
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -197,7 +197,7 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 		{Title: "Size", Width: 10},
 	}
 	var rows []table.Row
-	for _, dirPath := range cfg.Global.SourceDirs {
+	for _, dirPath := range conf.Global.SourceDirs {
 		dir := m.linkDirs[dirPath]
 		r := table.Row{
 			utils.TruncateStr(dir.path, 30),
@@ -209,14 +209,14 @@ func (m *Model) linkDirsView(b *strings.Builder) {
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(len(cfg.Global.SourceDirs)+1),
+		table.WithHeight(len(conf.Global.SourceDirs)+1),
 		table.WithStyles(style.Table),
 	)
 	b.WriteString(t.View())
 }
 
 func (m *Model) pushView(b *strings.Builder, spinView string) {
-	for i, node := range cfg.Global.RemoteNodes {
+	for i, node := range conf.Global.RemoteNodes {
 		if m.pushingNode == i && !m.pushDone {
 			fmt.Fprintf(b, "%s %s", node, spinView)
 		} else {

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/sftp"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
@@ -25,7 +25,7 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 	}
 	hashes = append(hashes, hashGob)
 
-	for i, node := range cfg.Global.RemoteNodes {
+	for i, node := range conf.Global.RemoteNodes {
 		overseer.Global.Send(pushingNode{index: i})
 		if err := pushToNode(ctx, hashes, node); err != nil {
 			return utils.WrapErr(err)

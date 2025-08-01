@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
@@ -19,9 +19,9 @@ type linkPathMeta struct {
 }
 type doneLinks struct{}
 
-// Pulls changes from Cfg.SourceDirs and writes hashes to file.
+// Pulls changes from conf.SourceDirs and writes hashes to file.
 func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg {
-	selfDir := cfg.Global.SelfDir()
+	selfDir := conf.Global.SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
 		return utils.WrapErr(err)

@@ -14,6 +14,8 @@ type Theme struct{}
 
 func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgColor.Color {
 	switch name {
+	case theme.ColorNameOverlayBackground:
+		return imgColor.White
 	case theme.ColorNameBackground:
 		return imgColor.White
 	case theme.ColorNameForeground:

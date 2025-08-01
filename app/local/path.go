@@ -3,7 +3,7 @@ package local
 import (
 	"path/filepath"
 
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -13,7 +13,7 @@ type RelativePath struct {
 
 // Resolves to absolute path.
 func (r *RelativePath) Resolve(node string) string {
-	return filepath.Join(cfg.Global.NodeDir(node), r.Path)
+	return filepath.Join(conf.Global.NodeDir(node), r.Path)
 }
 
 type SnapshotPath struct {
@@ -36,12 +36,12 @@ func (s *SnapshotPath) Resolve(snapshot string) RelativePath {
 
 // Resolves to an absolute path with NodeDirTemp as the base.
 func (s *SnapshotPath) ResolveTemp(node string) string {
-	return filepath.Join(cfg.Global.NodeDirTemp(node), s.Path)
+	return filepath.Join(conf.Global.NodeDirTemp(node), s.Path)
 }
 
 // Resolves to an absolute path with SelfDir as the base.
 func (s *SnapshotPath) ResolveSelf() string {
-	return filepath.Join(cfg.Global.SelfDir(), s.Path)
+	return filepath.Join(conf.Global.SelfDir(), s.Path)
 }
 
 // Resolves to an absolute path with SelfDir as the base.

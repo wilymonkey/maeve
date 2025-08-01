@@ -1,8 +1,12 @@
 package gui
 
 import (
+	"regexp"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/theme"
 )
 
@@ -24,11 +28,6 @@ func Render() fyne.CanvasObject {
 }
 
 func body() *fyne.Container {
-	info := container.NewScroll(
-		container.NewCenter(theme.NewH2("Info")),
-	)
-	info.SetMinSize(fyne.NewSquareSize(200))
-
 	nodes := container.NewScroll(
 		container.NewCenter(theme.NewH2("Backup Locations")),
 	)
@@ -40,11 +39,76 @@ func body() *fyne.Container {
 	dirs.SetMinSize(fyne.NewSquareSize(200))
 
 	return container.NewVBox(
-		theme.NewH2("This PC Info"),
-		theme.LowPriorBox(info),
-		theme.NewH2("Backup PCs"),
-		theme.LowPriorBox(nodes),
+		theme.NewH2("This PC"),
+		thisPC(),
 		theme.NewH2("Folders"),
-		theme.LowPriorBox(dirs),
+		sourceDirs(),
+		addSourceDir(),
+		theme.NewH2("Backup PCs"),
+		remoteNotes(),
+		addRemoteNote(),
+	)
+}
+
+func remoteNotes() fyne.CanvasObject {
+	w := container.NewScroll(
+		theme.LowPriorBox(
+			container.NewPadded(
+				widget.NewListWithData(Global.RemoteNodes,
+					func() fyne.CanvasObject {
+						label := widget.NewLabel("")
+						deleteBtn := theme.DeleteBtn(func() {})
+						return container.NewBorder(
+							nil,
+							nil,
+							nil,
+							deleteBtn,
+							label,
+						)
+					},
+					func(i binding.DataItem, o fyne.CanvasObject) {
+						row := o.(*fyne.Container)
+						label := row.Objects[0].(*widget.Label)
+						label.Bind(i.(binding.String))
+						label.Truncation = fyne.TextTruncateEllipsis
+						deleteBtn := row.Objects[1].(*widget.Button)
+						deleteBtn.OnTapped = func() {
+							val, err := i.(binding.String).Get()
+							if err != nil {
+								panic(err)
+							}
+							Global.RemoteNodes.Remove(val)
+						}
+					},
+				),
+			),
+		),
+	)
+	w.SetMinSize(fyne.NewSquareSize(200))
+	return w
+}
+
+func addRemoteNote() *fyne.Container {
+	inputEntry := widget.NewEntry()
+	addButton := theme.HighBtn("  +  ", func() {
+		Global.RemoteNodes.Append(inputEntry.Text)
+		inputEntry.SetText("")
+	})
+	addButton.Disable()
+	inputEntry.OnChanged = func(s string) {
+		r := regexp.MustCompile(`^[a-zA-Z0-9_]+@(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}$`)
+		if r.MatchString(s) {
+			addButton.Enable()
+		} else {
+			addButton.Disable()
+		}
+	}
+
+	return container.NewBorder(
+		nil,
+		nil,
+		nil,
+		addButton,
+		inputEntry,
 	)
 }

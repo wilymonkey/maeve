@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/rpc"
 	"github.com/wilymonkey/maeve/utils"
@@ -164,7 +164,7 @@ func pushFile(
 	if err != nil {
 		return status, utils.WrapErrWithInfo(err, remotePath)
 	}
-	rateKB := cfg.Global.MaxUpload * 1024
+	rateKB := conf.Global.MaxUpload * 1024
 	pw := &progWriter{
 		writer: remoteFile,
 		total:  status.Total,

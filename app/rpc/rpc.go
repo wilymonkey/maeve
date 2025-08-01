@@ -10,7 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/overseer"
@@ -93,12 +93,12 @@ type TempLocationReply struct {
 }
 
 func (h *RPCFuncs) TempLocation(args *TempLocationArgs, reply *TempLocationReply) error {
-	reply.Path = cfg.Global.NodeDirTemp(args.Node)
+	reply.Path = conf.Global.NodeDirTemp(args.Node)
 	return nil
 }
 
 func TempLocation(rpc *rpc.Client) (string, error) {
-	args := &TempLocationArgs{Node: cfg.Global.Name}
+	args := &TempLocationArgs{Node: conf.Global.Name}
 	var reply TempLocationReply
 	if err := rpc.Call("RPCFuncs.TempLocation", args, &reply); err != nil {
 		return "", utils.WrapErr(err)
@@ -127,7 +127,7 @@ func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) 
 func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
 	args := &VerifyFuncArgs{
 		Hash: hash,
-		Node: cfg.Global.Name,
+		Node: conf.Global.Name,
 	}
 	var reply VerifyFuncReply
 	if err := rpc.Call("RPCFuncs.VerifyTempfile", args, &reply); err != nil {
@@ -154,7 +154,7 @@ func (h *RPCFuncs) LinkExisting(args *LinkExistingArgs, reply *LinkExistingReply
 }
 
 func LinkExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
-	args := &LinkExistingArgs{Node: cfg.Global.Name, Hashes: hashes}
+	args := &LinkExistingArgs{Node: conf.Global.Name, Hashes: hashes}
 	var reply LinkExistingReply
 	if err := rpc.Call("RPCFuncs.LinkExisting", args, &reply); err != nil {
 		return nil, utils.WrapErr(err)
@@ -182,7 +182,7 @@ func (h *RPCFuncs) ValiExisting(args *ValiExistingArgs, reply *ValiExistingReply
 func ValiExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
 	args := &ValiExistingArgs{
 		Hashes: hashes,
-		Node:   cfg.Global.Name,
+		Node:   conf.Global.Name,
 	}
 	var reply ValiExistingReply
 	if err := rpc.Call("RPCFuncs.ValiExisting", args, &reply); err != nil {
@@ -211,7 +211,7 @@ func (h *RPCFuncs) FinSnapshot(args *FinSnapshotArgs, reply *struct{}) error {
 }
 
 func FinSnapshot(rpc *rpc.Client) error {
-	args := &FinSnapshotArgs{Node: cfg.Global.Name}
+	args := &FinSnapshotArgs{Node: conf.Global.Name}
 	var reply struct{}
 	if err := rpc.Call("RPCFuncs.FinSnapshot", args, &reply); err != nil {
 		return utils.WrapErr(err)

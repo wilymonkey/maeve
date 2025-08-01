@@ -4,7 +4,7 @@ import (
 	"context"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
@@ -18,7 +18,7 @@ type doneHashsums struct {
 }
 
 func newHashes(parentCtx context.Context) tea.Msg {
-	selfDir := cfg.Global.SelfDir()
+	selfDir := conf.Global.SelfDir()
 
 	progChan := make(chan hs.FileHash, 100)
 	defer close(progChan)

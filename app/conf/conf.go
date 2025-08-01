@@ -1,13 +1,13 @@
-package cfg
+package conf
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -15,48 +15,48 @@ var Version = "DEV"
 
 const TIMEFORMAT = "02Jan2006-1504"
 
-var Global MaeveConfig
+var Global MaeveConf
 
-type MaeveConfig struct {
-	Name          string   `yaml:"Name"`
-	SSHKey        string   `yaml:"SSHKey"`
-	SSHKnownHosts string   `yaml:"SSHKnownHosts"`
-	BackupDir     string   `yaml:"BackupDir"`
-	MaxBackups    int      `yaml:"MaxBackups"`
-	MaxUpload     int64    `yaml:"MaxUpload"`
-	RemoteNodes   []string `yaml:"RemoteNodes"`
-	SourceDirs    []string `yaml:"SourceDirs"`
+type MaeveConf struct {
+	Name          string
+	SSHKey        string
+	SSHKnownHosts string
+	BackupDir     string
+	MaxBackups    int
+	MaxUpload     int64
+	RemoteNodes   []string
+	SourceDirs    []string
 }
 
 // Hash file path for a given directory.
-func (c *MaeveConfig) MasterHashFile(node string) string {
+func (c *MaeveConf) MasterHashFile(node string) string {
 	return filepath.Join(c.NodeDir(node), "maeve_hashmap.gob")
 }
 
 // Hash file path for a given directory.
-func (c *MaeveConfig) HashFile(dir string) string {
+func (c *MaeveConf) HashFile(dir string) string {
 	return filepath.Join(dir, "maeve_hashes.gob")
 }
 
-func (c *MaeveConfig) SelfDir() string {
+func (c *MaeveConf) SelfDir() string {
 	return filepath.Join(c.BackupDir, "my_files")
 }
 
-func (c *MaeveConfig) NodeDir(node string) string {
+func (c *MaeveConf) NodeDir(node string) string {
 	return filepath.Join(c.BackupDir, "backups", node)
 }
 
-func (c *MaeveConfig) NodeDirTemp(node string) string {
+func (c *MaeveConf) NodeDirTemp(node string) string {
 	return filepath.Join(c.NodeDir(node), "temp")
 }
 
-func (c *MaeveConfig) NodeSnapshotDir(node, snapshot string) string {
+func (c *MaeveConf) NodeSnapshotDir(node, snapshot string) string {
 	return filepath.Join(c.NodeDir(node), snapshot)
 }
 
 // Lists snapshots for a given node from oldest to newest.
 // Returns absolute paths to those snapshots.
-func (c *MaeveConfig) NodeSnapshots(node string) ([]string, error) {
+func (c *MaeveConf) NodeSnapshots(node string) ([]string, error) {
 	baseDir := c.NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
@@ -86,11 +86,8 @@ func (c *MaeveConfig) NodeSnapshots(node string) ([]string, error) {
 	return result, nil
 }
 
-func (c *MaeveConfig) Close() {
-}
-
-func (c *MaeveConfig) commit(path string) error {
-	data, err := yaml.Marshal(c)
+func (c *MaeveConf) commit(path string) error {
+	data, err := json.Marshal(c)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -107,26 +104,26 @@ func (c *MaeveConfig) commit(path string) error {
 	return nil
 }
 
-func (cfg *MaeveConfig) applyDefaults() error {
+func (c *MaeveConf) applyDefaults() error {
 	def, err := defaultConfig()
 	if err != nil {
 		return utils.WrapErr(err)
 	}
 
-	if cfg.Name == "" {
-		cfg.Name = def.Name
+	if c.Name == "" {
+		c.Name = def.Name
 	}
-	if cfg.SSHKey == "" {
-		cfg.SSHKey = def.SSHKey
+	if c.SSHKey == "" {
+		c.SSHKey = def.SSHKey
 	}
-	if cfg.SSHKnownHosts == "" {
-		cfg.SSHKnownHosts = def.SSHKnownHosts
+	if c.SSHKnownHosts == "" {
+		c.SSHKnownHosts = def.SSHKnownHosts
 	}
-	if cfg.BackupDir == "" {
-		cfg.BackupDir = def.BackupDir
+	if c.BackupDir == "" {
+		c.BackupDir = def.BackupDir
 	}
-	if cfg.MaxBackups == 0 {
-		cfg.MaxBackups = def.MaxBackups
+	if c.MaxBackups == 0 {
+		c.MaxBackups = def.MaxBackups
 	}
 
 	// Ignore: MaxUpload, RemoteNodes, SourceDirs
@@ -135,14 +132,14 @@ func (cfg *MaeveConfig) applyDefaults() error {
 }
 
 // Reads/Creates the config file and makes it available globally.
-func GetConfig() error {
+func LoadConfig(Global *MaeveConf) error {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
 		return utils.WrapErr(err)
 	}
-	cfgPath := filepath.Join(userDir, "maeve", "config.yaml")
+	confPath := filepath.Join(userDir, "maeve", "config.json")
 
-	data, err := os.ReadFile(cfgPath)
+	data, err := os.ReadFile(confPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return utils.WrapErr(err)
@@ -153,26 +150,38 @@ func GetConfig() error {
 		if err != nil {
 			return utils.WrapErr(err)
 		}
-		if err := Global.commit(cfgPath); err != nil {
+		if err := Global.commit(confPath); err != nil {
 			return utils.WrapErr(err)
 		}
 		return nil
 	}
 
-	if err := yaml.Unmarshal(data, &Global); err != nil {
+	if err := json.Unmarshal(data, &Global); err != nil {
 		return utils.WrapErr(err)
 	}
 	if err := Global.applyDefaults(); err != nil {
 		return utils.WrapErr(err)
 	}
-	if err := Global.commit(cfgPath); err != nil {
+	if err := Global.commit(confPath); err != nil {
 		return utils.WrapErr(err)
 	}
 	return nil
 }
 
-func defaultConfig() (MaeveConfig, error) {
-	mc := MaeveConfig{
+func (c *MaeveConf) SaveToFile() error {
+	userDir, err := os.UserConfigDir()
+	if err != nil {
+		return utils.WrapErr(err)
+	}
+	confPath := filepath.Join(userDir, "maeve", "config.json")
+	if err := c.commit(confPath); err != nil {
+		return utils.WrapErr(err)
+	}
+	return nil
+}
+
+func defaultConfig() (*MaeveConf, error) {
+	mc := MaeveConf{
 		MaxBackups:  5,
 		MaxUpload:   0,
 		RemoteNodes: make([]string, 0),
@@ -180,31 +189,31 @@ func defaultConfig() (MaeveConfig, error) {
 	}
 	hostname, err := os.Hostname()
 	if err != nil {
-		return mc, utils.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	mc.Name = hostname
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return mc, utils.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	mc.BackupDir = filepath.Join(homeDir, "Maeve")
 
 	sshDir := filepath.Join(homeDir, ".ssh")
 	sshKey, err := findSSHKeys(sshDir)
 	if err != nil {
-		return mc, utils.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	mc.SSHKey = sshKey
 
 	sshKnownHosts := filepath.Join(sshDir, "known_hosts")
 	_, err = os.Stat(sshKnownHosts)
 	if err != nil {
-		return mc, utils.WrapErr(err)
+		return nil, utils.WrapErr(err)
 	}
 	mc.SSHKnownHosts = sshKnownHosts
 
-	return mc, nil
+	return &mc, nil
 }
 
 func findSSHKeys(sshDir string) (string, error) {

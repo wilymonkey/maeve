@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/backup"
-	"github.com/wilymonkey/maeve/cfg"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/gui"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/rpc"
@@ -39,10 +39,9 @@ func main() {
 		log.Fatalf("Failed to parse args: %v", err)
 	}
 
-	if err := cfg.GetConfig(); err != nil {
+	if err := conf.LoadConfig(&conf.Global); err != nil {
 		log.Fatalf("Failed to read config:  %v", err)
 	}
-	defer cfg.Global.Close()
 
 	switch {
 	case *flagBackupAll:
@@ -68,7 +67,7 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Printf("%s\n", cfg.Version)
+	fmt.Printf("%s\n", conf.Version)
 	os.Exit(0)
 }
 
@@ -81,11 +80,17 @@ func startTui(start tea.Model) {
 }
 
 func startGUI() {
-	a := app.New()
+	gui.Global = gui.NewState()
+
+	a := app.NewWithID("wilymonkey/maeve")
 	a.Settings().SetTheme(&theme.Theme{})
 	w := a.NewWindow("Maeve")
 	w.SetPadded(false)
 	w.SetContent(gui.Render())
+
+	if err := gui.Global.Load(w); err != nil {
+		log.Fatalf("Failed to start UI:  %v", err)
+	}
 
 	w.ShowAndRun()
 }
