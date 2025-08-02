@@ -1,7 +1,10 @@
 package main
 
 import (
+	_ "embed"
+
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
@@ -19,7 +22,7 @@ func makeGUI() fyne.CanvasObject {
 			container.NewPadded(
 				container.NewBorder(
 					container.NewHBox(
-						theme.Favicon(64),
+						favicon(64),
 						theme.NewH1("Maeve Installer"),
 					),
 					theme.HighBtn("Install", func() {
@@ -112,10 +115,10 @@ If a key is no longer being used please remove it.`)
 		widget.NewCheckWithData("Yes, this is where backups will be kept.", Global.isServer),
 		theme.NewH2("Maeve Keys"),
 		serverExp,
-		theme.LowPriorBox(sshKeys),
+		theme.GreyBox(sshKeys),
 		inputSSH(),
 		theme.NewH2("Logs"),
-		theme.LowPriorBox(logs),
+		theme.GreyBox(logs),
 	)
 }
 
@@ -187,4 +190,18 @@ func inputSSH() *fyne.Container {
 		addButton,
 		inputEntry,
 	)
+}
+
+//go:embed icon.svg
+var faviconIcon []byte
+var faviconSvg = &fyne.StaticResource{
+	StaticName:    "favicon.svg",
+	StaticContent: faviconIcon,
+}
+
+func favicon(size float32) fyne.CanvasObject {
+	img := canvas.NewImageFromResource(faviconSvg)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(size, size))
+	return img
 }

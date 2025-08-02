@@ -2,44 +2,52 @@ package theme
 
 import (
 	_ "embed"
-	imgColor "image/color"
+	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/wilymonkey/maeve/theme/internal/color"
-	"github.com/wilymonkey/maeve/theme/internal/resource"
+	"github.com/wilymonkey/maeve/theme/internal/icons"
 )
 
 type Theme struct{}
 
-func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) imgColor.Color {
+func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	switch name {
+	// -----------------------------------
+	// BASICS
+	// -----------------------------------
 	case theme.ColorNameOverlayBackground:
-		return imgColor.White
+		return color.White
 	case theme.ColorNameBackground:
-		return imgColor.White
+		return color.White
 	case theme.ColorNameForeground:
-		return color.Zinc950
-	case theme.ColorNameDisabled:
-		return color.Zinc400
+		return color.Black
+	// -----------------------------------
+	// BUTTONS, INPUT & TEXT
+	// -----------------------------------
 	case theme.ColorNameButton:
-		return color.Green400
-	case theme.ColorNamePrimary:
-		return color.Green400
-	case theme.ColorNameForegroundOnPrimary:
-		return color.Zinc100
-	case theme.ColorNameScrollBar:
-		return color.Zinc950
-	case theme.ColorNameSeparator:
-		return color.Zinc200
-	case theme.ColorNameShadow:
-		return color.Zinc300
-	case theme.ColorNameInputBackground:
-		return color.Zinc300
-	case theme.ColorNameInputBorder:
-		return color.Zinc950
+		return zinc400
 	case theme.ColorNameDisabledButton:
-		return color.Zinc300
+		return zinc200
+	case theme.ColorNameDisabled:
+		return zinc400
+	case theme.ColorNamePrimary:
+		return green400
+	case theme.ColorNameForegroundOnPrimary:
+		return color.Black
+	case theme.ColorNameInputBackground: // Takes colour from ColorNameForeground.
+		return zinc200
+	case theme.ColorNameInputBorder:
+		return color.Black
+	// -----------------------------------
+	// OTHER
+	// -----------------------------------
+	case theme.ColorNameScrollBar:
+		return color.Black
+	case theme.ColorNameSeparator:
+		return zinc200
+	case theme.ColorNameShadow:
+		return zinc400
 	default:
 		return theme.DefaultTheme().Color(name, variant)
 	}
@@ -52,15 +60,15 @@ func (m *Theme) Font(style fyne.TextStyle) fyne.Resource {
 func (m *Theme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	switch name {
 	case theme.IconNameCheckButtonFill:
-		return resource.CheckboxSvg
+		return icons.CheckboxSvg
 	case theme.IconNameCheckButtonChecked:
-		return resource.CheckboxCheckedSvg
+		return icons.CheckboxCheckedSvg
 	case theme.IconNameCheckButton:
-		return resource.CheckboxSvg
+		return icons.CheckboxSvg
 	case theme.IconNameConfirm:
-		return resource.CheckSvg
+		return icons.CheckSvg
 	case theme.IconNameContentClear:
-		return resource.CancelSvg
+		return icons.CancelSvg
 	default:
 		return theme.DefaultTheme().Icon(name)
 	}
@@ -74,3 +82,14 @@ func (m *Theme) Size(name fyne.ThemeSizeName) float32 {
 		return theme.DefaultTheme().Size(name)
 	}
 }
+
+// -----------------------------------
+// COLORS
+// -----------------------------------
+
+var (
+	zinc100  = color.NRGBA{R: 0xF4, G: 0xF4, B: 0xF5, A: 0xFF}
+	zinc200  = color.NRGBA{R: 0xE4, G: 0xE4, B: 0xE7, A: 0xFF}
+	zinc400  = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xAA, A: 0xFF}
+	green400 = color.NRGBA{R: 0x4A, G: 0xDE, B: 0x80, A: 0xFF}
+)

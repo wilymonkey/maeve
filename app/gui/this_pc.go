@@ -1,8 +1,8 @@
 package gui
 
 import (
-	"fmt"
 	"regexp"
+	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -17,13 +17,13 @@ func thisPC() fyne.CanvasObject {
 	return container.NewHBox(
 		container.New(
 			layout.NewCustomPaddedVBoxLayout(0),
-			editableLabel("Name", Global.Name, "^[A-Za-z0-9_-]{1,25}$"),
+			editableLabel("Name", Global.Name, "^[A-Za-z0-9_-]+$", 25),
 			backupDir(),
 		),
 		container.New(
 			layout.NewCustomPaddedVBoxLayout(0),
-			editableLabel("Max Backups to Keep", binding.IntToString(Global.MaxBackups), "^[0-9]{1,5}$"),
-			editableLabel("Max Upload Speed", Global.MaxUpload, "^[A-Za-z0-9 .]{1,15}$"),
+			editableLabel("Max Backups to Keep", binding.IntToString(Global.MaxBackups), `^\d+$`, 5),
+			editableLabel("Max Upload Speed", Global.MaxUpload, `^\s*\d+(\.\d+)?\s*(k|K|m|M|g|G)?(b|B)\s*$`, 15),
 		),
 	)
 }
@@ -32,41 +32,36 @@ func editableLabel(
 	name string,
 	data binding.String,
 	isValidReg string,
+	maxChars int,
 ) *fyne.Container {
 	label := widget.NewLabelWithData(data)
-	entry := widget.NewEntryWithData(data)
+	entry := widget.NewEntry()
 	entry.Hide()
-	entry.Validator = func(s string) error {
-		match, err := regexp.MatchString(isValidReg, s)
-		if err != nil {
-			panic(err)
-		}
-		if !match {
-			return fmt.Errorf("Invalid")
-		}
-		return nil
-	}
+	entry.Validator = nil
 	textStack := container.NewStack(label, entry)
 
 	var editBtn *widget.Button
-	editBtn = widget.NewButton("Edit", func() {
-		if label.Visible() {
+	editBtn = theme.EditBtn(
+		label.Visible,
+		func() {
 			label.Hide()
+			entry.SetText(label.Text)
 			entry.Show()
-			editBtn.SetText("Save")
-		} else {
+		},
+		func() {
+			data.Set(entry.Text)
 			entry.Hide()
 			label.Show()
-			editBtn.SetText("Edit")
-		}
-	})
-	entry.SetOnValidationChanged(func(err error) {
-		if err != nil {
+		},
+	)
+	entry.OnChanged = func(s string) {
+		reg := regexp.MustCompile(isValidReg)
+		if !reg.MatchString(s) || utf8.RuneCountInString(s) > maxChars {
 			editBtn.Disable()
 		} else {
 			editBtn.Enable()
 		}
-	})
+	}
 
 	return container.NewBorder(
 		nil,
@@ -78,18 +73,21 @@ func editableLabel(
 }
 
 func backupDir() fyne.CanvasObject {
-	btn := theme.HighBtn("Edit", func() {
-		dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
-			if err != nil {
-				Global.ShowError(err)
-				return
-			}
-			if list == nil {
-				return // User canceled
-			}
-			Global.BackupDir.Set(list.Path())
-		}, Global.Window).Show()
-	})
+	btn := theme.EditBtn(
+		func() bool { return false }, // Always in edit mode.
+		func() {},
+		func() {
+			dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+				if err != nil {
+					Global.ShowError(err)
+					return
+				}
+				if list == nil {
+					return // User canceled
+				}
+				Global.BackupDir.Set(list.Path())
+			}, Global.Window).Show()
+		})
 	return container.NewHBox(
 		widget.NewLabel("Backup Folder"),
 		widget.NewLabelWithData(Global.BackupDir),

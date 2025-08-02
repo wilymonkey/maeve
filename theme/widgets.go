@@ -6,8 +6,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/theme/internal/color"
-	"github.com/wilymonkey/maeve/theme/internal/resource"
+	"github.com/wilymonkey/maeve/theme/internal/icons"
 )
 
 func NewH1(text string) *canvas.Text {
@@ -34,8 +33,22 @@ func HighBtn(label string, tapped func()) *widget.Button {
 }
 
 func DeleteBtn(tapped func()) *widget.Button {
-	btn := widget.NewButtonWithIcon("", resource.TrashSvg, tapped)
+	btn := widget.NewButtonWithIcon("", icons.TrashSvg, tapped)
 	btn.Importance = widget.DangerImportance
+	return btn
+}
+
+func EditBtn(onPred func() bool, onEdit func(), onConfirm func()) *widget.Button {
+	var btn *widget.Button
+	btn = widget.NewButtonWithIcon("", icons.PencilSvg, func() {
+		if onPred() {
+			onEdit()
+			btn.SetIcon(icons.CheckSvg)
+		} else {
+			onConfirm()
+			btn.SetIcon(icons.PencilSvg)
+		}
+	})
 	return btn
 }
 
@@ -44,17 +57,10 @@ func PrimaryBox(objects fyne.CanvasObject) *fyne.Container {
 	return container.NewStack(background, objects)
 }
 
-func LowPriorBox(objects fyne.CanvasObject) *fyne.Container {
-	background := canvas.NewRectangle(color.Zinc100)
+func GreyBox(objects fyne.CanvasObject) *fyne.Container {
+	background := canvas.NewRectangle(zinc100)
 	background.CornerRadius = 8
 	background.StrokeColor = theme.Color(theme.ColorNameInputBorder)
 	background.StrokeWidth = 1
 	return container.NewStack(background, objects)
-}
-
-func Favicon(size float32) *canvas.Image {
-	img := canvas.NewImageFromResource(resource.FaviconSvg)
-	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(size, size))
-	return img
 }

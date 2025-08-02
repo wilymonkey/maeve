@@ -6,7 +6,10 @@ import (
 	"log"
 	"os"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/conf"
@@ -45,7 +48,7 @@ func main() {
 
 	switch {
 	case *flagBackupAll:
-		startTui(backup.New())
+		startGUI(backupWindow)
 		return
 
 	case *flagVersion:
@@ -62,7 +65,7 @@ func main() {
 
 	default:
 		overseer.GlobalInteractive = true
-		startGUI()
+		startGUI(gui.Render)
 	}
 }
 
@@ -79,18 +82,38 @@ func startTui(start tea.Model) {
 	}
 }
 
-func startGUI() {
+func startGUI(content func() fyne.CanvasObject) {
 	gui.Global = gui.NewState()
 
 	a := app.NewWithID("wilymonkey/maeve")
 	a.Settings().SetTheme(&theme.Theme{})
 	w := a.NewWindow("Maeve")
 	w.SetPadded(false)
-	w.SetContent(gui.Render())
+	w.SetContent(content())
 
 	if err := gui.Global.Load(w); err != nil {
 		log.Fatalf("Failed to start UI:  %v", err)
 	}
 
 	w.ShowAndRun()
+}
+
+func backupWindow() fyne.CanvasObject {
+	cancelBtn := widget.NewButton(
+		"Cancel",
+		func() {
+			backup.OnCancel()
+			fyne.CurrentApp().Quit()
+		},
+	)
+	cancelBtn.Importance = widget.DangerImportance
+	return container.NewPadded(
+		container.NewBorder(
+			nil,
+			cancelBtn,
+			nil,
+			nil,
+			backup.Dialog(),
+		),
+	)
 }

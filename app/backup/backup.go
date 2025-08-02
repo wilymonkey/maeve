@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
@@ -16,6 +19,19 @@ import (
 	"github.com/wilymonkey/maeve/style"
 	"github.com/wilymonkey/maeve/utils"
 )
+
+type status struct {
+}
+
+func Dialog() fyne.CanvasObject {
+	return container.NewCenter(
+		widget.NewLabel("Backing up!"),
+	)
+}
+
+func OnCancel() {
+
+}
 
 type Model struct {
 	pullDone    bool

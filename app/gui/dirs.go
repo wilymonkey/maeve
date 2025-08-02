@@ -11,7 +11,7 @@ import (
 
 func sourceDirs() fyne.CanvasObject {
 	w := container.NewScroll(
-		theme.LowPriorBox(
+		theme.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(Global.SourceDirs,
 					func() fyne.CanvasObject {

@@ -6,7 +6,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/theme"
 )
 
@@ -18,7 +20,7 @@ func Render() fyne.CanvasObject {
 					favicon(64),
 					theme.NewH1("Maeve"),
 				),
-				theme.HighBtn("Backup Now", func() {}),
+				theme.HighBtn("Backup Now", StartBackup),
 				nil,
 				nil,
 				body(),
@@ -52,7 +54,7 @@ func body() *fyne.Container {
 
 func remoteNotes() fyne.CanvasObject {
 	w := container.NewScroll(
-		theme.LowPriorBox(
+		theme.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(Global.RemoteNodes,
 					func() fyne.CanvasObject {
@@ -111,4 +113,28 @@ func addRemoteNote() *fyne.Container {
 		addButton,
 		inputEntry,
 	)
+}
+
+func StartBackup() {
+	var d *dialog.CustomDialog
+	cancelBtn := widget.NewButton(
+		"Cancel",
+		func() {
+			backup.OnCancel()
+			d.Hide()
+		},
+	)
+	cancelBtn.Importance = widget.DangerImportance
+	d = dialog.NewCustomWithoutButtons(
+		"Backing Up",
+		container.NewBorder(
+			nil,
+			cancelBtn,
+			nil,
+			nil,
+			backup.Dialog(),
+		),
+		Global.Window,
+	)
+	d.Show()
 }
