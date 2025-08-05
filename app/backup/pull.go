@@ -5,59 +5,52 @@ import (
 	"os"
 	"path/filepath"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"fyne.io/fyne/v2/data/binding"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/local"
-	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type linkPathMeta struct {
-	path   string
-	number int
-	size   int64
+type dirMeta struct {
+	path     string
+	number   binding.Int
+	size     binding.Int
+	hashsums binding.Float
 }
 type doneLinks struct{}
 
-// Pulls changes from conf.SourceDirs and writes hashes to file.
-func pullChanges(linkDirs map[string]linkPathMeta, ctx context.Context) tea.Msg {
-	selfDir := conf.Global.SelfDir()
+func updateLatest(meta []dirMeta, ctx context.Context) error {
+	selfDir := conf.GetConf().SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {
 		return utils.WrapErr(err)
 	}
 
-	if err := os.MkdirAll(selfDir, 0755); err != nil {
+	if err := os.MkdirAll(selfDir, os.ModeDir); err != nil {
 		return utils.WrapErr(err)
 	}
 
-	for srcDir := range linkDirs {
-		destDir := filepath.Join(selfDir, filepath.Base(srcDir))
+	for _, m := range meta {
+		destDir := filepath.Join(selfDir, filepath.Base(m.path))
 
-		sizeChan := make(chan int64, 100)
+		metaChan := make(chan int64, 100)
 		var totalSize int64
 		var totalFiles int
 		utils.Throttle(
-			sizeChan,
+			metaChan,
 			func(size int64) {
 				totalFiles++
 				totalSize += size
 			},
 			func() {
-				overseer.Global.Send(
-					linkPathMeta{
-						path:   srcDir,
-						number: totalFiles,
-						size:   totalSize,
-					},
-				)
+				m.number.Set(totalFiles)
+				m.size.Set(int(totalSize))
 			})
 
-		if err := local.HardlinkDir(srcDir, destDir, sizeChan, ctx); err != nil {
+		if err := local.HardlinkDir(m.path, destDir, metaChan, ctx); err != nil {
 			return utils.WrapErr(err)
 		}
-		close(sizeChan)
 	}
 
-	return doneLinks{}
+	return nil
 }

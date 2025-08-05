@@ -13,7 +13,7 @@ import (
 func NewSSHClient(address string) (*ssh.Client, error) {
 	user, host, port := parseAddress(address)
 
-	key, err := os.ReadFile(conf.Global.SSHKey)
+	key, err := os.ReadFile(conf.GetConf().SSHKey)
 	if err != nil {
 		return nil, utils.WrapErr(err)
 	}
@@ -23,7 +23,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 		return nil, utils.WrapErr(err)
 	}
 
-	hostKeyCallback, err := knownhosts.New(conf.Global.SSHKnownHosts)
+	hostKeyCallback, err := knownhosts.New(conf.GetConf().SSHKnownHosts)
 	if err != nil {
 		return nil, utils.WrapErr(err)
 	}

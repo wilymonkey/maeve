@@ -73,7 +73,7 @@ func Hardlink(sourcePath, targetPath string) error {
 		return nil
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(targetPath), os.ModeDir); err != nil {
 			return utils.WrapErr(err)
 		}
 		// Try to link the file again.

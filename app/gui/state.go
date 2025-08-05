@@ -32,16 +32,12 @@ func NewState() State {
 }
 
 func (s *State) Load(w fyne.Window) error {
-	var c conf.MaeveConf
-	if err := conf.LoadConfig(&c); err != nil {
-		return utils.WrapErr(err)
-	}
-
+	c := conf.GetConf()
 	s.Name.Set(c.Name)
 	s.Name.AddListener(binding.NewDataListener(func() {
 		name := utils.GetOrPanic(s.Name)
-		conf.Global.Name = name
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.Name = name
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))
@@ -49,8 +45,8 @@ func (s *State) Load(w fyne.Window) error {
 	s.BackupDir.Set(c.BackupDir)
 	s.BackupDir.AddListener(binding.NewDataListener(func() {
 		backupDir := utils.GetOrPanic(s.BackupDir)
-		conf.Global.BackupDir = backupDir
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.BackupDir = backupDir
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))
@@ -58,8 +54,8 @@ func (s *State) Load(w fyne.Window) error {
 	s.MaxBackups.Set(c.MaxBackups)
 	s.MaxBackups.AddListener(binding.NewDataListener(func() {
 		maxBackups := utils.GetOrPanic(s.MaxBackups)
-		conf.Global.MaxBackups = maxBackups
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.MaxBackups = maxBackups
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))
@@ -71,8 +67,8 @@ func (s *State) Load(w fyne.Window) error {
 			Global.ShowError(err)
 			return
 		}
-		conf.Global.MaxUpload = maxUpload
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.MaxUpload = maxUpload
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))
@@ -80,8 +76,8 @@ func (s *State) Load(w fyne.Window) error {
 	s.RemoteNodes.Set(c.RemoteNodes)
 	s.RemoteNodes.AddListener(binding.NewDataListener(func() {
 		remoteNodes := utils.GetOrPanic(s.RemoteNodes)
-		conf.Global.RemoteNodes = remoteNodes
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.RemoteNodes = remoteNodes
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))
@@ -89,8 +85,8 @@ func (s *State) Load(w fyne.Window) error {
 	s.SourceDirs.Set(c.SourceDirs)
 	s.SourceDirs.AddListener(binding.NewDataListener(func() {
 		sourceDirs := utils.GetOrPanic(s.SourceDirs)
-		conf.Global.SourceDirs = sourceDirs
-		if err := conf.Global.SaveToFile(); err != nil {
+		c.SourceDirs = sourceDirs
+		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
 	}))

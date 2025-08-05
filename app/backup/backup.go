@@ -3,278 +3,108 @@ package backup
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
+	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/overseer"
-	"github.com/wilymonkey/maeve/remote"
-	"github.com/wilymonkey/maeve/style"
+	"github.com/wilymonkey/maeve/theme"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type status struct {
-}
-
-func Dialog() fyne.CanvasObject {
-	return container.NewCenter(
-		widget.NewLabel("Backing up!"),
-	)
-}
-
-func OnCancel() {
-
-}
-
-type Model struct {
-	pullDone    bool
-	linkDirs    map[string]linkPathMeta
+type guiState struct {
+	linkDirs    []dirMeta
 	hashDone    bool
 	totalFiles  int
 	hashNum     int
 	pushProg    pushProgress
 	pushingNode int
 	pushDone    bool
-	width       int
-	height      int
-	spinner     spinner.Model
-	progress    progress.Model
 	err         error
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 }
 
-func New() Model {
-	p := progress.New(
-		progress.WithDefaultGradient(),
-		progress.WithWidth(40),
-	)
-	s := spinner.New(
-		spinner.WithSpinner(spinner.MiniDot),
-		spinner.WithStyle(style.Spinner),
-	)
-	linkDirs := make(map[string]linkPathMeta)
-	for _, dir := range conf.Global.SourceDirs {
-		linkDirs[dir] = linkPathMeta{path: dir}
+func Dialog() (fyne.CanvasObject, guiState) {
+	m := New()
+	return container.NewVBox(
+		theme.NewH2("Checking PC State"),
+		theme.NewH2("Preparing Backup Files"),
+		theme.NewH2("Send to PCs"),
+	), m
+}
+
+func OnCancel(m guiState) {
+	m.ctxCancel()
+}
+
+func New() guiState {
+	linkDirs := make([]dirMeta, len(conf.GetConf().SourceDirs))
+	for i, dir := range conf.GetConf().SourceDirs {
+		linkDirs[i] = dirMeta{
+			path:     dir,
+			number:   binding.NewInt(),
+			size:     binding.NewInt(),
+			hashsums: binding.NewFloat(),
+		}
 	}
 	ctx, ctxCancel := context.WithCancel(context.Background())
-	return Model{
+	return guiState{
 		linkDirs:  linkDirs,
-		spinner:   s,
-		progress:  p,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 		pushProg:  newPushProgress(0),
 	}
 }
 
-func (m Model) Init() tea.Cmd {
-	return tea.Sequence(
-		m.spinner.Tick,
-		func() tea.Msg { return pullChanges(m.linkDirs, m.ctx) },
-	)
-}
+func makeMetaTable(metaMap map[string]dirMeta) *widget.Table {
+	keys := make([]string, 0, len(metaMap))
+	for k := range metaMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	totalRows := len(keys) + 1
+	totalCols := 3
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
+	return widget.NewTable(
+		func() (int, int) {
+			return totalRows, totalCols
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(cell widget.TableCellID, o fyne.CanvasObject) {
+			label := o.(*widget.Label)
+			row := cell.Row
+			col := cell.Col
 
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "esc", "q":
-			if m.ctx.Err() == nil {
-				m.ctxCancel()
-				return m, nil
+			if row == 0 {
+				switch col {
+				case 0:
+					label.SetText("Dir")
+				case 1:
+					label.SetText("Files")
+				case 2:
+					label.SetText("Size")
+				case 3:
+					label.SetText("Hashsums")
+				}
+			} else {
+				meta := metaMap[keys[row-1]]
+				switch col {
+				case 0:
+					label.SetText(meta.path)
+				case 1:
+					label.SetText(fmt.Sprintf("%d", utils.GetOrPanic(meta.number)))
+				case 2:
+					label.SetText(fmt.Sprintf("%d", utils.GetOrPanic(meta.size)))
+				case 3:
+					perc := int(utils.GetOrPanic(meta.hashsums) * 100)
+					label.SetText(fmt.Sprintf("%d", perc))
+				}
 			}
-			return m, overseer.Back
-		}
-
-	case linkPathMeta:
-		m.linkDirs[msg.path] = msg
-		var totalFiles int
-		for _, value := range m.linkDirs {
-			totalFiles += value.number
-		}
-		m.totalFiles = totalFiles
-		return m, nil
-
-	case doneLinks:
-		m.pullDone = true
-		return m, func() tea.Msg { return newHashes(m.ctx) }
-
-	case hashProg:
-		m.hashNum = msg.hashNum
-		return m, nil
-
-	case doneHashsums:
-		m.hashDone = true
-		return m, func() tea.Msg { return pushChanges(m.ctx, msg.hashes) }
-
-	case pushingNode:
-		m.pushingNode = msg.index
-		return m, nil
-
-	case pushProgress:
-		m.pushProg = msg
-		progressCmd := m.progress.SetPercent(float64(msg.curr) / float64(msg.total))
-		return m, progressCmd
-
-	case doneSend:
-		m.pushDone = true
-		m.ctxCancel()
-		if overseer.GlobalInteractive {
-			return m, nil
-		} else {
-			return m, overseer.Back
-		}
-
-	case error:
-		m.err = msg
-		m.ctxCancel()
-		if overseer.GlobalInteractive {
-			return m, nil
-		} else {
-			return m, overseer.Back
-		}
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
-	case progress.FrameMsg:
-		newModel, cmd := m.progress.Update(msg)
-		if newModel, ok := newModel.(progress.Model); ok {
-			m.progress = newModel
-		}
-		return m, cmd
-	}
-	return m, nil
-}
-
-func (m Model) View() string {
-	var b strings.Builder
-	spinView := m.spinner.View()
-
-	b.WriteString(titleWithProgress("CREATE BACKUP FILES", spinView, m.pullDone, true))
-	m.linkDirsView(&b)
-
-	b.WriteString("\n")
-	b.WriteString(titleWithProgress("CALCULATE HASHSUMS", spinView, m.hashDone, m.pullDone))
-	if m.pullDone {
-		perc := float32(m.hashNum) / float32(m.totalFiles) * 100
-		fmt.Fprintf(&b, "%d / %d: %0.2f%%\n", m.hashNum, m.totalFiles, perc)
-	}
-
-	b.WriteString("\n")
-	b.WriteString(titleWithProgress("SEND TO REMOTE NODES", spinView, m.pushDone, m.hashDone))
-	if m.pullDone && m.hashDone {
-		m.pushView(&b, spinView)
-	}
-
-	if m.err != nil {
-		b.WriteString(utils.PrintErr(m.err))
-	}
-
-	b.WriteString("\n")
-	if m.ctx.Err() != nil {
-		b.WriteString(style.Success.Render("Press q to go back"))
-	} else {
-		b.WriteString(style.Fail.Render("Press q to stop backup"))
-	}
-
-	return b.String()
-}
-
-func titleWithProgress(title, spinView string, isDone, isPending bool) string {
-	var s string
-	if isDone {
-		s = fmt.Sprintf("%s %s", style.ITick, style.TitleSuccess.Render(title))
-	} else if isPending {
-		s = fmt.Sprintf("%s %s", spinView, style.Title.Render(title))
-	} else {
-		s = style.TitlePending.Render(title)
-	}
-	return style.My.Render(s) + "\n"
-}
-
-func (m *Model) linkDirsView(b *strings.Builder) {
-	columns := []table.Column{
-		{Title: "Dir", Width: 40},
-		{Title: "Files", Width: 10},
-		{Title: "Size", Width: 10},
-	}
-	var rows []table.Row
-	for _, dirPath := range conf.Global.SourceDirs {
-		dir := m.linkDirs[dirPath]
-		r := table.Row{
-			utils.TruncateStr(dir.path, 30),
-			strconv.Itoa(dir.number),
-			utils.BytesToHuman(dir.size),
-		}
-		rows = append(rows, r)
-	}
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithHeight(len(conf.Global.SourceDirs)+1),
-		table.WithStyles(style.Table),
+		},
 	)
-	b.WriteString(t.View())
-}
-
-func (m *Model) pushView(b *strings.Builder, spinView string) {
-	for i, node := range conf.Global.RemoteNodes {
-		if m.pushingNode == i && !m.pushDone {
-			fmt.Fprintf(b, "%s %s", node, spinView)
-		} else {
-			fmt.Fprint(b, style.Fade.Render(node))
-		}
-		b.WriteString("\n")
-	}
-
-	columns := []table.Column{
-		{Title: "File", Width: 40},
-		{Title: "Size", Width: 10},
-		{Title: "%", Width: 10},
-		{Title: "Verified", Width: 20},
-	}
-	var rows []table.Row
-	m.pushProg.operations.ForEach(func(item remote.SendStatus) {
-		perc := float32(item.Curr) / float32(item.Total) * 100
-		var verified string
-		if item.Verifying {
-			verified = spinView
-			if item.IsGood {
-				verified = style.ITick
-			}
-		}
-
-		r := table.Row{
-			style.Reset + utils.TruncateStr(item.Hash.Path.Path, 30),
-			utils.BytesToHuman(item.Total),
-			fmt.Sprintf("%0.2f%%", perc),
-			verified,
-		}
-		rows = append(rows, r)
-	})
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithHeight(len(rows)+1),
-		table.WithStyles(style.Table),
-	)
-
-	b.WriteString(t.View())
-	b.WriteString("\n")
-	b.WriteString(m.progress.View())
 }

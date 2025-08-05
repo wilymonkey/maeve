@@ -6,16 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/wilymonkey/maeve/utils"
 )
 
-var Version = "DEV"
-
 const TIMEFORMAT = "02Jan2006-1504"
 
-var Global MaeveConf
+var (
+	Version   = "DEV"
+	maeveConf MaeveConf
+	once      sync.Once
+)
 
 type MaeveConf struct {
 	Name          string
@@ -26,6 +29,17 @@ type MaeveConf struct {
 	MaxUpload     int64
 	RemoteNodes   []string
 	SourceDirs    []string
+}
+
+func GetConf() *MaeveConf {
+	once.Do(func() {
+		var err error
+		maeveConf, err = loadConfig()
+		if err != nil {
+			panic(err)
+		}
+	})
+	return &maeveConf
 }
 
 // Hash file path for a given directory.
@@ -39,7 +53,7 @@ func (c *MaeveConf) HashFile(dir string) string {
 }
 
 func (c *MaeveConf) SelfDir() string {
-	return filepath.Join(c.BackupDir, "my_files")
+	return filepath.Join(c.BackupDir, "my_latest")
 }
 
 func (c *MaeveConf) NodeDir(node string) string {
@@ -47,7 +61,7 @@ func (c *MaeveConf) NodeDir(node string) string {
 }
 
 func (c *MaeveConf) NodeDirTemp(node string) string {
-	return filepath.Join(c.NodeDir(node), "temp")
+	return filepath.Join(c.NodeDir(node), "latest")
 }
 
 func (c *MaeveConf) NodeSnapshotDir(node, snapshot string) string {
@@ -131,41 +145,42 @@ func (c *MaeveConf) applyDefaults() error {
 	return nil
 }
 
-// Reads/Creates the config file and makes it available globally.
-func LoadConfig(Global *MaeveConf) error {
+// Reads/Creates the config file.
+func loadConfig() (MaeveConf, error) {
+	var conf MaeveConf
 	userDir, err := os.UserConfigDir()
 	if err != nil {
-		return utils.WrapErr(err)
+		return conf, utils.WrapErr(err)
 	}
 	confPath := filepath.Join(userDir, "maeve", "config.json")
 
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return utils.WrapErr(err)
+			return conf, utils.WrapErr(err)
 		}
 
 		// Create the config file.
-		Global, err = defaultConfig()
+		conf, err = defaultConfig()
 		if err != nil {
-			return utils.WrapErr(err)
+			return conf, utils.WrapErr(err)
 		}
-		if err := Global.commit(confPath); err != nil {
-			return utils.WrapErr(err)
+		if err := conf.commit(confPath); err != nil {
+			return conf, utils.WrapErr(err)
 		}
-		return nil
+		return conf, nil
 	}
 
-	if err := json.Unmarshal(data, &Global); err != nil {
-		return utils.WrapErr(err)
+	if err := json.Unmarshal(data, &conf); err != nil {
+		return conf, utils.WrapErr(err)
 	}
-	if err := Global.applyDefaults(); err != nil {
-		return utils.WrapErr(err)
+	if err := conf.applyDefaults(); err != nil {
+		return conf, utils.WrapErr(err)
 	}
-	if err := Global.commit(confPath); err != nil {
-		return utils.WrapErr(err)
+	if err := conf.commit(confPath); err != nil {
+		return conf, utils.WrapErr(err)
 	}
-	return nil
+	return conf, nil
 }
 
 func (c *MaeveConf) SaveToFile() error {
@@ -180,7 +195,7 @@ func (c *MaeveConf) SaveToFile() error {
 	return nil
 }
 
-func defaultConfig() (*MaeveConf, error) {
+func defaultConfig() (MaeveConf, error) {
 	mc := MaeveConf{
 		MaxBackups:  5,
 		MaxUpload:   0,
@@ -189,31 +204,31 @@ func defaultConfig() (*MaeveConf, error) {
 	}
 	hostname, err := os.Hostname()
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return mc, utils.WrapErr(err)
 	}
 	mc.Name = hostname
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return mc, utils.WrapErr(err)
 	}
 	mc.BackupDir = filepath.Join(homeDir, "Maeve")
 
 	sshDir := filepath.Join(homeDir, ".ssh")
 	sshKey, err := findSSHKeys(sshDir)
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return mc, utils.WrapErr(err)
 	}
 	mc.SSHKey = sshKey
 
 	sshKnownHosts := filepath.Join(sshDir, "known_hosts")
 	_, err = os.Stat(sshKnownHosts)
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return mc, utils.WrapErr(err)
 	}
 	mc.SSHKnownHosts = sshKnownHosts
 
-	return &mc, nil
+	return mc, nil
 }
 
 func findSSHKeys(sshDir string) (string, error) {

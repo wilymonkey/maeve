@@ -12,7 +12,7 @@ func Create(path string) (*os.File, error) {
 		return f, nil
 	}
 	if os.IsNotExist(err) {
-		if mkErr := os.MkdirAll(filepath.Dir(path), 0755); mkErr != nil {
+		if mkErr := os.MkdirAll(filepath.Dir(path), os.ModePerm); mkErr != nil {
 			return nil, WrapErr(err)
 		}
 

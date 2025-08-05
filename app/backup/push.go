@@ -25,7 +25,7 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 	}
 	hashes = append(hashes, hashGob)
 
-	for i, node := range conf.Global.RemoteNodes {
+	for i, node := range conf.GetConf().RemoteNodes {
 		overseer.Global.Send(pushingNode{index: i})
 		if err := pushToNode(ctx, hashes, node); err != nil {
 			return utils.WrapErr(err)

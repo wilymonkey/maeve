@@ -16,10 +16,10 @@ var ErrNeedsRecreate = errors.New("MasterHash needs to be recreated")
 type MasterHash struct {
 	Dirs map[string]struct{}
 	// hash as key
-	HashMap map[[32]byte]local.RelativePath
+	HashMap map[[32]byte]local.BackupRelPath
 }
 
-func (mh *MasterHash) Exists(fileHash FileHash) *local.RelativePath {
+func (mh *MasterHash) Exists(fileHash FileHash) *local.BackupRelPath {
 	if relPath, exists := mh.HashMap[fileHash.Hash]; exists {
 		return &relPath
 	}
@@ -30,7 +30,7 @@ func (mh *MasterHash) Exists(fileHash FileHash) *local.RelativePath {
 // dirs as well (i.e. they have been added to the hashes map).
 // Only returns a value if it's invalid.
 func (mh *MasterHash) validate(node string) error {
-	entries, err := os.ReadDir(conf.Global.NodeDir(node))
+	entries, err := os.ReadDir(conf.GetConf().NodeDir(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -48,7 +48,7 @@ func (mh *MasterHash) validate(node string) error {
 
 // Updates the MasterHash with a given snapshot folder name.
 func UpdateMaster(node, snapshot string) error {
-	hashes, err := readFileHashes(conf.Global.NodeSnapshotDir(node, snapshot))
+	hashes, err := readFileHashes(conf.GetConf().NodeSnapshotDir(node, snapshot))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -86,7 +86,7 @@ func getMaster(node string) (MasterHash, error) {
 func readMaster(node string) (MasterHash, error) {
 	var mh MasterHash
 
-	f, err := os.Open(conf.Global.MasterHashFile(node))
+	f, err := os.Open(conf.GetConf().MasterHashFile(node))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return mh, ErrNeedsRecreate
@@ -108,7 +108,7 @@ func readMaster(node string) (MasterHash, error) {
 func genMasterHash(node string) (MasterHash, error) {
 	var mh MasterHash
 
-	baseDir := conf.Global.NodeDir(node)
+	baseDir := conf.GetConf().NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -116,10 +116,10 @@ func genMasterHash(node string) (MasterHash, error) {
 		}
 		return mh, utils.WrapErr(err)
 	}
-	tempEntry := filepath.Base(conf.Global.NodeDirTemp(node))
+	tempEntry := filepath.Base(conf.GetConf().NodeDirTemp(node))
 
 	dirs := make(map[string]struct{})
-	hashMap := make(map[[32]byte]local.RelativePath)
+	hashMap := make(map[[32]byte]local.BackupRelPath)
 	for _, e := range entries {
 		if e.IsDir() {
 			if e.Name() == tempEntry {
@@ -144,7 +144,7 @@ func genMasterHash(node string) (MasterHash, error) {
 }
 
 func writeMaster(mh *MasterHash, node string) error {
-	f, err := utils.Create(conf.Global.MasterHashFile(node))
+	f, err := utils.Create(conf.GetConf().MasterHashFile(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}

@@ -21,7 +21,7 @@ func PathExists(path string) (bool, error) {
 }
 
 func StampDate(node string) (string, error) {
-	oldPath := conf.Global.NodeDirTemp(node)
+	oldPath := conf.GetConf().NodeDirTemp(node)
 	currentTime := time.Now().Format(conf.TIMEFORMAT)
 	newPath := filepath.Join(filepath.Dir(oldPath), currentTime)
 	if err := os.Rename(oldPath, newPath); err != nil {
@@ -31,13 +31,13 @@ func StampDate(node string) (string, error) {
 }
 
 func CullSnapshots(node string) error {
-	snapshots, err := conf.Global.NodeSnapshots(node)
+	snapshots, err := conf.GetConf().NodeSnapshots(node)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
 	snapLen := len(snapshots)
-	if snapLen > conf.Global.MaxBackups {
-		for _, p := range snapshots[:snapLen-conf.Global.MaxBackups] {
+	if snapLen > conf.GetConf().MaxBackups {
+		for _, p := range snapshots[:snapLen-conf.GetConf().MaxBackups] {
 			if err := os.RemoveAll(p); err != nil {
 				return utils.WrapErr(err)
 			}

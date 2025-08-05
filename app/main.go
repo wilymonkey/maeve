@@ -10,7 +10,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/gui"
@@ -42,10 +41,6 @@ func main() {
 		log.Fatalf("Failed to parse args: %v", err)
 	}
 
-	if err := conf.LoadConfig(&conf.Global); err != nil {
-		log.Fatalf("Failed to read config:  %v", err)
-	}
-
 	switch {
 	case *flagBackupAll:
 		startGUI(backupWindow)
@@ -74,14 +69,6 @@ func printVersion() {
 	os.Exit(0)
 }
 
-func startTui(start tea.Model) {
-	overseer.Global = tea.NewProgram(overseer.New(start), tea.WithAltScreen())
-
-	if _, err := overseer.Global.Run(); err != nil {
-		log.Fatalf("Failed to start TUI:  %v", err)
-	}
-}
-
 func startGUI(content func() fyne.CanvasObject) {
 	gui.Global = gui.NewState()
 
@@ -99,10 +86,11 @@ func startGUI(content func() fyne.CanvasObject) {
 }
 
 func backupWindow() fyne.CanvasObject {
+	body, m := backup.Dialog()
 	cancelBtn := widget.NewButton(
 		"Cancel",
 		func() {
-			backup.OnCancel()
+			backup.OnCancel(m)
 			fyne.CurrentApp().Quit()
 		},
 	)
@@ -113,7 +101,7 @@ func backupWindow() fyne.CanvasObject {
 			cancelBtn,
 			nil,
 			nil,
-			backup.Dialog(),
+			body,
 		),
 	)
 }

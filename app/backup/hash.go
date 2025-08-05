@@ -18,7 +18,7 @@ type doneHashsums struct {
 }
 
 func newHashes(parentCtx context.Context) tea.Msg {
-	selfDir := conf.Global.SelfDir()
+	selfDir := conf.GetConf().SelfDir()
 
 	progChan := make(chan hs.FileHash, 100)
 	defer close(progChan)

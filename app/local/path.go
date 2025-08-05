@@ -7,44 +7,44 @@ import (
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type RelativePath struct {
+type BackupRelPath struct {
 	Path string
 }
 
 // Resolves to absolute path.
-func (r *RelativePath) Resolve(node string) string {
-	return filepath.Join(conf.Global.NodeDir(node), r.Path)
+func (r *BackupRelPath) Resolve(node string) string {
+	return filepath.Join(conf.GetConf().NodeDir(node), r.Path)
 }
 
-type SnapshotPath struct {
+type SnapshotRelPath struct {
 	Path string
 }
 
-func NewSnapshotPath(sourcePath, filePath string) (SnapshotPath, error) {
+func NewSnapshotPath(sourcePath, filePath string) (SnapshotRelPath, error) {
 	relPath, err := filepath.Rel(sourcePath, filePath)
 	if err != nil {
-		return SnapshotPath{}, utils.WrapErr(err)
+		return SnapshotRelPath{}, utils.WrapErr(err)
 	}
 
-	return SnapshotPath{Path: relPath}, nil
+	return SnapshotRelPath{Path: relPath}, nil
 }
 
 // Resolves to relative path.
-func (s *SnapshotPath) Resolve(snapshot string) RelativePath {
-	return RelativePath{Path: filepath.Join(snapshot, s.Path)}
+func (s *SnapshotRelPath) Resolve(snapshot string) BackupRelPath {
+	return BackupRelPath{Path: filepath.Join(snapshot, s.Path)}
 }
 
 // Resolves to an absolute path with NodeDirTemp as the base.
-func (s *SnapshotPath) ResolveTemp(node string) string {
-	return filepath.Join(conf.Global.NodeDirTemp(node), s.Path)
+func (s *SnapshotRelPath) ResolveTemp(node string) string {
+	return filepath.Join(conf.GetConf().NodeDirTemp(node), s.Path)
 }
 
 // Resolves to an absolute path with SelfDir as the base.
-func (s *SnapshotPath) ResolveSelf() string {
-	return filepath.Join(conf.Global.SelfDir(), s.Path)
+func (s *SnapshotRelPath) ResolveSelf() string {
+	return filepath.Join(conf.GetConf().SelfDir(), s.Path)
 }
 
 // Resolves to an absolute path with SelfDir as the base.
-func (s *SnapshotPath) ResolvePrepend(prepend string) string {
+func (s *SnapshotRelPath) ResolvePrepend(prepend string) string {
 	return filepath.Join(prepend, s.Path)
 }

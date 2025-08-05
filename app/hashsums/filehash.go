@@ -17,7 +17,7 @@ import (
 )
 
 type FileHash struct {
-	Path local.SnapshotPath
+	Path local.SnapshotRelPath
 	Hash [32]byte
 }
 
@@ -33,8 +33,8 @@ func (fh *FileHash) Validate(path string) (bool, error) {
 // the SelfDir
 func GetSelfHashGob() (FileHash, error) {
 	var result FileHash
-	dir := conf.Global.SelfDir()
-	path := conf.Global.HashFile(dir)
+	dir := conf.GetConf().SelfDir()
+	path := conf.GetConf().HashFile(dir)
 	hash, err := genHash(path)
 	if err != nil {
 		return result, utils.WrapErr(err)
@@ -51,7 +51,7 @@ func GetSelfHashGob() (FileHash, error) {
 }
 
 func ValidateExisting(hashes []FileHash, node string) ([]FileHash, error) {
-	dir := conf.Global.NodeDirTemp(node)
+	dir := conf.GetConf().NodeDirTemp(node)
 	exists, err := local.PathExists(dir)
 	if err != nil {
 		return nil, utils.WrapErr(err)
@@ -163,7 +163,7 @@ func genHash(path string) ([32]byte, error) {
 
 // Write the given []FileHash to the SelfDir.
 func WriteFileHashes(hashes []FileHash) error {
-	f, err := os.Create(conf.Global.HashFile(conf.Global.SelfDir()))
+	f, err := os.Create(conf.GetConf().HashFile(conf.GetConf().SelfDir()))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -173,7 +173,7 @@ func WriteFileHashes(hashes []FileHash) error {
 }
 
 func readFileHashes(dir string) ([]FileHash, error) {
-	f, err := os.Open(conf.Global.HashFile(dir))
+	f, err := os.Open(conf.GetConf().HashFile(dir))
 	if err != nil {
 		return nil, utils.WrapErr(err)
 	}
