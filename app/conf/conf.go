@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/wilymonkey/maeve/utils"
+	"github.com/zeebo/blake3"
 )
 
 const TIMEFORMAT = "02Jan2006-1504"
@@ -54,6 +56,12 @@ func (c *MaeveConf) HashFile(dir string) string {
 
 func (c *MaeveConf) SelfDir() string {
 	return filepath.Join(c.BackupDir, "my_latest")
+}
+
+func (c *MaeveConf) MyNode() string {
+	sum := blake3.Sum512([]byte(c.SSHKey))
+	keyHash := hex.EncodeToString(sum[:16])
+	return filepath.Join(c.BackupDir, c.Name+keyHash)
 }
 
 func (c *MaeveConf) NodeDir(node string) string {

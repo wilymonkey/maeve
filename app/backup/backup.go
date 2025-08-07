@@ -3,7 +3,6 @@ package backup
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -15,7 +14,10 @@ import (
 )
 
 type guiState struct {
-	linkDirs    []dirMeta
+	version       binding.Float
+	backupDirMeta []BackupDirMeta
+
+	// OLD
 	hashDone    bool
 	totalFiles  int
 	hashNum     int
@@ -27,23 +29,23 @@ type guiState struct {
 	ctxCancel   context.CancelFunc
 }
 
-func Dialog() (fyne.CanvasObject, guiState) {
-	m := New()
+func Dialog(state guiState) fyne.CanvasObject {
 	return container.NewVBox(
 		theme.NewH2("Checking PC State"),
+		backupDirMetaTable(state.backupDirMeta),
 		theme.NewH2("Preparing Backup Files"),
 		theme.NewH2("Send to PCs"),
-	), m
+	)
 }
 
 func OnCancel(m guiState) {
 	m.ctxCancel()
 }
 
-func New() guiState {
-	linkDirs := make([]dirMeta, len(conf.GetConf().SourceDirs))
+func NewState() guiState {
+	linkDirs := make([]BackupDirMeta, len(conf.GetConf().SourceDirs))
 	for i, dir := range conf.GetConf().SourceDirs {
-		linkDirs[i] = dirMeta{
+		linkDirs[i] = BackupDirMeta{
 			path:     dir,
 			number:   binding.NewInt(),
 			size:     binding.NewInt(),
@@ -52,20 +54,15 @@ func New() guiState {
 	}
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	return guiState{
-		linkDirs:  linkDirs,
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		pushProg:  newPushProgress(0),
+		backupDirMeta: linkDirs,
+		ctx:           ctx,
+		ctxCancel:     ctxCancel,
+		pushProg:      newPushProgress(0),
 	}
 }
 
-func makeMetaTable(metaMap map[string]dirMeta) *widget.Table {
-	keys := make([]string, 0, len(metaMap))
-	for k := range metaMap {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	totalRows := len(keys) + 1
+func backupDirMetaTable(backupDirMeta []BackupDirMeta) *widget.Table {
+	totalRows := len(backupDirMeta) + 1
 	totalCols := 3
 
 	return widget.NewTable(
@@ -92,7 +89,7 @@ func makeMetaTable(metaMap map[string]dirMeta) *widget.Table {
 					label.SetText("Hashsums")
 				}
 			} else {
-				meta := metaMap[keys[row-1]]
+				meta := backupDirMeta[row-1]
 				switch col {
 				case 0:
 					label.SetText(meta.path)

@@ -13,46 +13,27 @@ import (
 )
 
 func makeGUI() fyne.CanvasObject {
-	return container.NewBorder(
-		nil,
-		nil,
-		sideBanner(),
-		nil,
-		container.NewScroll(
-			container.NewPadded(
-				container.NewBorder(
-					container.NewHBox(
-						favicon(64),
-						theme.NewH1("Maeve Installer"),
-					),
-					theme.HighBtn("Install", func() {
-						if err := Global.Install(); err != nil {
-							Global.LogErr(err)
-						}
-					}),
-					nil,
-					nil,
-					body(),
+	return container.NewScroll(
+		container.NewPadded(
+			container.NewBorder(
+				container.NewHBox(
+					favicon(64),
+					theme.NewH1("Maeve Installer"),
 				),
+				theme.HighBtn("Install", func() {
+					if err := Global.Install(); err != nil {
+						panic(err)
+					}
+				}),
+				nil,
+				nil,
+				body(),
 			),
 		),
 	)
 }
 
 func body() *fyne.Container {
-	logs := container.NewScroll(
-		widget.NewListWithData(Global.logs,
-			func() fyne.CanvasObject {
-				label := widget.NewLabel("")
-				label.Wrapping = fyne.TextWrapWord
-				return label
-			},
-			func(i binding.DataItem, o fyne.CanvasObject) {
-				o.(*widget.Label).Bind(i.(binding.String))
-			}),
-	)
-	logs.SetMinSize(fyne.NewSquareSize(180))
-
 	keysDisabled := container.NewCenter(theme.NewH2("Backup PCs Only"))
 	keyTable := widget.NewListWithData(Global.sshKeys,
 		func() fyne.CanvasObject {
@@ -117,8 +98,6 @@ If a key is no longer being used please remove it.`)
 		serverExp,
 		theme.GreyBox(sshKeys),
 		inputSSH(),
-		theme.NewH2("Logs"),
-		theme.GreyBox(logs),
 	)
 }
 
@@ -129,25 +108,6 @@ func statusAndLabel(t string, b binding.Float) *fyne.Container {
 		layout.NewCustomPaddedHBoxLayout(0),
 		x,
 		widget.NewLabel(t),
-	)
-}
-
-func sideBanner() *fyne.Container {
-	return theme.PrimaryBox(
-		container.NewCenter(
-			container.NewVBox(
-				container.NewPadded(
-					theme.NewH1("Components"),
-				),
-				container.NewPadded(
-					container.NewVBox(
-						statusAndLabel("SSH", Global.percSSH),
-						statusAndLabel("Maeve", Global.percMaeve),
-						statusAndLabel("Integrity", Global.percIntegrity),
-					),
-				),
-			),
-		),
 	)
 }
 

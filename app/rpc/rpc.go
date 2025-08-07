@@ -115,13 +115,14 @@ type VerifyFuncReply struct {
 }
 
 func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) error {
-	path := args.Hash.Path.ResolveTemp(args.Node)
-	hashGood, err := args.Hash.Validate(path)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	reply.HashGood = hashGood
-	return nil
+
+	// path := args.Hash.Path.ResolveTemp(args.Node)
+	// hashGood, err := args.Hash.Validate(path)
+	// if err != nil {
+	// 	return utils.WrapErr(err)
+	// }
+	// reply.HashGood = hashGood
+	return fmt.Errorf("NOT COMPLETE")
 }
 
 func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
@@ -196,13 +197,6 @@ type FinSnapshotArgs struct {
 }
 
 func (h *RPCFuncs) FinSnapshot(args *FinSnapshotArgs, reply *struct{}) error {
-	snapshot, err := local.StampDate(args.Node)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	if err := hs.UpdateMaster(args.Node, snapshot); err != nil {
-		return utils.WrapErr(err)
-	}
 	if err := local.CullSnapshots(args.Node); err != nil {
 		return utils.WrapErr(err)
 	}

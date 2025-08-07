@@ -11,7 +11,7 @@ import (
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type dirMeta struct {
+type BackupDirMeta struct {
 	path     string
 	number   binding.Int
 	size     binding.Int
@@ -19,7 +19,7 @@ type dirMeta struct {
 }
 type doneLinks struct{}
 
-func updateLatest(meta []dirMeta, ctx context.Context) error {
+func updateLatest(meta []BackupDirMeta, ctx context.Context) error {
 	selfDir := conf.GetConf().SelfDir()
 
 	if err := os.RemoveAll(selfDir); err != nil {

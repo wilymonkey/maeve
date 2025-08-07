@@ -35,7 +35,11 @@ func LinkExisting(node string, hashes []FileHash) ([]FileHash, error) {
 			}
 			if relPath, exists := mh.HashMap[h.Hash]; exists {
 				sourcePath := relPath.Resolve(node)
-				targetPath := h.Path.ResolveTemp(node)
+
+				// TODO: Give proper temp directory.
+				h.Snapshot = "latest"
+
+				targetPath := h.AbsPath(node)
 				if err := local.Hardlink(sourcePath, targetPath); err != nil {
 					if errors.Is(err, os.ErrNotExist) {
 						missingChan <- h

@@ -2,18 +2,51 @@ package local
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type BackupRelPath struct {
-	Path string
+type AbsPath struct {
+	Node         string
+	SnapshotPath string
+	RelPath      string
 }
 
-// Resolves to absolute path.
-func (r *BackupRelPath) Resolve(node string) string {
-	return filepath.Join(conf.GetConf().NodeDir(node), r.Path)
+func NewAbsPath(path string) AbsPath {
+	rel, err := filepath.Rel(conf.GetConf().BackupDir, path)
+	if err != nil {
+		panic(utils.WrapErr(err))
+	}
+
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(rel)), "/")
+
+	a := AbsPath{}
+	if len(parts) > 0 {
+		a.Node = parts[0]
+	}
+	if len(parts) > 1 {
+		a.SnapshotPath = parts[1]
+	}
+	if len(parts) > 2 {
+		a.RelPath = filepath.Join(parts[2:]...)
+	}
+
+	return a
+}
+
+func (a *AbsPath) Path() string {
+	return filepath.Join(conf.GetConf().NodeDir(a.Node), a.SnapshotPath, a.RelPath)
+}
+
+type RelPath struct {
+	Snapshot string
+	Path     string
+}
+
+func (r *RelPath) Resolve(node string) string {
+	return filepath.Join(conf.GetConf().NodeDir(node), r.Snapshot, r.Path)
 }
 
 type SnapshotRelPath struct {
@@ -30,8 +63,8 @@ func NewSnapshotPath(sourcePath, filePath string) (SnapshotRelPath, error) {
 }
 
 // Resolves to relative path.
-func (s *SnapshotRelPath) Resolve(snapshot string) BackupRelPath {
-	return BackupRelPath{Path: filepath.Join(snapshot, s.Path)}
+func (s *SnapshotRelPath) Resolve(snapshot string) RelPath {
+	return RelPath{Path: filepath.Join(snapshot, s.Path)}
 }
 
 // Resolves to an absolute path with NodeDirTemp as the base.

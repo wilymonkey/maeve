@@ -3,10 +3,12 @@ package hashsums
 import (
 	"context"
 	"encoding/gob"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/zeebo/blake3"
 	"golang.org/x/sync/errgroup"
@@ -17,12 +19,44 @@ import (
 )
 
 type FileHash struct {
-	Path local.SnapshotRelPath
-	Hash [32]byte
+	Hash     [32]byte
+	Snapshot string
+	RelPath  string
+}
+
+type FileMeta struct {
+	Hash    [32]byte
+	RelPath string
+	Size    int64
+	ModTime time.Time
+}
+
+func NewFileHash(basepath, targetpath string) (FileHash, error) {
+	var filehash FileHash
+	hash, err := NewHashsum(targetpath)
+	if err != nil {
+		return filehash, err
+	}
+
+	relPath, err := filepath.Rel(basepath, targetpath)
+	snapshot := filepath.Dir(basepath)
+	if err != nil {
+		return filehash, fmt.Errorf("making relative path: %s -> %s: %w", basepath, targetpath, err)
+	}
+
+	return FileHash{
+		Hash:     hash,
+		Snapshot: snapshot,
+		RelPath:  relPath,
+	}, nil
+}
+
+func (fh *FileHash) AbsPath(node string) string {
+	return filepath.Join(conf.GetConf().NodeDir(node), fh.Snapshot, fh.RelPath)
 }
 
 func (fh *FileHash) Validate(path string) (bool, error) {
-	newHash, err := genHash(path)
+	newHash, err := NewHashsum(path)
 	if err != nil {
 		return false, utils.WrapErr(err)
 	}
@@ -35,17 +69,13 @@ func GetSelfHashGob() (FileHash, error) {
 	var result FileHash
 	dir := conf.GetConf().SelfDir()
 	path := conf.GetConf().HashFile(dir)
-	hash, err := genHash(path)
-	if err != nil {
-		return result, utils.WrapErr(err)
-	}
-	snapshot, err := local.NewSnapshotPath(dir, path)
+	hash, err := NewHashsum(path)
 	if err != nil {
 		return result, utils.WrapErr(err)
 	}
 	result = FileHash{
-		Path: snapshot,
-		Hash: hash,
+		RelPath: path,
+		Hash:    hash,
 	}
 	return result, nil
 }
@@ -71,20 +101,14 @@ func ValidateExisting(hashes []FileHash, node string) ([]FileHash, error) {
 		return hashes, utils.WrapErr(err)
 	}
 	sourceHashes := utils.SliceToSet(hashes)
-	for _, h := range currHashes {
-		if _, exists := sourceHashes[h]; exists {
-			delete(sourceHashes, h)
-		} else {
-			if err := os.Remove(h.Path.ResolveTemp(node)); err != nil {
-				return hashes, utils.WrapErr(err)
-			}
-		}
+	for _, _ = range currHashes {
+		// TODO: Compare what should be and what shouldn't be there
 	}
 
 	return utils.SetToSlice(sourceHashes), nil
 }
 
-func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Context) ([]FileHash, error) {
+func NewDirFileHash(basepath string, progChan chan FileHash, ctx context.Context) ([]FileHash, error) {
 	hashChan := make(chan FileHash, 100)
 	var hashes []FileHash
 	wg := utils.GoWait(func() {
@@ -96,33 +120,26 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 	eGrp, ctx := errgroup.WithContext(ctx)
 	eGrp.SetLimit(20 * runtime.NumCPU())
 
-	walkErr := filepath.WalkDir(sourcePath, func(filePath string, dir os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(basepath, func(filePath string, dir os.DirEntry, err error) error {
 		if err != nil {
-			return utils.WrapErr(err)
+			return err
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		info, err := dir.Info()
 		if err != nil {
-			return utils.WrapErr(err)
+			return fmt.Errorf("getting dir info: %w", err)
 		}
 		if !info.Mode().IsRegular() {
 			return nil
 		}
 
 		eGrp.Go(func() error {
-			hash, err := genHash(filePath)
+			fh, err := NewFileHash(basepath, filePath)
 			if err != nil {
-				return utils.WrapErr(err)
+				return err
 			}
-
-			snapshotPath, err := local.NewSnapshotPath(sourcePath, filePath)
-			if err != nil {
-				return utils.WrapErr(err)
-			}
-
-			fh := FileHash{Path: snapshotPath, Hash: hash}
 			hashChan <- fh
 			progChan <- fh
 			return nil
@@ -143,19 +160,17 @@ func NewDirFileHash(sourcePath string, progChan chan FileHash, ctx context.Conte
 	return hashes, nil
 }
 
-// Hash a file.
-func genHash(path string) ([32]byte, error) {
+func NewHashsum(path string) ([32]byte, error) {
 	var result [32]byte
-
 	f, err := os.Open(path)
 	if err != nil {
-		return result, err
+		return result, fmt.Errorf("opening file: %s: %w", path, err)
 	}
 	defer f.Close()
 
 	h := blake3.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return result, utils.WrapErr(err)
+		return result, fmt.Errorf("hashing file: %s: %w", path, err)
 	}
 	copy(result[:], h.Sum(nil))
 	return result, nil

@@ -25,7 +25,8 @@ type SendStatus struct {
 }
 
 func NewDoneStatus(hash hs.FileHash) (SendStatus, error) {
-	localFile, err := os.Open(hash.Path.ResolveSelf())
+	path := hash.AbsPath(conf.GetConf().MyNode())
+	localFile, err := os.Open(path)
 	if err != nil {
 		return SendStatus{}, utils.WrapErr(err)
 	}
@@ -142,7 +143,8 @@ func pushFile(
 ) (SendStatus, error) {
 	status := SendStatus{Hash: hash}
 
-	localFile, err := os.Open(hash.Path.ResolveSelf())
+	path := hash.AbsPath(conf.GetConf().MyNode())
+	localFile, err := os.Open(path)
 	if err != nil {
 		return status, utils.WrapErr(err)
 	}
@@ -153,7 +155,7 @@ func pushFile(
 	}
 	status.Total = fileInfo.Size()
 
-	remotePath := hash.Path.ResolvePrepend(remoteDir)
+	remotePath := filepath.Join(remoteDir, hash.RelPath)
 	parentDir := filepath.Dir(remotePath)
 	if err := sftpClient.MkdirAll(parentDir); err != nil {
 		return status, utils.WrapErr(err)

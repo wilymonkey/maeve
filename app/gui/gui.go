@@ -117,11 +117,12 @@ func addRemoteNote() *fyne.Container {
 
 func StartBackup() {
 	var d *dialog.CustomDialog
-	body, m := backup.Dialog()
+	state := backup.NewState()
+	body := backup.Dialog(state)
 	cancelBtn := widget.NewButton(
 		"Cancel",
 		func() {
-			backup.OnCancel(m)
+			backup.OnCancel(state)
 			d.Hide()
 		},
 	)

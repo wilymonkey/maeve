@@ -16,10 +16,10 @@ var ErrNeedsRecreate = errors.New("MasterHash needs to be recreated")
 type MasterHash struct {
 	Dirs map[string]struct{}
 	// hash as key
-	HashMap map[[32]byte]local.BackupRelPath
+	HashMap map[[32]byte]local.RelPath
 }
 
-func (mh *MasterHash) Exists(fileHash FileHash) *local.BackupRelPath {
+func (mh *MasterHash) Exists(fileHash FileHash) *local.RelPath {
 	if relPath, exists := mh.HashMap[fileHash.Hash]; exists {
 		return &relPath
 	}
@@ -43,23 +43,6 @@ func (mh *MasterHash) validate(node string) error {
 		}
 	}
 
-	return nil
-}
-
-// Updates the MasterHash with a given snapshot folder name.
-func UpdateMaster(node, snapshot string) error {
-	hashes, err := readFileHashes(conf.GetConf().NodeSnapshotDir(node, snapshot))
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	mh, err := getMaster(node)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	for _, h := range hashes {
-		mh.HashMap[h.Hash] = h.Path.Resolve(snapshot)
-	}
-	mh.Dirs[snapshot] = struct{}{}
 	return nil
 }
 
@@ -119,22 +102,19 @@ func genMasterHash(node string) (MasterHash, error) {
 	tempEntry := filepath.Base(conf.GetConf().NodeDirTemp(node))
 
 	dirs := make(map[string]struct{})
-	hashMap := make(map[[32]byte]local.BackupRelPath)
+	hashMap := make(map[[32]byte]local.RelPath)
 	for _, e := range entries {
 		if e.IsDir() {
 			if e.Name() == tempEntry {
 				continue
 			}
 
-			hashes, err := readFileHashes(filepath.Join(baseDir, e.Name()))
+			_, err := readFileHashes(filepath.Join(baseDir, e.Name()))
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					continue
 				}
 				return mh, utils.WrapErr(err)
-			}
-			for _, h := range hashes {
-				hashMap[h.Hash] = h.Path.Resolve(e.Name())
 			}
 			dirs[e.Name()] = struct{}{}
 		}

@@ -1,9 +1,12 @@
 package main
 
 import (
-	"fyne.io/fyne/v2/data/binding"
-	"github.com/wilymonkey/maeve/installer/utils"
 	"slices"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
+	"github.com/wilymonkey/maeve/installer/utils"
 )
 
 var Global State
@@ -16,6 +19,7 @@ type State struct {
 	percIntegrity binding.Float
 	sshKeys       binding.StringList
 	isServer      binding.Bool
+	CurrentWindow fyne.Window
 }
 
 func NewState() State {
@@ -38,12 +42,12 @@ func NewState() State {
 	return s
 }
 
-func (s *State) Close() {
-	close(s.logChan)
+func (s *State) ShowError(err error) {
+	dialog.ShowError(err, s.CurrentWindow)
 }
 
-func (s *State) LogErr(err error) {
-	s.logChan <- utils.PrintErr(err)
+func (s *State) Close() {
+	close(s.logChan)
 }
 
 // Ensures the key add is unique.
@@ -54,25 +58,6 @@ func (s *State) AddKey(key string) {
 	}
 	if !slices.Contains(sshKeys, key) {
 		s.sshKeys.Append(key)
-	}
-}
-
-func (s *State) GetCurrent() {
-	hasSSH, err := checkSSH()
-	if err != nil {
-		s.LogErr(err)
-	}
-	sshRunning, err := checkSSHRunning()
-	if err != nil {
-		s.LogErr(err)
-	}
-	sshKeys, err := readSSHKeys()
-	if err != nil {
-		s.LogErr(err)
-	}
-	s.sshKeys.Set(sshKeys)
-	if hasSSH && sshRunning {
-		s.percSSH.Set(1)
 	}
 }
 

@@ -86,11 +86,12 @@ func startGUI(content func() fyne.CanvasObject) {
 }
 
 func backupWindow() fyne.CanvasObject {
-	body, m := backup.Dialog()
+	state := backup.NewState()
+	body := backup.Dialog(state)
 	cancelBtn := widget.NewButton(
 		"Cancel",
 		func() {
-			backup.OnCancel(m)
+			backup.OnCancel(state)
 			fyne.CurrentApp().Quit()
 		},
 	)
