@@ -39,6 +39,12 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color
 		return zinc200
 	case theme.ColorNameInputBorder:
 		return color.Black
+	case theme.ColorNameError:
+		return red600
+	case theme.ColorNameWarning:
+		return yellow400
+	case theme.ColorNameForegroundOnError:
+		return color.White
 	// -----------------------------------
 	// OTHER
 	// -----------------------------------
@@ -88,8 +94,10 @@ func (m *Theme) Size(name fyne.ThemeSizeName) float32 {
 // -----------------------------------
 
 var (
-	zinc100  = color.NRGBA{R: 0xF4, G: 0xF4, B: 0xF5, A: 0xFF}
-	zinc200  = color.NRGBA{R: 0xE4, G: 0xE4, B: 0xE7, A: 0xFF}
-	zinc400  = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xAA, A: 0xFF}
-	green400 = color.NRGBA{R: 0x4A, G: 0xDE, B: 0x80, A: 0xFF}
+	zinc100   = color.NRGBA{R: 0xF4, G: 0xF4, B: 0xF5, A: 0xFF}
+	zinc200   = color.NRGBA{R: 0xE4, G: 0xE4, B: 0xE7, A: 0xFF}
+	zinc400   = color.NRGBA{R: 0xA1, G: 0xA1, B: 0xAA, A: 0xFF}
+	green400  = color.NRGBA{R: 0x4A, G: 0xDE, B: 0x80, A: 0xFF}
+	red600    = color.NRGBA{R: 0xDC, G: 0x26, B: 0x26, A: 0xFF}
+	yellow400 = color.NRGBA{R: 0xFB, G: 0xB9, B: 0x51, A: 0xFF}
 )

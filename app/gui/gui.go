@@ -20,7 +20,7 @@ func Render() fyne.CanvasObject {
 					favicon(64),
 					theme.NewH1("Maeve"),
 				),
-				theme.HighBtn("Backup Now", StartBackup),
+				theme.HighBtn("Backup Now", OpenBackupGUI),
 				nil,
 				nil,
 				body(),
@@ -115,7 +115,7 @@ func addRemoteNote() *fyne.Container {
 	)
 }
 
-func StartBackup() {
+func OpenBackupGUI() {
 	var d *dialog.CustomDialog
 	state := backup.NewState()
 	body := backup.Dialog(state)

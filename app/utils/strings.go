@@ -2,13 +2,14 @@ package utils
 
 import (
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TruncateStr(s string, width int) string {
-	sWidth := lipgloss.Width(s)
+	sWidth := ansi.StringWidth(s)
 	if sWidth > width {
 		// We need space for the ellipsis.
 		availWidth := width - 2

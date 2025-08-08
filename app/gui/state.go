@@ -82,10 +82,10 @@ func (s *State) Load(w fyne.Window) error {
 		}
 	}))
 
-	s.SourceDirs.Set(c.SourceDirs)
+	s.SourceDirs.Set(c.BackupDirs)
 	s.SourceDirs.AddListener(binding.NewDataListener(func() {
 		sourceDirs := utils.GetOrPanic(s.SourceDirs)
-		c.SourceDirs = sourceDirs
+		c.BackupDirs = sourceDirs
 		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}

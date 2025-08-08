@@ -30,7 +30,7 @@ type MaeveConf struct {
 	MaxBackups    int
 	MaxUpload     int64
 	RemoteNodes   []string
-	SourceDirs    []string
+	BackupDirs    []string
 }
 
 func GetConf() *MaeveConf {
@@ -208,7 +208,7 @@ func defaultConfig() (MaeveConf, error) {
 		MaxBackups:  5,
 		MaxUpload:   0,
 		RemoteNodes: make([]string, 0),
-		SourceDirs:  make([]string, 0),
+		BackupDirs:  make([]string, 0),
 	}
 	hostname, err := os.Hostname()
 	if err != nil {

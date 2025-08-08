@@ -46,3 +46,10 @@ var PencilSvg = &fyne.StaticResource{
 	StaticName:    "pencil.svg",
 	StaticContent: pencilIcon,
 }
+
+//go:embed danger.svg
+var dangerIcon []byte
+var DangerSvg = &fyne.StaticResource{
+	StaticName:    "danger.svg",
+	StaticContent: dangerIcon,
+}

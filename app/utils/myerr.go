@@ -9,6 +9,13 @@ import (
 	"github.com/wilymonkey/maeve/style"
 )
 
+func ErrContext(context string, err error) error {
+	pc, _, _, _ := runtime.Caller(1)
+	fn := runtime.FuncForPC(pc)
+	fnName := filepath.Base(fn.Name())
+	return fmt.Errorf("[%s]: %s →  %w", fnName, context, err)
+}
+
 // Wraps the error with file and codeline location.
 func WrapErr(err error) error {
 	_, file, line, _ := runtime.Caller(1)
@@ -25,10 +32,7 @@ func WrapErrWithInfo(err error, info string) error {
 }
 
 func DummyErr(s string) error {
-	_, file, line, _ := runtime.Caller(1)
-	filename := filepath.Base(file)
-
-	return fmt.Errorf("%s@%d: DummyErr: %s", filename, line, s)
+	return fmt.Errorf("DummyErr: %s", s)
 }
 
 func Sleep(t time.Duration) {
