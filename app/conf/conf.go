@@ -60,8 +60,8 @@ func (c *MaeveConf) SelfDir() string {
 
 func (c *MaeveConf) MyNode() string {
 	sum := blake3.Sum512([]byte(c.SSHKey))
-	keyHash := hex.EncodeToString(sum[:16])
-	return filepath.Join(c.BackupDir, c.Name+keyHash)
+	keyHash := hex.EncodeToString(sum[:3])
+	return filepath.Join(c.BackupDir, c.Name+"_"+keyHash)
 }
 
 func (c *MaeveConf) NodeDir(node string) string {

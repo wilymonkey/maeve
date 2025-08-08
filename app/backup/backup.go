@@ -2,15 +2,17 @@ package backup
 
 import (
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/utils"
-	"zombiezen.com/go/sqlite"
+	"github.com/wilymonkey/maeve/db"
 )
 
 func Backup(state guiState) error {
-	_, err := sqlite.OpenConn(conf.GetConf().MyNode())
-	return utils.ErrContext("testing", utils.DummyErr("Woot!"))
+	conn, err := db.Open(conf.GetConf().MyNode())
 	if err != nil {
-		return utils.ErrContext("opening db connection", err)
+		return err
+	}
+	_, err = db.GetVersion(conn)
+	if err != nil {
+		return err
 	}
 	return nil
 }

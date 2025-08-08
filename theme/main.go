@@ -41,9 +41,13 @@ func (m *Theme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color
 		return color.Black
 	case theme.ColorNameError:
 		return red600
+	case theme.ColorNameForegroundOnError:
+		return color.White
 	case theme.ColorNameWarning:
 		return yellow400
-	case theme.ColorNameForegroundOnError:
+	case theme.ColorNameSuccess:
+		return green600
+	case theme.ColorNameForegroundOnSuccess:
 		return color.White
 	// -----------------------------------
 	// OTHER
@@ -100,4 +104,5 @@ var (
 	green400  = color.NRGBA{R: 0x4A, G: 0xDE, B: 0x80, A: 0xFF}
 	red600    = color.NRGBA{R: 0xDC, G: 0x26, B: 0x26, A: 0xFF}
 	yellow400 = color.NRGBA{R: 0xFB, G: 0xB9, B: 0x51, A: 0xFF}
+	green600  = color.NRGBA{R: 0x16, G: 0xA3, B: 0x4A, A: 0xFF}
 )

@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/gui"
@@ -87,22 +86,7 @@ func startGUI(content func() fyne.CanvasObject) {
 
 func backupWindow() fyne.CanvasObject {
 	state := backup.NewState()
-	body := backup.Dialog(state)
-	cancelBtn := widget.NewButton(
-		"Cancel",
-		func() {
-			backup.OnCancel(state)
-			fyne.CurrentApp().Quit()
-		},
-	)
-	cancelBtn.Importance = widget.DangerImportance
 	return container.NewPadded(
-		container.NewBorder(
-			nil,
-			cancelBtn,
-			nil,
-			nil,
-			body,
-		),
+		backup.Dialog(state, func() { fyne.CurrentApp().Quit() }, true),
 	)
 }

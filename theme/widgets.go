@@ -67,7 +67,7 @@ func GreyBox(objects fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewStack(background, objects)
 }
 
-func DangerBox(msg binding.String) fyne.CanvasObject {
+func ErrorBox(ErrMsg binding.String) fyne.CanvasObject {
 	bg := canvas.NewRectangle(theme.Color(theme.ColorNameError))
 	bg.CornerRadius = 8
 	bg.StrokeWidth = 1
@@ -75,13 +75,36 @@ func DangerBox(msg binding.String) fyne.CanvasObject {
 	icon := canvas.NewImageFromResource(iconRes)
 	icon.FillMode = canvas.ImageFillContain
 	icon.SetMinSize(fyne.NewSquareSize(theme.IconInlineSize()))
-	text := canvas.NewText("", theme.Color(theme.ColorNameForegroundOnError))
-	text.TextStyle = fyne.TextStyle{Bold: true}
-	msg.AddListener(binding.NewDataListener(func() {
-		text.Text = utils.GetOrPanic(msg)
+
+	title := canvas.NewText(
+		"ERROR",
+		theme.Color(theme.ColorNameForegroundOnError),
+	)
+	title.TextSize = 20
+	title.TextStyle.Bold = true
+
+	richtext := widget.NewRichTextWithText("")
+	text := richtext.Segments[0].(*widget.TextSegment)
+	text.Style.ColorName = theme.ColorNameForegroundOnError
+	text.Style.TextStyle.Bold = true
+	richtext.Wrapping = fyne.TextWrapWord
+
+	ErrMsg.AddListener(binding.NewDataListener(func() {
+		text.Text = utils.GetOrPanic(ErrMsg)
 	}))
 	return container.NewStack(
 		bg,
-		container.NewPadded(container.NewHBox(icon, text)),
+		container.NewPadded(
+			container.NewBorder(
+				container.NewHBox(
+					icon,
+					title,
+				),
+				nil,
+				nil,
+				nil,
+				richtext,
+			),
+		),
 	)
 }

@@ -14,7 +14,7 @@ type DBVersion struct {
 	snapshot time.Time
 }
 
-func GetVersion(conn *sqlite.Conn, dbPath string) (DBVersion, error) {
+func GetVersion(conn *sqlite.Conn) (DBVersion, error) {
 	var version DBVersion
 
 	const stmt = `

@@ -17,6 +17,8 @@ type guiState struct {
 	version       binding.Float
 	backupDirMeta []BackupDirMeta
 	err           binding.String
+	ctx           context.Context
+	ctxCancel     context.CancelFunc
 
 	// OLD
 	hashDone    bool
@@ -25,17 +27,18 @@ type guiState struct {
 	pushProg    pushProgress
 	pushingNode int
 	pushDone    bool
-	ctx         context.Context
-	ctxCancel   context.CancelFunc
 }
 
-func Dialog(state guiState) fyne.CanvasObject {
+func Dialog(state guiState, exitNow func(), exitOnDone bool) fyne.CanvasObject {
 	go func() {
 		if err := Backup(state); err != nil {
+			state.ctxCancel()
 			state.err.Set(err.Error())
+		} else if exitOnDone {
+			exitNow()
 		}
 	}()
-	scroll := container.NewScroll(
+	body := container.NewScroll(
 		container.NewVBox(
 			theme.NewH2("Checking PC State"),
 			backupDirMetaTable(state.backupDirMeta),
@@ -44,12 +47,30 @@ func Dialog(state guiState) fyne.CanvasObject {
 			ErrorLabel(state.err),
 		),
 	)
-	scroll.SetMinSize(fyne.NewSize(600, 500))
-	return scroll
-}
+	body.SetMinSize(fyne.NewSize(600, 500))
 
-func OnCancel(m guiState) {
-	m.ctxCancel()
+	cancelBtn := widget.NewButton(
+		"Cancel",
+		func() {
+			state.ctxCancel()
+			exitNow()
+		},
+	)
+	cancelBtn.Importance = widget.DangerImportance
+	go func() {
+		<-state.ctx.Done()
+		cancelBtn.SetText("Okay")
+		cancelBtn.Importance = widget.SuccessImportance
+		cancelBtn.Refresh()
+	}()
+
+	return container.NewBorder(
+		nil,
+		cancelBtn,
+		nil,
+		nil,
+		body,
+	)
 }
 
 func NewState() guiState {
@@ -134,10 +155,10 @@ func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {
 }
 
 func ErrorLabel(err binding.String) fyne.CanvasObject {
-	dangerBox := theme.DangerBox(err)
+	dangerBox := theme.ErrorBox(err)
 	dangerBox.Hide()
 	err.AddListener(binding.NewDataListener(func() {
-		if utils.GetOrPanic(err) != "" {
+		if s, e := err.Get(); s != "" && e == nil {
 			dangerBox.Show()
 		}
 	}))
