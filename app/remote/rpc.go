@@ -1,4 +1,4 @@
-package rpc
+package remote
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/wilymonkey/maeve/conf"
+	"github.com/wilymonkey/maeve/db"
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/overseer"
@@ -44,7 +45,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return utils.WrapErr(err)
+		return utils.Stacktrace(err, "register rpc functions")
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -52,6 +53,7 @@ func RunServer() error {
 	return nil
 }
 
+// Deprecated: Use NewNodeConn.
 func New(session *ssh.Session) (*rpc.Client, error) {
 	stdinPipe, err := session.StdinPipe()
 	if err != nil {
@@ -84,6 +86,34 @@ func New(session *ssh.Session) (*rpc.Client, error) {
 }
 
 type RPCFuncs int
+
+type GetDBVersionArgs struct {
+	Node string
+}
+type GetDBVersionReply struct {
+	Version *db.DBVersion
+}
+
+func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply) error {
+	conn, err := db.Open(args.Node)
+	if err != nil {
+		return err
+	}
+	reply.Version, err = db.GetVersion(conn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (nc *NodeConn) GetDBVersion() (*db.DBVersion, error) {
+	args := &GetDBVersionArgs{Node: conf.GetConf().Name}
+	var reply GetDBVersionReply
+	if err := nc.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
+		return &db.DBVersion{}, utils.Stacktrace(err, "getting rpc db version")
+	}
+	return reply.Version, nil
+}
 
 type TempLocationArgs struct {
 	Node string

@@ -1,6 +1,8 @@
 package conf
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,21 +14,24 @@ import (
 
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
+	"golang.org/x/crypto/ssh"
 )
 
-const TIMEFORMAT = "02Jan2006-1504"
+const (
+	TIMEFORMAT = "02Jan2006-1504"
+)
 
 var (
 	Version   = "DEV"
-	maeveConf MaeveConf
+	maeveConf *MaeveConf
 	once      sync.Once
 )
 
 type MaeveConf struct {
 	Name          string
-	SSHKey        string
-	SSHKnownHosts string
-	BackupDir     string
+	SSHPrivateKey ed25519.PrivateKey
+	SSHKnownHosts SSHKnownHosts
+	MaeveDir      string
 	MaxBackups    int
 	MaxUpload     int64
 	RemoteNodes   []string
@@ -41,8 +46,125 @@ func GetConf() *MaeveConf {
 			panic(err)
 		}
 	})
-	return &maeveConf
+	return maeveConf
 }
+
+// Reads/Creates the config file.
+func loadConfig() (*MaeveConf, error) {
+	conf := &MaeveConf{}
+	confPath, err := configPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, utils.Stacktrace(err, "parsing config file")
+		}
+		// File exists since there is no error, so unmarshal it.
+	} else if err := json.Unmarshal(data, &conf); err != nil {
+		return nil, utils.Stacktrace(err, "unmarshalling config file")
+	}
+
+	if err := conf.applyDefaults(); err != nil {
+		return nil, err
+	}
+	if err := conf.SaveToFile(); err != nil {
+		return nil, err
+	}
+
+	return conf, nil
+}
+
+func (c *MaeveConf) applyDefaults() error {
+	if c.Name == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return utils.Stacktrace(err, "getting hostname")
+		}
+		c.Name = hostname
+	}
+
+	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
+		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return utils.Stacktrace(err, "generating ssh key")
+		}
+		c.SSHPrivateKey = privateKey
+	}
+
+	if c.SSHKnownHosts.Hosts == nil {
+		c.SSHKnownHosts = NewSSHKnownHosts()
+	}
+
+	if c.MaeveDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return utils.Stacktrace(err, "getting home dir")
+		}
+		c.MaeveDir = filepath.Join(homeDir, "Maeve")
+	}
+
+	if c.MaxBackups == 0 {
+		c.MaxBackups = 5
+	}
+
+	if c.RemoteNodes == nil {
+		c.RemoteNodes = make([]string, 0)
+	}
+
+	if c.BackupDirs == nil {
+		c.BackupDirs = make([]string, 0)
+	}
+
+	// Ignore: MaxUpload
+
+	return nil
+}
+
+func (c *MaeveConf) SaveToFile() error {
+	confPath, err := configPath()
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(c)
+	if err != nil {
+		return utils.Stacktrace(err, "marshalling config")
+	}
+
+	f, err := utils.Create(confPath)
+	if err != nil {
+		return utils.Stacktrace(err, "creating config file")
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		return utils.Stacktrace(err, "writing data to config file")
+	}
+
+	return nil
+}
+
+func configPath() (string, error) {
+	userDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", utils.Stacktrace(err, "reading user dir")
+	}
+	confPath := filepath.Join(userDir, "maeve", "config.yml")
+	return confPath, nil
+}
+
+func (c *MaeveConf) MyNode() string {
+	pubKey, err := ssh.NewPublicKey(c.SSHPrivateKey.Public())
+	utils.PanicOnErr("cannot generate pub key from config private key", err)
+	sum := blake3.Sum512(pubKey.Marshal())
+	keyHash := hex.EncodeToString(sum[:3])
+	return filepath.Join(c.MaeveDir, c.Name+"_"+keyHash)
+}
+
+// TODO: REMOVE ALL OF THE FOLLOWING
 
 // Hash file path for a given directory.
 func (c *MaeveConf) MasterHashFile(node string) string {
@@ -55,17 +177,11 @@ func (c *MaeveConf) HashFile(dir string) string {
 }
 
 func (c *MaeveConf) SelfDir() string {
-	return filepath.Join(c.BackupDir, "my_latest")
-}
-
-func (c *MaeveConf) MyNode() string {
-	sum := blake3.Sum512([]byte(c.SSHKey))
-	keyHash := hex.EncodeToString(sum[:3])
-	return filepath.Join(c.BackupDir, c.Name+"_"+keyHash)
+	return filepath.Join(c.MaeveDir, "my_latest")
 }
 
 func (c *MaeveConf) NodeDir(node string) string {
-	return filepath.Join(c.BackupDir, "backups", node)
+	return filepath.Join(c.MaeveDir, "backups", node)
 }
 
 func (c *MaeveConf) NodeDirTemp(node string) string {
@@ -106,162 +222,4 @@ func (c *MaeveConf) NodeSnapshots(node string) ([]string, error) {
 		result[i] = c.NodeSnapshotDir(node, snapshot)
 	}
 	return result, nil
-}
-
-func (c *MaeveConf) commit(path string) error {
-	data, err := json.Marshal(c)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-
-	f, err := utils.Create(path)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer f.Close()
-
-	if _, err := f.Write(data); err != nil {
-		return utils.WrapErr(err)
-	}
-	return nil
-}
-
-func (c *MaeveConf) applyDefaults() error {
-	def, err := defaultConfig()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-
-	if c.Name == "" {
-		c.Name = def.Name
-	}
-	if c.SSHKey == "" {
-		c.SSHKey = def.SSHKey
-	}
-	if c.SSHKnownHosts == "" {
-		c.SSHKnownHosts = def.SSHKnownHosts
-	}
-	if c.BackupDir == "" {
-		c.BackupDir = def.BackupDir
-	}
-	if c.MaxBackups == 0 {
-		c.MaxBackups = def.MaxBackups
-	}
-
-	// Ignore: MaxUpload, RemoteNodes, SourceDirs
-
-	return nil
-}
-
-// Reads/Creates the config file.
-func loadConfig() (MaeveConf, error) {
-	var conf MaeveConf
-	userDir, err := os.UserConfigDir()
-	if err != nil {
-		return conf, utils.WrapErr(err)
-	}
-	confPath := filepath.Join(userDir, "maeve", "config.json")
-
-	data, err := os.ReadFile(confPath)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return conf, utils.WrapErr(err)
-		}
-
-		// Create the config file.
-		conf, err = defaultConfig()
-		if err != nil {
-			return conf, utils.WrapErr(err)
-		}
-		if err := conf.commit(confPath); err != nil {
-			return conf, utils.WrapErr(err)
-		}
-		return conf, nil
-	}
-
-	if err := json.Unmarshal(data, &conf); err != nil {
-		return conf, utils.WrapErr(err)
-	}
-	if err := conf.applyDefaults(); err != nil {
-		return conf, utils.WrapErr(err)
-	}
-	if err := conf.commit(confPath); err != nil {
-		return conf, utils.WrapErr(err)
-	}
-	return conf, nil
-}
-
-func (c *MaeveConf) SaveToFile() error {
-	userDir, err := os.UserConfigDir()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	confPath := filepath.Join(userDir, "maeve", "config.json")
-	if err := c.commit(confPath); err != nil {
-		return utils.WrapErr(err)
-	}
-	return nil
-}
-
-func defaultConfig() (MaeveConf, error) {
-	mc := MaeveConf{
-		MaxBackups:  5,
-		MaxUpload:   0,
-		RemoteNodes: make([]string, 0),
-		BackupDirs:  make([]string, 0),
-	}
-	hostname, err := os.Hostname()
-	if err != nil {
-		return mc, utils.WrapErr(err)
-	}
-	mc.Name = hostname
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return mc, utils.WrapErr(err)
-	}
-	mc.BackupDir = filepath.Join(homeDir, "Maeve")
-
-	sshDir := filepath.Join(homeDir, ".ssh")
-	sshKey, err := findSSHKeys(sshDir)
-	if err != nil {
-		return mc, utils.WrapErr(err)
-	}
-	mc.SSHKey = sshKey
-
-	sshKnownHosts := filepath.Join(sshDir, "known_hosts")
-	_, err = os.Stat(sshKnownHosts)
-	if err != nil {
-		return mc, utils.WrapErr(err)
-	}
-	mc.SSHKnownHosts = sshKnownHosts
-
-	return mc, nil
-}
-
-func findSSHKeys(sshDir string) (string, error) {
-	var key string
-
-	err := filepath.WalkDir(sshDir, func(path string, dir os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		name := dir.Name()
-		if !dir.IsDir() {
-			if isID, _ := filepath.Match("id_*", name); isID {
-				if isPub, _ := filepath.Match("*.pub", name); !isPub {
-					key = path
-					return filepath.SkipDir
-				}
-			}
-		}
-
-		return nil
-	})
-
-	if key == "" {
-		return "", os.ErrNotExist
-	}
-	return key, err
 }

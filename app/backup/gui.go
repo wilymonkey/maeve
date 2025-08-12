@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -11,11 +12,12 @@ import (
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/theme"
 	"github.com/wilymonkey/maeve/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 type guiState struct {
-	version       binding.Float
 	backupDirMeta []BackupDirMeta
+	nodeStates    map[string]*nodeState
 	err           binding.String
 	ctx           context.Context
 	ctxCancel     context.CancelFunc
@@ -29,13 +31,62 @@ type guiState struct {
 	pushDone    bool
 }
 
+func (s *guiState) ErrGroup(scaling int) (*errgroup.Group, context.Context) {
+	eGrp, ctx := errgroup.WithContext(s.ctx)
+	eGrp.SetLimit(scaling * runtime.NumCPU())
+	return eGrp, ctx
+}
+
+func (s *guiState) FatalErr(err error) {
+	s.ctxCancel()
+	if utils.GetOrPanic(s.err) == "" {
+		s.err.Set(err.Error())
+	}
+}
+
+func NewState() guiState {
+	cfg := conf.GetConf()
+
+	backupDirs := make([]BackupDirMeta, len(cfg.BackupDirs))
+	for i, dir := range cfg.BackupDirs {
+		backupDirs[i] = BackupDirMeta{
+			path:     dir,
+			number:   binding.NewInt(),
+			size:     binding.NewInt(),
+			hashsums: binding.NewFloat(),
+		}
+	}
+
+	nodeStates := make(map[string]*nodeState, len(cfg.RemoteNodes))
+	for _, node := range cfg.RemoteNodes {
+		nodeStates[node] = &nodeState{
+			err: binding.NewString(),
+		}
+	}
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	return guiState{
+		backupDirMeta: backupDirs,
+		nodeStates:    nodeStates,
+		err:           binding.NewString(),
+		ctx:           ctx,
+		ctxCancel:     ctxCancel,
+
+		// OLD
+		pushProg: newPushProgress(0),
+	}
+}
+
+type nodeState struct {
+	err binding.String
+}
+
 func Dialog(state guiState, exitNow func(), exitOnDone bool) fyne.CanvasObject {
 	go func() {
 		if err := Backup(state); err != nil {
-			state.ctxCancel()
-			state.err.Set(err.Error())
+			state.FatalErr(err)
 		} else if exitOnDone {
-			exitNow()
+			fyne.Do(exitNow)
 		}
 	}()
 	body := container.NewScroll(
@@ -49,19 +100,25 @@ func Dialog(state guiState, exitNow func(), exitOnDone bool) fyne.CanvasObject {
 	)
 	body.SetMinSize(fyne.NewSize(600, 500))
 
-	cancelBtn := widget.NewButton(
+	var cancelBtn *widget.Button
+	cancelBtn = widget.NewButton(
 		"Cancel",
 		func() {
-			state.ctxCancel()
-			exitNow()
+			if cancelBtn.Importance == widget.DangerImportance {
+				state.ctxCancel()
+			} else {
+				fyne.Do(exitNow)
+			}
 		},
 	)
 	cancelBtn.Importance = widget.DangerImportance
 	go func() {
 		<-state.ctx.Done()
-		cancelBtn.SetText("Okay")
-		cancelBtn.Importance = widget.SuccessImportance
-		cancelBtn.Refresh()
+		fyne.Do(func() {
+			cancelBtn.SetText("Okay")
+			cancelBtn.Importance = widget.SuccessImportance
+			cancelBtn.Refresh()
+		})
 	}()
 
 	return container.NewBorder(
@@ -71,28 +128,6 @@ func Dialog(state guiState, exitNow func(), exitOnDone bool) fyne.CanvasObject {
 		nil,
 		body,
 	)
-}
-
-func NewState() guiState {
-	backupDirs := make([]BackupDirMeta, len(conf.GetConf().BackupDirs))
-	for i, dir := range conf.GetConf().BackupDirs {
-		backupDirs[i] = BackupDirMeta{
-			path:     dir,
-			number:   binding.NewInt(),
-			size:     binding.NewInt(),
-			hashsums: binding.NewFloat(),
-		}
-	}
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	return guiState{
-		backupDirMeta: backupDirs,
-		err:           binding.NewString(),
-		ctx:           ctx,
-		ctxCancel:     ctxCancel,
-
-		// OLD
-		pushProg: newPushProgress(0),
-	}
 }
 
 func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {

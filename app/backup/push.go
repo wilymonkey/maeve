@@ -8,7 +8,6 @@ import (
 	hs "github.com/wilymonkey/maeve/hashsums"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
-	"github.com/wilymonkey/maeve/rpc"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -63,7 +62,7 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 		return utils.WrapErr(err)
 	}
 	defer rpcSesh.Close()
-	rpcClient, err := rpc.New(rpcSesh)
+	rpcClient, err := remote.New(rpcSesh)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -90,13 +89,13 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 			overseer.Global.Send(pushProg)
 		})
 
-	currHashes, err := rpc.ValiExisting(rpcClient, hashes)
+	currHashes, err := remote.ValiExisting(rpcClient, hashes)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
 	hashes, err = updateProg(hashes, currHashes, progChan)
 
-	currHashes, err = rpc.LinkExisting(rpcClient, hashes)
+	currHashes, err = remote.LinkExisting(rpcClient, hashes)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -108,7 +107,7 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 		}
 	}
 
-	if err := rpc.FinSnapshot(rpcClient); err != nil {
+	if err := remote.FinSnapshot(rpcClient); err != nil {
 		return utils.WrapErr(err)
 	}
 

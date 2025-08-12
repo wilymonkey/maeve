@@ -2,8 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -23,40 +25,51 @@ func TruncateStr(s string, width int) string {
 	return s
 }
 
-func ParseHumanBytes(s string) (int64, error) {
-	units := map[string]int64{
-		"b":  1,
-		"kb": 1 << 10,
-		"mb": 1 << 20,
-		"gb": 1 << 30,
-		"tb": 1 << 40,
-		"pb": 1 << 50,
+func BytesToHuman(bytes int64) string {
+	var units = []string{"KB", "MB", "GB", "TB", "PB"}
+
+	if bytes < 1000 {
+		return fmt.Sprintf("%d B", bytes)
 	}
 
-	s = strings.TrimSpace(strings.ToLower(s))
-	var numPart string
-	var unitPart string
+	exponent := min(int(math.Floor(math.Log10(float64(bytes))/math.Log10(1000))), len(units))
+	decimal := float64(bytes) / math.Pow(1000, float64(exponent))
+	return fmt.Sprintf("%.2f %s", decimal, units[exponent-1])
+}
 
+func ParseHumanBytes(s string) (int64, error) {
+	units := map[string]int64{
+		"B":  1,
+		"KB": 1000,
+		"MB": 1000 * 1000,
+		"GB": 1000 * 1000 * 1000,
+		"TB": 1000 * 1000 * 1000 * 1000,
+		"PB": 1000 * 1000 * 1000 * 1000 * 1000,
+	}
+
+	s = strings.TrimSpace(strings.ToUpper(s))
+	var numStr, unit string
 	for i, r := range s {
-		if (r < '0' || r > '9') && r != '.' {
-			numPart = strings.TrimSpace(s[:i])
-			unitPart = strings.TrimSpace(s[i:])
+		if !unicode.IsDigit(r) && r != '.' {
+			numStr = strings.TrimSpace(s[:i])
+			unit = strings.TrimSpace(s[i:])
 			break
 		}
 	}
-	if numPart == "" {
-		numPart = s
-		unitPart = "b"
+
+	if numStr == "" {
+		numStr = s
+		unit = "b"
 	}
 
-	multiplier, ok := units[unitPart]
+	multiplier, ok := units[unit]
 	if !ok {
-		return 0, fmt.Errorf("unknown unit: %q", unitPart)
+		return 0, Stacktrace(fmt.Errorf("unknown unit: %q", unit), "parsing unit")
 	}
 
-	val, err := strconv.ParseFloat(numPart, 64)
+	val, err := strconv.ParseFloat(numStr, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid number: %q", numPart)
+		return 0, Stacktrace(err, "parsing number")
 	}
 
 	return int64(val * float64(multiplier)), nil

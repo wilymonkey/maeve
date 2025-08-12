@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/sftp"
 	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/rpc"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -54,7 +53,7 @@ func SendFiles(
 ) error {
 	eGrp, ctx := errgroup.WithContext(ctx)
 
-	remoteDir, err := rpc.TempLocation(rpcClient)
+	remoteDir, err := TempLocation(rpcClient)
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -107,7 +106,7 @@ func SendFiles(
 				status.Verifying = true
 				progChan <- status
 
-				isGood, err := rpc.VerifyFile(rpcClient, status.Hash)
+				isGood, err := VerifyFile(rpcClient, status.Hash)
 				if err != nil {
 					return utils.WrapErr(err)
 				}

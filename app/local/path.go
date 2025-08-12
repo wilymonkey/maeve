@@ -15,7 +15,7 @@ type AbsPath struct {
 }
 
 func NewAbsPath(path string) AbsPath {
-	rel, err := filepath.Rel(conf.GetConf().BackupDir, path)
+	rel, err := filepath.Rel(conf.GetConf().MaeveDir, path)
 	if err != nil {
 		panic(utils.WrapErr(err))
 	}

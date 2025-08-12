@@ -42,10 +42,10 @@ func (s *State) Load(w fyne.Window) error {
 		}
 	}))
 
-	s.BackupDir.Set(c.BackupDir)
+	s.BackupDir.Set(c.MaeveDir)
 	s.BackupDir.AddListener(binding.NewDataListener(func() {
 		backupDir := utils.GetOrPanic(s.BackupDir)
-		c.BackupDir = backupDir
+		c.MaeveDir = backupDir
 		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
 		}
@@ -70,6 +70,8 @@ func (s *State) Load(w fyne.Window) error {
 		c.MaxUpload = maxUpload
 		if err := c.SaveToFile(); err != nil {
 			s.ShowError(err)
+		} else {
+			s.MaxUpload.Set(utils.BytesToHuman(maxUpload))
 		}
 	}))
 
@@ -96,6 +98,6 @@ func (s *State) Load(w fyne.Window) error {
 	return nil
 }
 
-func (s State) ShowError(err error) {
+func (s *State) ShowError(err error) {
 	dialog.ShowError(err, s.Window)
 }

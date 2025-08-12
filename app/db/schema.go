@@ -23,7 +23,7 @@ func createSchema(conn *sqlite.Conn) error {
 	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {
-		return utils.ErrContext("creating schema: %w", err)
+		return utils.Stacktrace(err, "creating schema")
 	}
 	return nil
 }

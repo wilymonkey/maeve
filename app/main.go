@@ -13,7 +13,7 @@ import (
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/gui"
 	"github.com/wilymonkey/maeve/overseer"
-	"github.com/wilymonkey/maeve/rpc"
+	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/theme"
 )
 
@@ -51,7 +51,7 @@ func main() {
 
 	case *flagServer:
 		log.Println("RPC Server: Starting...")
-		if err := rpc.RunServer(); err != nil {
+		if err := remote.RunServer(); err != nil {
 			log.Fatalf("RPC Server Failed:  %v", err)
 		}
 		log.Println("RPC Server: Exiting.")
