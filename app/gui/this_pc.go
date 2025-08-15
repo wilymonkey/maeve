@@ -8,23 +8,36 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/clipboard"
+	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/theme"
+	"golang.org/x/crypto/ssh"
 )
 
 func thisPC() fyne.CanvasObject {
-	return container.NewHBox(
-		container.New(
-			layout.NewCustomPaddedVBoxLayout(0),
-			editableLabel("Name", Global.Name, "^[A-Za-z0-9_-]+$", 25),
-			backupDir(),
+	return container.NewGridWithColumns(2,
+		editableLabel(
+			"Name",
+			Global.Name,
+			"^[A-Za-z0-9_-]+$",
+			25,
 		),
-		container.New(
-			layout.NewCustomPaddedVBoxLayout(0),
-			editableLabel("Max Backups to Keep", binding.IntToString(Global.MaxBackups), `^\d+$`, 5),
-			editableLabel("Max Upload Speed", Global.MaxUpload, `^\s*\d+(\.\d+)?\s*(k|K|m|M|g|G)?(b|B)\s*$`, 15),
+		editableLabel(
+			"Max Backups to Keep",
+			binding.IntToString(Global.MaxBackups),
+			`^\d+$`,
+			5,
 		),
+		backupDir(),
+		editableLabel(
+			"Max Upload Speed",
+			Global.MaxUpload,
+			`^\s*\d+(\.\d+)?\s*(k|K|m|M|g|G)?(b|B)\s*$`,
+			15,
+		),
+		maeveKey(),
+		trustedPCs(),
 	)
 }
 
@@ -64,33 +77,82 @@ func editableLabel(
 	}
 
 	return container.NewBorder(
-		nil,
-		nil,
-		widget.NewLabel(name),
+		nil, nil,
+		NewFixedWidthLabel(name, 150),
 		editBtn,
 		textStack,
 	)
 }
 
 func backupDir() fyne.CanvasObject {
-	btn := theme.EditBtn(
-		func() bool { return false }, // Always in edit mode.
-		func() {},
-		func() {
-			dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+	openFinder := func() {
+		dialog.NewFolderOpen(
+			func(list fyne.ListableURI, err error) {
 				if err != nil {
 					Global.ShowError(err)
-					return
 				}
-				if list == nil {
-					return // User canceled
+				if list != nil {
+					Global.BackupDir.Set(list.Path())
 				}
-				Global.BackupDir.Set(list.Path())
-			}, Global.Window).Show()
-		})
-	return container.NewHBox(
+			},
+			Global.Window,
+		).Show()
+	}
+	return container.NewBorder(
+		nil, nil,
 		widget.NewLabel("Backup Folder"),
+		theme.PencilBtn(openFinder),
 		widget.NewLabelWithData(Global.BackupDir),
-		btn,
 	)
+}
+
+func maeveKey() fyne.CanvasObject {
+	copyKey := func() {
+		p := conf.GetConf().SSHPrivateKey.Public()
+		pubKey, err := ssh.NewPublicKey(p)
+		if err != nil {
+			Global.ShowError(err)
+			return
+		}
+		key := ssh.MarshalAuthorizedKey(pubKey)
+		if err := clipboard.WriteAll(string(key)); err != nil {
+			Global.ShowError(err)
+			return
+		}
+	}
+	return container.NewBorder(
+		nil, nil, nil,
+		theme.DupliBtn(copyKey),
+		widget.NewLabel("Maeve Key"),
+	)
+}
+
+func trustedPCs() fyne.CanvasObject {
+	openDialog := func() {}
+	return container.NewBorder(
+		nil, nil, nil,
+		theme.PencilBtn(openDialog),
+		widget.NewLabel("Trusted PCs"),
+	)
+}
+
+type FixedWidthLabel struct {
+	widget.Label
+	width float32
+}
+
+func NewFixedWidthLabel(text string, width float32) *FixedWidthLabel {
+	fl := &FixedWidthLabel{width: width}
+	fl.ExtendBaseWidget(fl)
+	fl.SetText(text)
+	fl.Wrapping = fyne.TextWrapWord
+	return fl
+}
+
+func (f *FixedWidthLabel) MinSize() fyne.Size {
+	orig := f.Label.Size()
+	f.Label.Resize(fyne.NewSize(f.width, orig.Height))
+	min := f.Label.MinSize()
+	min.Width = f.width
+	return min
 }

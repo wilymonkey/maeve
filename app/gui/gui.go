@@ -6,82 +6,80 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/theme"
 )
 
 func Render() fyne.CanvasObject {
-	return container.NewScroll(
-		container.NewPadded(
+	launchBackup := func() {
+		w := backup.Launch(fyne.CurrentApp(), false)
+		w.Show()
+	}
+
+	return container.NewBorder(
+		container.NewHBox(
+			favicon(64),
+			theme.NewH1("Maeve"),
+		),
+		theme.HighBtn("Backup Now", launchBackup),
+		nil,
+		nil,
+		container.NewGridWithRows(3,
 			container.NewBorder(
-				container.NewHBox(
-					favicon(64),
-					theme.NewH1("Maeve"),
-				),
-				theme.HighBtn("Backup Now", OpenBackupGUI),
-				nil,
-				nil,
-				body(),
+				theme.NewH2("This PC"),
+				nil, nil, nil,
+				thisPC(),
+			),
+			container.NewBorder(
+				theme.NewH2("Folders"),
+				addSourceDir(),
+				nil, nil,
+				sourceDirs(),
+			),
+			container.NewBorder(
+				theme.NewH2("Backup PCs"),
+				addRemoteNote(),
+				nil, nil,
+				remoteNotes(),
 			),
 		),
 	)
 }
 
-func body() *fyne.Container {
-	nodes := container.NewScroll(
-		container.NewCenter(theme.NewH2("Backup Locations")),
-	)
-	nodes.SetMinSize(fyne.NewSquareSize(200))
-
-	dirs := container.NewScroll(
-		container.NewCenter(theme.NewH2("Folders")),
-	)
-	dirs.SetMinSize(fyne.NewSquareSize(200))
-
-	return container.NewVBox(
-		theme.NewH2("This PC"),
-		thisPC(),
-		theme.NewH2("Folders"),
-		sourceDirs(),
-		addSourceDir(),
-		theme.NewH2("Backup PCs"),
-		remoteNotes(),
-		addRemoteNote(),
-	)
-}
-
 func remoteNotes() fyne.CanvasObject {
+	emptyRows := func() fyne.CanvasObject {
+		label := widget.NewLabel("")
+		deleteBtn := theme.DeleteBtn(func() {})
+		return container.NewBorder(
+			nil,
+			nil,
+			nil,
+			deleteBtn,
+			label,
+		)
+	}
+	updateRows := func(i binding.DataItem, o fyne.CanvasObject) {
+		row := o.(*fyne.Container)
+		label := row.Objects[0].(*widget.Label)
+		label.Bind(i.(binding.String))
+		label.Truncation = fyne.TextTruncateEllipsis
+		deleteBtn := row.Objects[1].(*widget.Button)
+		deleteBtn.OnTapped = func() {
+			val, err := i.(binding.String).Get()
+			if err != nil {
+				panic(err)
+			}
+			Global.RemoteNodes.Remove(val)
+		}
+	}
 	w := container.NewScroll(
 		theme.GreyBox(
 			container.NewPadded(
-				widget.NewListWithData(Global.RemoteNodes,
-					func() fyne.CanvasObject {
-						label := widget.NewLabel("")
-						deleteBtn := theme.DeleteBtn(func() {})
-						return container.NewBorder(
-							nil,
-							nil,
-							nil,
-							deleteBtn,
-							label,
-						)
-					},
-					func(i binding.DataItem, o fyne.CanvasObject) {
-						row := o.(*fyne.Container)
-						label := row.Objects[0].(*widget.Label)
-						label.Bind(i.(binding.String))
-						label.Truncation = fyne.TextTruncateEllipsis
-						deleteBtn := row.Objects[1].(*widget.Button)
-						deleteBtn.OnTapped = func() {
-							val, err := i.(binding.String).Get()
-							if err != nil {
-								panic(err)
-							}
-							Global.RemoteNodes.Remove(val)
-						}
-					},
+				widget.NewListWithData(
+					Global.RemoteNodes,
+					emptyRows,
+					updateRows,
 				),
 			),
 		),
@@ -113,15 +111,4 @@ func addRemoteNote() *fyne.Container {
 		addButton,
 		inputEntry,
 	)
-}
-
-func OpenBackupGUI() {
-	var d *dialog.CustomDialog
-	state := backup.NewState()
-	d = dialog.NewCustomWithoutButtons(
-		"Backing Up",
-		backup.Dialog(state, func() { d.Dismiss() }, false),
-		Global.Window,
-	)
-	d.Show()
 }

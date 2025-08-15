@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/wilymonkey/maeve/help"
 )
 
 func TruncateStr(s string, width int) string {
@@ -64,12 +65,13 @@ func ParseHumanBytes(s string) (int64, error) {
 
 	multiplier, ok := units[unit]
 	if !ok {
-		return 0, Stacktrace(fmt.Errorf("unknown unit: %q", unit), "parsing unit")
+		err := fmt.Errorf("unknown unit: %q", unit)
+		return 0, help.Stacktrace(err, "parsing unit", help.DevError)
 	}
 
 	val, err := strconv.ParseFloat(numStr, 64)
 	if err != nil {
-		return 0, Stacktrace(err, "parsing number")
+		return 0, help.Stacktrace(err, "parsing number", help.DevError)
 	}
 
 	return int64(val * float64(multiplier)), nil

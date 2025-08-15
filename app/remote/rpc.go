@@ -13,6 +13,7 @@ import (
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/db"
 	hs "github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/utils"
@@ -45,7 +46,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return utils.Stacktrace(err, "register rpc functions")
+		return help.Stacktrace(err, "register rpc functions", help.UpdateMaeve)
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -99,7 +100,8 @@ func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply
 	if err != nil {
 		return err
 	}
-	reply.Version, err = db.GetVersion(conn)
+	nodeDir := conf.GetConf().NodeDir(args.Node)
+	reply.Version, err = db.GetVersion(conn, nodeDir)
 	if err != nil {
 		return err
 	}
@@ -110,7 +112,7 @@ func (nc *NodeConn) GetDBVersion() (*db.DBVersion, error) {
 	args := &GetDBVersionArgs{Node: conf.GetConf().Name}
 	var reply GetDBVersionReply
 	if err := nc.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
-		return &db.DBVersion{}, utils.Stacktrace(err, "getting rpc db version")
+		return reply.Version, help.Stacktrace(err, "getting rpc db version", help.UpdateMaeve)
 	}
 	return reply.Version, nil
 }

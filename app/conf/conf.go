@@ -4,14 +4,16 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/goccy/go-yaml"
+	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
 	"golang.org/x/crypto/ssh"
@@ -29,7 +31,7 @@ var (
 
 type MaeveConf struct {
 	Name          string
-	SSHPrivateKey ed25519.PrivateKey
+	SSHPrivateKey ed25519.PrivateKey `yaml:"sshprivatekey,flow"`
 	SSHKnownHosts SSHKnownHosts
 	MaeveDir      string
 	MaxBackups    int
@@ -42,11 +44,13 @@ func GetConf() *MaeveConf {
 	once.Do(func() {
 		var err error
 		maeveConf, err = loadConfig()
-		if err != nil {
-			panic(err)
-		}
+		utils.AssertNoErr("config should be parseable", err)
 	})
 	return maeveConf
+}
+
+func (c *MaeveConf) PublicKey() ed25519.PublicKey {
+	return c.SSHPrivateKey.Public().(ed25519.PublicKey)
 }
 
 // Reads/Creates the config file.
@@ -60,11 +64,11 @@ func loadConfig() (*MaeveConf, error) {
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, utils.Stacktrace(err, "parsing config file")
+			return nil, help.Stacktrace(err, "parsing config file", help.DelConfig)
 		}
 		// File exists since there is no error, so unmarshal it.
-	} else if err := json.Unmarshal(data, &conf); err != nil {
-		return nil, utils.Stacktrace(err, "unmarshalling config file")
+	} else if err := yaml.Unmarshal(data, conf); err != nil {
+		return nil, help.Stacktrace(err, "unmarshalling config file", help.DelConfig)
 	}
 
 	if err := conf.applyDefaults(); err != nil {
@@ -81,7 +85,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.Name == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return utils.Stacktrace(err, "getting hostname")
+			return help.Stacktrace(err, "getting hostname", help.DevError)
 		}
 		c.Name = hostname
 	}
@@ -89,7 +93,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
 		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return utils.Stacktrace(err, "generating ssh key")
+			return help.Stacktrace(err, "generating ssh key", help.DevError)
 		}
 		c.SSHPrivateKey = privateKey
 	}
@@ -101,7 +105,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.MaeveDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return utils.Stacktrace(err, "getting home dir")
+			return help.Stacktrace(err, "getting home dir", help.DevError)
 		}
 		c.MaeveDir = filepath.Join(homeDir, "Maeve")
 	}
@@ -129,19 +133,19 @@ func (c *MaeveConf) SaveToFile() error {
 		return err
 	}
 
-	data, err := json.Marshal(c)
+	data, err := yaml.Marshal(c)
 	if err != nil {
-		return utils.Stacktrace(err, "marshalling config")
+		return help.Stacktrace(err, "marshalling config", help.DevError)
 	}
 
 	f, err := utils.Create(confPath)
 	if err != nil {
-		return utils.Stacktrace(err, "creating config file")
+		return help.Stacktrace(err, "creating config file", help.DelConfig)
 	}
 	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
-		return utils.Stacktrace(err, "writing data to config file")
+		return help.Stacktrace(err, "writing data to config file", help.DelConfig)
 	}
 
 	return nil
@@ -150,7 +154,7 @@ func (c *MaeveConf) SaveToFile() error {
 func configPath() (string, error) {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", utils.Stacktrace(err, "reading user dir")
+		return "", help.Stacktrace(err, "reading user dir", help.DevError)
 	}
 	confPath := filepath.Join(userDir, "maeve", "config.yml")
 	return confPath, nil
@@ -158,10 +162,14 @@ func configPath() (string, error) {
 
 func (c *MaeveConf) MyNode() string {
 	pubKey, err := ssh.NewPublicKey(c.SSHPrivateKey.Public())
-	utils.PanicOnErr("cannot generate pub key from config private key", err)
+	utils.AssertNoErr("cannot generate pub key from config private key", err)
 	sum := blake3.Sum512(pubKey.Marshal())
 	keyHash := hex.EncodeToString(sum[:3])
-	return filepath.Join(c.MaeveDir, c.Name+"_"+keyHash)
+	return filepath.Join(c.MaeveDir, fmt.Sprintf("%s_%s", c.Name, keyHash))
+}
+
+func (c *MaeveConf) NodeDir(node string) string {
+	return filepath.Join(c.MaeveDir, node)
 }
 
 // TODO: REMOVE ALL OF THE FOLLOWING
@@ -178,10 +186,6 @@ func (c *MaeveConf) HashFile(dir string) string {
 
 func (c *MaeveConf) SelfDir() string {
 	return filepath.Join(c.MaeveDir, "my_latest")
-}
-
-func (c *MaeveConf) NodeDir(node string) string {
-	return filepath.Join(c.MaeveDir, "backups", node)
 }
 
 func (c *MaeveConf) NodeDirTemp(node string) string {

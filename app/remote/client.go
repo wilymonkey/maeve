@@ -1,42 +1,32 @@
 package remote
 
 import (
-	"os"
+	"fmt"
 	"strings"
 
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/help"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func NewSSHClient(address string) (*ssh.Client, error) {
+	cfg := conf.GetConf()
 	user, host, port := parseAddress(address)
 
-	key, err := os.ReadFile(conf.GetConf().SSHKey)
+	signer, err := ssh.NewSignerFromKey(cfg.SSHPrivateKey)
 	if err != nil {
-		return nil, utils.WrapErr(err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, utils.WrapErr(err)
-	}
-
-	hostKeyCallback, err := knownhosts.New(conf.GetConf().SSHKnownHosts)
-	if err != nil {
-		return nil, utils.WrapErr(err)
+		return nil, help.Stacktrace(err, "parsing private key", help.DelPrivateKey)
 	}
 
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: hostKeyCallback,
+		HostKeyCallback: cfg.SSHKnownHosts.HostKeyCallback(),
 	}
 
-	client, err := ssh.Dial("tcp", host+":"+port, config)
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", host, port), config)
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return nil, help.Stacktrace(err, "dialing ssh server", help.CheckNodeConn)
 	}
 	return client, nil
 }

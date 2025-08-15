@@ -40,9 +40,17 @@ func DeleteBtn(tapped func()) *widget.Button {
 	return btn
 }
 
+func PencilBtn(tapped func()) *widget.Button {
+	return widget.NewButtonWithIcon("", icons.PencilSvg, tapped)
+}
+
+func DupliBtn(tapped func()) *widget.Button {
+	return widget.NewButtonWithIcon("", icons.DuplicateSvg, tapped)
+}
+
 func EditBtn(onPred func() bool, onEdit func(), onConfirm func()) *widget.Button {
 	var btn *widget.Button
-	btn = widget.NewButtonWithIcon("", icons.PencilSvg, func() {
+	btn = PencilBtn(func() {
 		if onPred() {
 			onEdit()
 			btn.SetIcon(icons.CheckSvg)
@@ -52,11 +60,6 @@ func EditBtn(onPred func() bool, onEdit func(), onConfirm func()) *widget.Button
 		}
 	})
 	return btn
-}
-
-func PrimaryBox(objects fyne.CanvasObject) fyne.CanvasObject {
-	background := canvas.NewRectangle(theme.Color(theme.ColorNamePrimary))
-	return container.NewStack(background, objects)
 }
 
 func GreyBox(objects fyne.CanvasObject) fyne.CanvasObject {

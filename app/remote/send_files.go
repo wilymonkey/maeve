@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"fmt"
 	"io"
 	netRPC "net/rpc"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/pkg/sftp"
 	"github.com/wilymonkey/maeve/conf"
 	hs "github.com/wilymonkey/maeve/hashsums"
+	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -163,7 +165,8 @@ func pushFile(
 	remoteFile, err := sftpClient.Create(remotePath)
 	defer remoteFile.Close()
 	if err != nil {
-		return status, utils.WrapErrWithInfo(err, remotePath)
+		task := fmt.Sprintf("creating file: %q", remotePath)
+		return status, help.Stacktrace(err, task, help.DelBackupDir)
 	}
 	rateKB := conf.GetConf().MaxUpload * 1024
 	pw := &progWriter{

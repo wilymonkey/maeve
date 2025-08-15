@@ -8,11 +8,9 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/gui"
-	"github.com/wilymonkey/maeve/overseer"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/theme"
 )
@@ -42,11 +40,13 @@ func main() {
 
 	switch {
 	case *flagBackupAll:
-		startGUI(backupWindow)
+		startApp(func(app fyne.App) fyne.Window {
+			return backup.Launch(app, true)
+		})
 		return
 
 	case *flagVersion:
-		printVersion()
+		fmt.Printf("%s\n", conf.Version)
 		return
 
 	case *flagServer:
@@ -58,35 +58,24 @@ func main() {
 		return
 
 	default:
-		overseer.GlobalInteractive = true
-		startGUI(gui.Render)
+		startApp(func(app fyne.App) fyne.Window {
+			w := app.NewWindow("Maeve")
+			w.SetContent(gui.Render())
+			return w
+		})
 	}
 }
 
-func printVersion() {
-	fmt.Printf("%s\n", conf.Version)
-	os.Exit(0)
-}
-
-func startGUI(content func() fyne.CanvasObject) {
+func startApp(window func(app fyne.App) fyne.Window) {
 	gui.Global = gui.NewState()
 
 	a := app.NewWithID("wilymonkey/maeve")
 	a.Settings().SetTheme(&theme.Theme{})
-	w := a.NewWindow("Maeve")
-	w.SetPadded(false)
-	w.SetContent(content())
+	w := window(a)
 
 	if err := gui.Global.Load(w); err != nil {
 		log.Fatalf("Failed to start UI:  %v", err)
 	}
 
 	w.ShowAndRun()
-}
-
-func backupWindow() fyne.CanvasObject {
-	state := backup.NewState()
-	return container.NewPadded(
-		backup.Dialog(state, func() { fyne.CurrentApp().Quit() }, true),
-	)
 }

@@ -1,7 +1,7 @@
 package db
 
 import (
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/help"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
@@ -21,9 +21,13 @@ func createSchema(conn *sqlite.Conn) error {
 		size INTEGER NOT NULL,
 		mod_time TEXT NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS size_signature (
+	    id INTEGER PRIMARY KEY CHECK (id = 1),
+	    signature BLOB NOT NULL
+	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {
-		return utils.Stacktrace(err, "creating schema")
+		return help.Stacktrace(err, "creating schema", help.DelDB)
 	}
 	return nil
 }

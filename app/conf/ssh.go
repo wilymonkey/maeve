@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/help"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -29,7 +29,7 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 		host := strings.Split(hostname, ":")[0]
 		if host == "" {
 			err := fmt.Errorf("cannot find host for %s", hostname)
-			return utils.Stacktrace(err, "parsing hostname")
+			return help.Stacktrace(err, "parsing hostname", help.DelKnownHost)
 		}
 		storedKey, exists := s.Hosts[host]
 		if !exists {
@@ -38,12 +38,8 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 		}
 
 		if !bytes.Equal(key.Marshal(), storedKey.Marshal()) {
-			err := fmt.Errorf("host key mismatch for %s: expected %s, got %s",
-				host,
-				ssh.FingerprintSHA256(storedKey),
-				ssh.FingerprintSHA256(key),
-			)
-			return utils.Stacktrace(err, "validating keys")
+			err := fmt.Errorf("host key mismatch for %s", host)
+			return help.Stacktrace(err, "validating keys", help.DelKnownHost)
 		}
 
 		return nil

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"net/rpc"
 
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/help"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -21,30 +21,34 @@ func (n *NodeConn) Close() {
 }
 
 func NewNodeConn(node string, onStderr func(err string)) (*NodeConn, error) {
+	checkConn := func(err error, task string) error {
+		return help.Stacktrace(err, task, help.CheckNodeConn)
+	}
+
 	sshClient, err := NewSSHClient(node)
 	if err != nil {
 		return nil, err
 	}
 	sshSession, err := sshClient.NewSession()
 	if err != nil {
-		return nil, utils.Stacktrace(err, "creating ssh session")
+		return nil, checkConn(err, "creating ssh session")
 	}
 
 	stdinPipe, err := sshSession.StdinPipe()
 	if err != nil {
-		return nil, utils.Stacktrace(err, "getting stdin pipe")
+		return nil, checkConn(err, "getting stdin pipe")
 	}
 	stdoutPipe, err := sshSession.StdoutPipe()
 	if err != nil {
-		return nil, utils.Stacktrace(err, "getting stdout pipe")
+		return nil, checkConn(err, "getting stdout pipe")
 	}
 	stderrPipe, err := sshSession.StderrPipe()
 	if err != nil {
-		return nil, utils.Stacktrace(err, "getting stderr pipe")
+		return nil, checkConn(err, "getting stderr pipe")
 	}
 
 	if err := sshSession.Start("maeve --server"); err != nil {
-		return nil, utils.Stacktrace(err, "starting remote maeve as server")
+		return nil, checkConn(err, "starting remote maeve as server")
 	}
 
 	go func() {

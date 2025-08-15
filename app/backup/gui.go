@@ -2,12 +2,14 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/theme"
@@ -21,6 +23,7 @@ type guiState struct {
 	err           binding.String
 	ctx           context.Context
 	ctxCancel     context.CancelFunc
+	window        fyne.Window
 
 	// OLD
 	hashDone    bool
@@ -44,7 +47,7 @@ func (s *guiState) FatalErr(err error) {
 	}
 }
 
-func NewState() guiState {
+func NewState(window fyne.Window) guiState {
 	cfg := conf.GetConf()
 
 	backupDirs := make([]BackupDirMeta, len(cfg.BackupDirs))
@@ -71,6 +74,7 @@ func NewState() guiState {
 		err:           binding.NewString(),
 		ctx:           ctx,
 		ctxCancel:     ctxCancel,
+		window:        window,
 
 		// OLD
 		pushProg: newPushProgress(0),
@@ -81,52 +85,82 @@ type nodeState struct {
 	err binding.String
 }
 
-func Dialog(state guiState, exitNow func(), exitOnDone bool) fyne.CanvasObject {
+func Launch(app fyne.App, exitOnDone bool) fyne.Window {
+	window := app.NewWindow("Maeve - Backing Up")
+	state := NewState(window)
+	window.SetContent(mainWindow(state, exitOnDone))
+	return window
+}
+
+func mainWindow(state guiState, exitOnDone bool) fyne.CanvasObject {
 	go func() {
 		if err := Backup(state); err != nil {
 			state.FatalErr(err)
+		}
+		for _, node := range state.nodeStates {
+			if utils.GetOrPanic(node.err) != "" {
+				state.FatalErr(errors.New("One or more PCs failed to sync"))
+				break
+			}
+		}
+		state.ctxCancel()
+		if utils.GetOrPanic(state.err) != "" {
+			showError(state)
 		} else if exitOnDone {
-			fyne.Do(exitNow)
+			fyne.Do(state.window.Close)
 		}
 	}()
-	body := container.NewScroll(
-		container.NewVBox(
-			theme.NewH2("Checking PC State"),
-			backupDirMetaTable(state.backupDirMeta),
-			theme.NewH2("Preparing Backup Files"),
-			theme.NewH2("Send to PCs"),
-			ErrorLabel(state.err),
-		),
-	)
-	body.SetMinSize(fyne.NewSize(600, 500))
 
-	var cancelBtn *widget.Button
-	cancelBtn = widget.NewButton(
-		"Cancel",
-		func() {
-			if cancelBtn.Importance == widget.DangerImportance {
-				state.ctxCancel()
-			} else {
-				fyne.Do(exitNow)
-			}
-		},
-	)
-	cancelBtn.Importance = widget.DangerImportance
-	go func() {
-		<-state.ctx.Done()
-		fyne.Do(func() {
-			cancelBtn.SetText("Okay")
-			cancelBtn.Importance = widget.SuccessImportance
-			cancelBtn.Refresh()
-		})
-	}()
+	cancelBtn := func() fyne.CanvasObject {
+		var cancelBtn *widget.Button
+		cancelBtn = widget.NewButton(
+			"Cancel",
+			func() {
+				if cancelBtn.Importance == widget.MediumImportance {
+					state.ctxCancel()
+				} else {
+					fyne.Do(state.window.Close)
+				}
+			},
+		)
+		go func() {
+			<-state.ctx.Done()
+			fyne.Do(func() {
+				cancelBtn.SetText("Okay")
+				cancelBtn.Importance = widget.SuccessImportance
+				cancelBtn.Refresh()
+			})
+		}()
+		return cancelBtn
+	}
 
 	return container.NewBorder(
 		nil,
-		cancelBtn,
+		cancelBtn(),
 		nil,
 		nil,
-		body,
+		container.NewGridWithRows(3,
+			container.NewBorder(
+				theme.NewH2("Checking PC State"),
+				nil,
+				nil,
+				nil,
+			),
+			container.NewBorder(
+				theme.NewH2("Preparing Backup Files"),
+				nil,
+				nil,
+				nil,
+				backupDirMetaTable(state.backupDirMeta),
+			),
+			container.NewBorder(
+				theme.NewH2("Send to PCs"),
+				nil,
+				nil,
+				nil,
+				nodeStatusTable(state.nodeStates),
+			),
+		),
 	)
 }
 
@@ -189,6 +223,50 @@ func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {
 	return scroll
 }
 
+func nodeStatusTable(nodeStates map[string]*nodeState) fyne.CanvasObject {
+	cfg := conf.GetConf()
+
+	table := widget.NewTable(
+		func() (int, int) {
+			totalRows := len(nodeStates) + 1
+			totalCols := 2
+			return totalRows, totalCols
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(cell widget.TableCellID, o fyne.CanvasObject) {
+			label := o.(*widget.Label)
+
+			if cell.Row == 0 {
+				switch cell.Col {
+				case 0:
+					label.SetText("PC")
+				case 1:
+					label.SetText("State")
+					label.Alignment = fyne.TextAlignCenter
+				}
+			} else {
+				name := cfg.RemoteNodes[cell.Row-1]
+				pc := nodeStates[name]
+				switch cell.Col {
+				case 0:
+					truncPath := utils.TruncateStr(name, 25)
+					label.SetText(truncPath)
+				case 1:
+					label.Bind(pc.err)
+					label.Wrapping = fyne.TextWrapWord
+				}
+			}
+		},
+	)
+	table.SetColumnWidth(0, 250)
+	table.SetColumnWidth(1, 300)
+	scroll := container.NewStack(table)
+	scroll.Resize(fyne.NewSize(600, 200))
+	return scroll
+}
+
 func ErrorLabel(err binding.String) fyne.CanvasObject {
 	dangerBox := theme.ErrorBox(err)
 	dangerBox.Hide()
@@ -198,4 +276,27 @@ func ErrorLabel(err binding.String) fyne.CanvasObject {
 		}
 	}))
 	return dangerBox
+}
+
+func showError(state guiState) {
+	var d *dialog.CustomDialog
+
+	cancelBtn := func() fyne.CanvasObject {
+		cancelBtn := widget.NewButton("OK", func() { d.Dismiss() })
+		cancelBtn.Importance = widget.HighImportance
+		return cancelBtn
+	}
+
+	d = dialog.NewCustomWithoutButtons(
+		"ERROR",
+		container.NewBorder(
+			nil,
+			cancelBtn(),
+			nil,
+			nil,
+			widget.NewLabelWithData(state.err),
+		),
+		state.window,
+	)
+	d.Show()
 }

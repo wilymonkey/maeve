@@ -23,17 +23,25 @@ func Backup(state guiState) error {
 	return nil
 }
 
-type nodeDBVersion struct {
+type nodeVersion struct {
 	node    string
 	version *db.DBVersion
 }
 
+func (nv *nodeVersion) snapshot() float64 {
+	return float64(nv.version.LatestSnapshot.Unix())
+}
+
+func (nv *nodeVersion) size() float64 {
+	return float64(nv.version.Size)
+}
+
 func repairDB(conn *sqlite.Conn, state guiState) error {
-	localVersion, err := db.GetVersion(conn)
+	localVersion, err := db.GetVersion(conn, conf.GetConf().MyNode())
 	if err != nil {
 		return err
 	}
-	versionChan := make(chan nodeDBVersion, 10)
+	versionChan := make(chan nodeVersion, 10)
 	collectVersions := utils.CollectChan(versionChan)
 
 	eGrp, _ := state.ErrGroup(2)
@@ -53,7 +61,7 @@ func repairDB(conn *sqlite.Conn, state guiState) error {
 				nodeState.err.Set(err.Error())
 				return nil
 			}
-			versionChan <- nodeDBVersion{node: node, version: dbVersion}
+			versionChan <- nodeVersion{node: node, version: dbVersion}
 			return nil
 		})
 	}
@@ -64,7 +72,8 @@ func repairDB(conn *sqlite.Conn, state guiState) error {
 	}
 
 	remoteVersions := collectVersions()
-	node := findLatestVersion(localVersion, remoteVersions)
+	lv := nodeVersion{"", localVersion}
+	node := findBestVersion(append([]nodeVersion{lv}, remoteVersions...))
 	if node == "" {
 		return nil
 	}
@@ -72,48 +81,33 @@ func repairDB(conn *sqlite.Conn, state guiState) error {
 	return nil
 }
 
-func findLatestVersion(local *db.DBVersion, nodeVersions []nodeDBVersion) string {
-	agreementMap := make(map[int64]int)
-	for _, v := range nodeVersions {
-		for _, snapshot := range v.version.Snapshot {
-			agreementMap[snapshot.Unix()]++
-		}
-	}
-	for _, snapshot := range local.Snapshot {
-		agreementMap[snapshot.Unix()]++
-	}
-	for snapshot, score := range agreementMap {
-		if score < 2 {
-			delete(agreementMap, snapshot)
-		}
-	}
-
-	scores := make([]int, len(nodeVersions))
-	var localScore int
-	for i, v := range nodeVersions {
-		for _, snapshot := range v.version.Snapshot {
-			if _, exists := agreementMap[snapshot.Unix()]; exists {
-				scores[i]++
-			}
-		}
-	}
-	for _, snapshot := range local.Snapshot {
-		if _, exists := agreementMap[snapshot.Unix()]; exists {
-			localScore++
+func findBestVersion(nodeVersions []nodeVersion) string {
+	pubKey := conf.GetConf().PublicKey()
+	var verified []nodeVersion
+	var latestSnapshot float64
+	latestSnapshotWeight := 0.25
+	var largestSize float64
+	largestSizeWeight := 1 - latestSnapshot
+	for _, nv := range nodeVersions {
+		if nv.version.IsValid(pubKey) {
+			verified = append(verified, nv)
+			largestSize = max(nv.size(), largestSize)
+			latestSnapshot = max(nv.snapshot(), latestSnapshot)
 		}
 	}
 
-	var bestNodeIdx int
-	var bestNodeScore int
-	for i, s := range scores {
-		if s > bestNodeScore {
-			bestNodeIdx = i
-			bestNodeScore = s
+	type nodeWeight struct {
+		node   string
+		weight float64
+	}
+	var bestNode nodeWeight
+	for _, nv := range verified {
+		w1 := (nv.snapshot() / latestSnapshot) * latestSnapshotWeight
+		w2 := (nv.size() / largestSize) * largestSizeWeight
+		total := w1 + w2
+		if bestNode.weight < total {
+			bestNode = nodeWeight{nv.node, total}
 		}
 	}
-	if bestNodeScore > localScore {
-		return nodeVersions[bestNodeIdx].node
-	} else {
-		return ""
-	}
+	return bestNode.node
 }
