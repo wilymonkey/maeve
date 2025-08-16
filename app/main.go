@@ -60,6 +60,7 @@ func main() {
 	default:
 		startApp(func(app fyne.App) fyne.Window {
 			w := app.NewWindow("Maeve")
+			gui.LoadState(w)
 			w.SetContent(gui.Render())
 			return w
 		})
@@ -67,15 +68,8 @@ func main() {
 }
 
 func startApp(window func(app fyne.App) fyne.Window) {
-	gui.Global = gui.NewState()
-
 	a := app.NewWithID("wilymonkey/maeve")
 	a.Settings().SetTheme(&theme.Theme{})
 	w := window(a)
-
-	if err := gui.Global.Load(w); err != nil {
-		log.Fatalf("Failed to start UI:  %v", err)
-	}
-
 	w.ShowAndRun()
 }

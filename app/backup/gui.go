@@ -141,20 +141,20 @@ func mainWindow(state guiState, exitOnDone bool) fyne.CanvasObject {
 		nil,
 		container.NewGridWithRows(3,
 			container.NewBorder(
-				theme.NewH2("Checking PC State"),
+				theme.H2("Checking PC State"),
 				nil,
 				nil,
 				nil,
 			),
 			container.NewBorder(
-				theme.NewH2("Preparing Backup Files"),
+				theme.H2("Preparing Backup Files"),
 				nil,
 				nil,
 				nil,
 				backupDirMetaTable(state.backupDirMeta),
 			),
 			container.NewBorder(
-				theme.NewH2("Send to PCs"),
+				theme.H2("Send to PCs"),
 				nil,
 				nil,
 				nil,

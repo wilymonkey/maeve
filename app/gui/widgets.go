@@ -17,6 +17,6 @@ var faviconSvg = &fyne.StaticResource{
 func favicon(size float32) *canvas.Image {
 	img := canvas.NewImageFromResource(faviconSvg)
 	img.FillMode = canvas.ImageFillContain
-	img.SetMinSize(fyne.NewSize(size, size))
+	img.SetMinSize(fyne.NewSquareSize(size))
 	return img
 }

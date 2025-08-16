@@ -8,11 +8,11 @@ import (
 	"github.com/wilymonkey/maeve/utils"
 )
 
-var Global State
+var global State
 
 type State struct {
 	Name        binding.String
-	BackupDir   binding.String
+	MaeveDir    binding.String
 	MaxBackups  binding.Int
 	MaxUpload   binding.String
 	RemoteNodes binding.StringList
@@ -20,82 +20,46 @@ type State struct {
 	Window      fyne.Window
 }
 
-func NewState() State {
-	return State{
-		Name:        binding.NewString(),
-		BackupDir:   binding.NewString(),
-		MaxBackups:  binding.NewInt(),
+func LoadState(window fyne.Window) {
+	cfg := conf.GetConf()
+
+	state := State{
+		Name:        binding.BindString(&cfg.Name),
+		MaeveDir:    binding.BindString(&cfg.MaeveDir),
+		MaxBackups:  binding.BindInt(&cfg.MaxBackups),
 		MaxUpload:   binding.NewString(),
-		RemoteNodes: binding.NewStringList(),
-		SourceDirs:  binding.NewStringList(),
+		RemoteNodes: binding.BindStringList(&cfg.RemoteNodes),
+		SourceDirs:  binding.BindStringList(&cfg.BackupDirs),
+		Window:      window,
 	}
+
+	state.MaxUpload.Set(utils.BytesToHuman(cfg.MaxUpload))
+	state.MaxUpload.AddListener(binding.NewDataListener(func() {
+		val := utils.GetOrPanic(state.MaxUpload)
+		max, err := utils.ParseHumanBytes(val)
+		if err != nil {
+			state.ShowError(err)
+		}
+		cfg.MaxUpload = max
+		state.MaxUpload.Set(utils.BytesToHuman(cfg.MaxUpload))
+	}))
+
+	saveOnChange(state.Name, state.MaeveDir, state.MaxUpload)
+	saveOnChange(state.MaxBackups)
+	saveOnChange(state.RemoteNodes, state.SourceDirs)
+
+	global = state
 }
 
-func (s *State) Load(w fyne.Window) error {
-	c := conf.GetConf()
-	s.Name.Set(c.Name)
-	s.Name.AddListener(binding.NewDataListener(func() {
-		name := utils.GetOrPanic(s.Name)
-		c.Name = name
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		}
-	}))
-
-	s.BackupDir.Set(c.MaeveDir)
-	s.BackupDir.AddListener(binding.NewDataListener(func() {
-		backupDir := utils.GetOrPanic(s.BackupDir)
-		c.MaeveDir = backupDir
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		}
-	}))
-
-	s.MaxBackups.Set(c.MaxBackups)
-	s.MaxBackups.AddListener(binding.NewDataListener(func() {
-		maxBackups := utils.GetOrPanic(s.MaxBackups)
-		c.MaxBackups = maxBackups
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		}
-	}))
-
-	s.MaxUpload.Set(utils.BytesToHuman(c.MaxUpload))
-	s.MaxUpload.AddListener(binding.NewDataListener(func() {
-		maxUpload, err := utils.ParseHumanBytes(utils.GetOrPanic(Global.MaxUpload))
-		if err != nil {
-			Global.ShowError(err)
-			return
-		}
-		c.MaxUpload = maxUpload
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		} else {
-			s.MaxUpload.Set(utils.BytesToHuman(maxUpload))
-		}
-	}))
-
-	s.RemoteNodes.Set(c.RemoteNodes)
-	s.RemoteNodes.AddListener(binding.NewDataListener(func() {
-		remoteNodes := utils.GetOrPanic(s.RemoteNodes)
-		c.RemoteNodes = remoteNodes
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		}
-	}))
-
-	s.SourceDirs.Set(c.BackupDirs)
-	s.SourceDirs.AddListener(binding.NewDataListener(func() {
-		sourceDirs := utils.GetOrPanic(s.SourceDirs)
-		c.BackupDirs = sourceDirs
-		if err := c.SaveToFile(); err != nil {
-			s.ShowError(err)
-		}
-	}))
-
-	s.Window = w
-
-	return nil
+func saveOnChange[T any](sources ...binding.Item[T]) {
+	cfg := conf.GetConf()
+	for _, s := range sources {
+		s.AddListener(binding.NewDataListener(func() {
+			if err := cfg.SaveToFile(); err != nil {
+				global.ShowError(err)
+			}
+		}))
+	}
 }
 
 func (s *State) ShowError(err error) {

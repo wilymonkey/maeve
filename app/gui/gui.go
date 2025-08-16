@@ -13,32 +13,31 @@ import (
 
 func Render() fyne.CanvasObject {
 	launchBackup := func() {
-		w := backup.Launch(fyne.CurrentApp(), false)
-		w.Show()
+		backup.Launch(fyne.CurrentApp(), false).Show()
 	}
 
 	return container.NewBorder(
 		container.NewHBox(
-			favicon(64),
-			theme.NewH1("Maeve"),
+			favicon(42),
+			theme.H1("Maeve"),
 		),
 		theme.HighBtn("Backup Now", launchBackup),
 		nil,
 		nil,
 		container.NewGridWithRows(3,
 			container.NewBorder(
-				theme.NewH2("This PC"),
+				theme.H2("This PC"),
 				nil, nil, nil,
 				thisPC(),
 			),
 			container.NewBorder(
-				theme.NewH2("Folders"),
+				theme.H2("Folders"),
 				addSourceDir(),
 				nil, nil,
 				sourceDirs(),
 			),
 			container.NewBorder(
-				theme.NewH2("Backup PCs"),
+				theme.H2("Backup PCs"),
 				addRemoteNote(),
 				nil, nil,
 				remoteNotes(),
@@ -52,9 +51,7 @@ func remoteNotes() fyne.CanvasObject {
 		label := widget.NewLabel("")
 		deleteBtn := theme.DeleteBtn(func() {})
 		return container.NewBorder(
-			nil,
-			nil,
-			nil,
+			nil, nil, nil,
 			deleteBtn,
 			label,
 		)
@@ -70,14 +67,14 @@ func remoteNotes() fyne.CanvasObject {
 			if err != nil {
 				panic(err)
 			}
-			Global.RemoteNodes.Remove(val)
+			global.RemoteNodes.Remove(val)
 		}
 	}
 	w := container.NewScroll(
 		theme.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(
-					Global.RemoteNodes,
+					global.RemoteNodes,
 					emptyRows,
 					updateRows,
 				),
@@ -91,7 +88,7 @@ func remoteNotes() fyne.CanvasObject {
 func addRemoteNote() *fyne.Container {
 	inputEntry := widget.NewEntry()
 	addButton := theme.HighBtn("  +  ", func() {
-		Global.RemoteNodes.Append(inputEntry.Text)
+		global.RemoteNodes.Append(inputEntry.Text)
 		inputEntry.SetText("")
 	})
 	addButton.Disable()
@@ -105,9 +102,7 @@ func addRemoteNote() *fyne.Container {
 	}
 
 	return container.NewBorder(
-		nil,
-		nil,
-		nil,
+		nil, nil, nil,
 		addButton,
 		inputEntry,
 	)

@@ -1,31 +1,42 @@
 package theme
 
 import (
+	"image/color"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/theme/internal/icons"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-func NewH1(text string) *canvas.Text {
+func H1(text string) *canvas.Text {
 	return &canvas.Text{
 		Color:     theme.Color(theme.ColorNameForeground),
 		Text:      text,
-		TextSize:  24.0,
+		TextSize:  theme.Size(theme.SizeNameHeadingText) * 1.5,
 		TextStyle: fyne.TextStyle{Bold: true},
 	}
 }
 
-func NewH2(text string) *canvas.Text {
+func H2(text string) *canvas.Text {
 	return &canvas.Text{
 		Color:     theme.Color(theme.ColorNameForeground),
 		Text:      text,
-		TextSize:  20.0,
+		TextSize:  theme.Size(theme.SizeNameHeadingText),
 		TextStyle: fyne.TextStyle{Bold: true},
+	}
+}
+func SmallText(text string) *canvas.Text {
+	return &canvas.Text{
+		Color:    zinc700,
+		Text:     text,
+		TextSize: theme.Size(theme.SizeNameCaptionText),
 	}
 }
 func HighBtn(label string, tapped func()) *widget.Button {
@@ -99,15 +110,44 @@ func ErrorBox(ErrMsg binding.String) fyne.CanvasObject {
 		bg,
 		container.NewPadded(
 			container.NewBorder(
-				container.NewHBox(
-					icon,
-					title,
-				),
-				nil,
-				nil,
-				nil,
+				container.NewHBox(icon, title),
+				nil, nil, nil,
 				richtext,
 			),
 		),
 	)
+}
+
+// Vbox with no padding.
+func VBox(objects ...fyne.CanvasObject) fyne.CanvasObject {
+	return container.New(
+		layout.NewCustomPaddedVBoxLayout(0),
+		objects...,
+	)
+}
+
+// Show a dialog on a separate window.
+func ShowWindowDialog(
+	currWindow fyne.Window,
+	title string,
+	dlg func(w fyne.Window) dialog.Dialog,
+) {
+	lock := dialog.NewCustomWithoutButtons(
+		"Dialog Open",
+		widget.NewLabel("A dialog is open, close it to unlock this window."),
+		currWindow,
+	)
+
+	w := fyne.CurrentApp().NewWindow(title)
+	w.SetContent(canvas.NewRectangle(color.Black))
+	w.SetFixedSize(true)
+	w.SetPadded(false)
+	w.SetOnClosed(func() { lock.Dismiss() })
+
+	d := dlg(w)
+
+	lock.Show()
+	w.Show()
+	d.Show()
+	d.SetOnClosed(func() { w.Close() })
 }

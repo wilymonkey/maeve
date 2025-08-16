@@ -18,7 +18,7 @@ func makeGUI() fyne.CanvasObject {
 			container.NewBorder(
 				container.NewHBox(
 					favicon(64),
-					theme.NewH1("Maeve Installer"),
+					theme.H1("Maeve Installer"),
 				),
 				theme.HighBtn("Install", func() {
 					if err := Global.Install(); err != nil {
@@ -34,7 +34,7 @@ func makeGUI() fyne.CanvasObject {
 }
 
 func body() *fyne.Container {
-	keysDisabled := container.NewCenter(theme.NewH2("Backup PCs Only"))
+	keysDisabled := container.NewCenter(theme.H2("Backup PCs Only"))
 	keyTable := widget.NewListWithData(Global.sshKeys,
 		func() fyne.CanvasObject {
 			label := widget.NewLabel("")
@@ -92,9 +92,9 @@ If a key is no longer being used please remove it.`)
 	serverExp.Wrapping = fyne.TextWrapWord
 
 	return container.NewVBox(
-		theme.NewH2("Is this a Backup PC?"),
+		theme.H2("Is this a Backup PC?"),
 		widget.NewCheckWithData("Yes, this is where backups will be kept.", Global.isServer),
-		theme.NewH2("Maeve Keys"),
+		theme.H2("Maeve Keys"),
 		serverExp,
 		theme.GreyBox(sshKeys),
 		inputSSH(),

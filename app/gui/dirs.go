@@ -10,35 +10,36 @@ import (
 )
 
 func sourceDirs() fyne.CanvasObject {
+	blankRows := func() fyne.CanvasObject {
+		label := widget.NewLabel("")
+		deleteBtn := theme.DeleteBtn(func() {})
+		return container.NewBorder(
+			nil, nil, nil,
+			deleteBtn,
+			label,
+		)
+	}
+	updateRows := func(i binding.DataItem, o fyne.CanvasObject) {
+		row := o.(*fyne.Container)
+		label := row.Objects[0].(*widget.Label)
+		label.Bind(i.(binding.String))
+		label.Truncation = fyne.TextTruncateEllipsis
+		deleteBtn := row.Objects[1].(*widget.Button)
+		deleteBtn.OnTapped = func() {
+			val, err := i.(binding.String).Get()
+			if err != nil {
+				panic(err)
+			}
+			global.SourceDirs.Remove(val)
+		}
+	}
 	w := container.NewScroll(
 		theme.GreyBox(
 			container.NewPadded(
-				widget.NewListWithData(Global.SourceDirs,
-					func() fyne.CanvasObject {
-						label := widget.NewLabel("")
-						deleteBtn := theme.DeleteBtn(func() {})
-						return container.NewBorder(
-							nil,
-							nil,
-							nil,
-							deleteBtn,
-							label,
-						)
-					},
-					func(i binding.DataItem, o fyne.CanvasObject) {
-						row := o.(*fyne.Container)
-						label := row.Objects[0].(*widget.Label)
-						label.Bind(i.(binding.String))
-						label.Truncation = fyne.TextTruncateEllipsis
-						deleteBtn := row.Objects[1].(*widget.Button)
-						deleteBtn.OnTapped = func() {
-							val, err := i.(binding.String).Get()
-							if err != nil {
-								panic(err)
-							}
-							Global.SourceDirs.Remove(val)
-						}
-					},
+				widget.NewListWithData(
+					global.SourceDirs,
+					blankRows,
+					updateRows,
 				),
 			),
 		),
@@ -48,16 +49,18 @@ func sourceDirs() fyne.CanvasObject {
 }
 
 func addSourceDir() fyne.CanvasObject {
-	return theme.HighBtn("Add Folder", func() {
-		dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+	dlg := func(w fyne.Window) dialog.Dialog {
+		return dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
 			if err != nil {
-				Global.ShowError(err)
+				global.ShowError(err)
 				return
 			}
-			if list == nil {
-				return // User canceled
+			if list != nil {
+				global.SourceDirs.Append(list.Path())
 			}
-			Global.SourceDirs.Append(list.Path())
-		}, Global.Window).Show()
+		}, w)
+	}
+	return theme.HighBtn("Add Folder", func() {
+		theme.ShowWindowDialog(global.Window, "Select Folder", dlg)
 	})
 }
