@@ -21,9 +21,9 @@ func createSchema(conn *sqlite.Conn) error {
 		size INTEGER NOT NULL,
 		mod_time TEXT NOT NULL
 	);
-	CREATE TABLE IF NOT EXISTS size_signature (
+	CREATE TABLE IF NOT EXISTS hash_sign (
 	    id INTEGER PRIMARY KEY CHECK (id = 1),
-	    signature BLOB NOT NULL
+	    sign BLOB NOT NULL
 	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {

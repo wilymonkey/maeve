@@ -66,12 +66,12 @@ func ParseHumanBytes(s string) (int64, error) {
 	multiplier, ok := units[unit]
 	if !ok {
 		err := fmt.Errorf("unknown unit: %q", unit)
-		return 0, help.Stacktrace(err, "parsing unit", help.DevError)
+		return 0, help.DevError(err, "parsing unit")
 	}
 
 	val, err := strconv.ParseFloat(numStr, 64)
 	if err != nil {
-		return 0, help.Stacktrace(err, "parsing number", help.DevError)
+		return 0, help.DevError(err, "parsing number")
 	}
 
 	return int64(val * float64(multiplier)), nil

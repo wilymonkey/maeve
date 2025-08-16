@@ -2,54 +2,48 @@ package db
 
 import (
 	"crypto/ed25519"
-	"encoding/binary"
-	"os"
 	"time"
 
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/help"
+	"github.com/zeebo/blake3"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
 type DBVersion struct {
 	LatestSnapshot time.Time
-	Size           int64
-	SizeSignature  []byte
-}
-
-func (v *DBVersion) IsValid(pubkey ed25519.PublicKey) bool {
-	sizeMsg := make([]byte, 8)
-	binary.BigEndian.PutUint64(sizeMsg, uint64(v.Size))
-	return ed25519.Verify(pubkey, sizeMsg, v.SizeSignature)
+	Hash           []byte
+	HashSign       []byte
+	Rows           int64
 }
 
 func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
 	var result DBVersion
 	var err error
 
-	result.Size, err = getDBSize(&conn, dirPath)
+	result.Hash, err = hashDB(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	err = sqlitex.Execute(conn,
-		"SELECT signature FROM size_signature WHERE id = 1;",
+	err = sqlitex.ExecuteTransient(conn,
+		"SELECT sign FROM hash_sign WHERE id = 1;",
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				stmt.ColumnBytes(0, result.SizeSignature)
+				stmt.ColumnBytes(0, result.HashSign)
 				return nil
 			},
 		})
 	if err != nil {
-		return nil, help.Stacktrace(err, "querying total file_hash rows", help.DevError)
+		return nil, help.DevError(err, "finding table version signature")
 	}
 
-	stmt := `SELECT DISTINCT snapshot 
+	err = sqlitex.ExecuteTransient(conn,
+		`SELECT DISTINCT snapshot 
 		FROM file_hash 
 		ORDER BY snapshot DESC 
-		LIMIT 1;`
-	err = sqlitex.Execute(conn, stmt,
+		LIMIT 1;`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				result.LatestSnapshot = time.Unix(stmt.ColumnInt64(0), 0)
@@ -57,69 +51,114 @@ func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.Stacktrace(err, "querying db_version rows", help.DevError)
+		return nil, help.DevError(err, "querying db_version rows")
+	}
+
+	err = sqlitex.ExecuteTransient(conn,
+		"SELECT COUNT(*) FROM file_hash;",
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				result.Rows = stmt.ColumnInt64(0)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, help.DevError(err, "counting file_meta rows")
 	}
 
 	return &result, nil
 }
 
 func SetDBVersion(conn *sqlite.Conn, dirPath string) error {
-	size, err := getDBSize(&conn, dirPath)
+	hash, err := hashDB(conn)
 	if err != nil {
 		return err
 	}
-	sizeMsg := make([]byte, 8)
-	binary.BigEndian.PutUint64(sizeMsg, uint64(size))
-	signature := ed25519.Sign(conf.GetConf().SSHPrivateKey, sizeMsg)
+	sig := ed25519.Sign(conf.GetConf().SSHPrivateKey, hash)
 
-	const stmt = `INSERT OR REPLACE INTO size_signature (id, signature) VALUES (1, ?)`
 	err = sqlitex.ExecuteTransient(conn,
-		stmt,
+		"INSERT OR REPLACE INTO size_signature (id, signature) VALUES (1, ?)",
 		&sqlitex.ExecOptions{
-			Args: []any{signature},
+			Args: []any{sig},
 		})
 	if err != nil {
-		return help.Stacktrace(err, "inserting db size signature", help.DevError)
+		return help.DevError(err, "inserting db signature")
 	}
 	return nil
 }
 
-// Will close the current connect to DB and reopen it.
-func getDBSize(conn **sqlite.Conn, dirPath string) (int64, error) {
-	dbPath := dbPath(dirPath)
-	if err := flushWrites(*conn); err != nil {
-		return 0, err
-	}
+func hashDB(conn *sqlite.Conn) ([]byte, error) {
+	maxRows := 100
+	hasher := blake3.New()
 
-	if err := (*conn).Close(); err != nil {
-		return 0, help.Stacktrace(err, "closing db", help.DevError)
-	}
-
-	stat, err := os.Stat(dbPath)
+	var total int
+	err := sqlitex.ExecuteTransient(conn,
+		"SELECT COUNT(*) FROM file_meta;",
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				total = stmt.ColumnInt(0)
+				return nil
+			},
+		})
 	if err != nil {
-		return 0, help.Stacktrace(err, "getting db stats", help.DevError)
+		return nil, help.DevError(err, "counting file_meta rows")
 	}
 
-	*conn, err = sqlite.OpenConn(dbPath)
-	if err != nil {
-		return 0, help.Stacktrace(err, "opening db", help.DevError)
+	addHashes := func(stmt *sqlite.Stmt) error {
+		var savedHash []byte
+		stmt.ColumnBytes(0, savedHash)
+		hasher.Write(savedHash)
+		if _, err := hasher.Write(savedHash); err != nil {
+			return err
+		}
+		return nil
+	}
+	if total <= maxRows {
+		err := sqlitex.ExecuteTransient(conn,
+			"SELECT hash FROM file_meta ORDER BY hash;",
+			&sqlitex.ExecOptions{ResultFunc: addHashes},
+		)
+		if err != nil {
+			return nil, help.DevError(err, "hashing rows")
+		}
+	} else {
+		for _, offset := range evenOffsets(total, maxRows) {
+			stmt, err := conn.Prepare("SELECT hash FROM file_meta ORDER BY hash LIMIT 1 OFFSET ?;")
+			if err != nil {
+				return nil, help.DevError(err, "preparing hash selecting")
+			}
+			defer stmt.Finalize()
+
+			stmt.BindInt64(1, int64(offset))
+			hasRow, err := stmt.Step()
+			if err != nil {
+				return nil, help.DevError(err, "stepping through rows")
+			}
+			if !hasRow {
+				break
+			}
+			if err := addHashes(stmt); err != nil {
+				return nil, help.DevError(err, "hashing stepped row")
+			}
+		}
 	}
 
-	return stat.Size(), nil
+	return hasher.Sum(nil), nil
 }
 
-func flushWrites(conn *sqlite.Conn) error {
-	err := sqlitex.ExecuteTransient(conn, "PRAGMA wal_checkpoint(FULL);", nil)
-	if err != nil {
-		return help.Stacktrace(err, "creating checkpoint", help.DevError)
+func evenOffsets(dataLen, maxRows int) []int {
+	offsets := make([]int, maxRows)
+	step := dataLen / maxRows
+	remainder := dataLen % maxRows
+
+	offset := 0
+	for i := range maxRows {
+		offsets[i] = offset
+		offset += step
+		if remainder > 0 {
+			offset++
+			remainder--
+		}
 	}
-	err = sqlitex.ExecuteTransient(conn, "PRAGMA synchronous=FULL;", nil)
-	if err != nil {
-		return help.Stacktrace(err, "syncing DB", help.DevError)
-	}
-	err = sqlitex.ExecuteTransient(conn, "PRAGMA optimize;", nil)
-	if err != nil {
-		return help.Stacktrace(err, "optimising DB", help.DevError)
-	}
-	return nil
+	return offsets
 }

@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/backup"
 	"github.com/wilymonkey/maeve/theme"
@@ -13,7 +14,15 @@ import (
 
 func Render() fyne.CanvasObject {
 	launchBackup := func() {
-		backup.Launch(fyne.CurrentApp(), false).Show()
+		lock := dialog.NewCustomWithoutButtons(
+			"Backup Lock",
+			widget.NewLabel("Currently backing up, stop it unlock this window."),
+			global.Window,
+		)
+		w := backup.Launch(fyne.CurrentApp(), false)
+		w.SetOnClosed(func() { lock.Dismiss() })
+		w.Show()
+		lock.Show()
 	}
 
 	return container.NewBorder(

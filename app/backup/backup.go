@@ -1,7 +1,9 @@
 package backup
 
 import (
+	"crypto/ed25519"
 	"errors"
+	"time"
 
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/db"
@@ -10,7 +12,7 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
-func Backup(state guiState) error {
+func Backup(state state) error {
 	conn, err := db.Open(conf.GetConf().MyNode())
 	if err != nil {
 		return err
@@ -28,15 +30,7 @@ type nodeVersion struct {
 	version *db.DBVersion
 }
 
-func (nv *nodeVersion) snapshot() float64 {
-	return float64(nv.version.LatestSnapshot.Unix())
-}
-
-func (nv *nodeVersion) size() float64 {
-	return float64(nv.version.Size)
-}
-
-func repairDB(conn *sqlite.Conn, state guiState) error {
+func repairDB(conn *sqlite.Conn, state state) error {
 	localVersion, err := db.GetVersion(conn, conf.GetConf().MyNode())
 	if err != nil {
 		return err
@@ -83,31 +77,19 @@ func repairDB(conn *sqlite.Conn, state guiState) error {
 
 func findBestVersion(nodeVersions []nodeVersion) string {
 	pubKey := conf.GetConf().PublicKey()
-	var verified []nodeVersion
-	var latestSnapshot float64
-	latestSnapshotWeight := 0.25
-	var largestSize float64
-	largestSizeWeight := 1 - latestSnapshot
-	for _, nv := range nodeVersions {
-		if nv.version.IsValid(pubKey) {
-			verified = append(verified, nv)
-			largestSize = max(nv.size(), largestSize)
-			latestSnapshot = max(nv.snapshot(), latestSnapshot)
-		}
-	}
 
-	type nodeWeight struct {
-		node   string
-		weight float64
-	}
-	var bestNode nodeWeight
-	for _, nv := range verified {
-		w1 := (nv.snapshot() / latestSnapshot) * latestSnapshotWeight
-		w2 := (nv.size() / largestSize) * largestSizeWeight
-		total := w1 + w2
-		if bestNode.weight < total {
-			bestNode = nodeWeight{nv.node, total}
+	var nodeIndex int
+	var latest time.Time
+	var rows int64
+	for i, nv := range nodeVersions {
+		if !ed25519.Verify(pubKey, nv.version.Hash, nv.version.HashSign) {
+			continue
+		}
+		if nv.version.LatestSnapshot.After(latest) && nv.version.Rows >= rows {
+			latest = nv.version.LatestSnapshot
+			rows = nv.version.Rows
+			nodeIndex = i
 		}
 	}
-	return bestNode.node
+	return nodeVersions[nodeIndex].node
 }

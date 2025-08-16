@@ -85,7 +85,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.Name == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return help.Stacktrace(err, "getting hostname", help.DevError)
+			return help.DevError(err, "getting hostname")
 		}
 		c.Name = hostname
 	}
@@ -93,7 +93,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
 		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return help.Stacktrace(err, "generating ssh key", help.DevError)
+			return help.DevError(err, "generating ssh key")
 		}
 		c.SSHPrivateKey = privateKey
 	}
@@ -105,7 +105,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.MaeveDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return help.Stacktrace(err, "getting home dir", help.DevError)
+			return help.DevError(err, "getting home dir")
 		}
 		c.MaeveDir = filepath.Join(homeDir, "Maeve")
 	}
@@ -135,7 +135,7 @@ func (c *MaeveConf) SaveToFile() error {
 
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return help.Stacktrace(err, "marshalling config", help.DevError)
+		return help.DevError(err, "marshalling config")
 	}
 
 	f, err := utils.Create(confPath)
@@ -154,7 +154,7 @@ func (c *MaeveConf) SaveToFile() error {
 func configPath() (string, error) {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", help.Stacktrace(err, "reading user dir", help.DevError)
+		return "", help.DevError(err, "reading user dir")
 	}
 	confPath := filepath.Join(userDir, "maeve", "config.yml")
 	return confPath, nil

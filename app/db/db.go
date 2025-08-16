@@ -6,6 +6,7 @@ import (
 	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
 func Open(dirPath string) (*sqlite.Conn, error) {
@@ -28,4 +29,20 @@ func Open(dirPath string) (*sqlite.Conn, error) {
 
 func dbPath(dirPath string) string {
 	return path.Join(dirPath, "maeve.db")
+}
+
+func flushWrites(conn *sqlite.Conn) error {
+	err := sqlitex.ExecuteTransient(conn, "PRAGMA wal_checkpoint(FULL);", nil)
+	if err != nil {
+		return help.DevError(err, "creating checkpoint")
+	}
+	err = sqlitex.ExecuteTransient(conn, "PRAGMA synchronous=FULL;", nil)
+	if err != nil {
+		return help.DevError(err, "syncing DB")
+	}
+	err = sqlitex.ExecuteTransient(conn, "PRAGMA optimize;", nil)
+	if err != nil {
+		return help.DevError(err, "optimising DB")
+	}
+	return nil
 }
