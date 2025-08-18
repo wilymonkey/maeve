@@ -91,6 +91,14 @@ func loadState(window fyne.Window) {
 		// OLD
 		pushProg: newPushProgress(0),
 	}
+
+	guiState.err.AddListener(binding.NewDataListener(func() {
+		err := fynext.GetOrPanic(guiState.err)
+		if err != nil {
+			guiState.ctxCancel()
+			showErrorDialog()
+		}
+	}))
 }
 
 func Launch(app fyne.App, exitOnDone bool) fyne.Window {
@@ -102,19 +110,18 @@ func Launch(app fyne.App, exitOnDone bool) fyne.Window {
 
 func mainWindow(exitOnDone bool) fyne.CanvasObject {
 	go func() {
-		if err := Backup(guiState); err != nil {
+		if err := Backup(); err != nil {
 			guiState.err.Set(err)
 		}
+		guiState.ctxCancel()
+
 		for _, node := range guiState.nodeStates {
 			if fynext.GetOrPanic(node.err) != nil {
 				guiState.err.Set(errors.New("One or more PCs failed to sync"))
 				break
 			}
 		}
-		guiState.ctxCancel()
-		if fynext.GetOrPanic(guiState.err) != nil {
-			guiState.showError()
-		} else if exitOnDone {
+		if fynext.GetOrPanic(guiState.err) == nil && exitOnDone {
 			// TODO: remove this when done.
 			// fyne.Do(state.window.Close)
 		}
@@ -241,7 +248,7 @@ func nodeStatusTable(nodeStatus map[string]*nodeStatus) fyne.CanvasObject {
 	objects := make([]fyne.CanvasObject, 0, len(cfg.RemoteNodes)*2)
 	for _, node := range cfg.RemoteNodes {
 		status := nodeStatus[node]
-		sLabel := help.Widget(status.err)
+		errStatus := help.NewWidget(status.err)
 		border := container.NewBorder(
 			nil, nil,
 			fynext.LabelDisableUntil(
@@ -250,7 +257,7 @@ func nodeStatusTable(nodeStatus map[string]*nodeStatus) fyne.CanvasObject {
 				pushing,
 			),
 			nil,
-			sLabel,
+			errStatus,
 		)
 		sep := widget.NewSeparator()
 		objects = append(objects, border, sep)
@@ -260,18 +267,7 @@ func nodeStatusTable(nodeStatus map[string]*nodeStatus) fyne.CanvasObject {
 	return container.NewVScroll(vbox)
 }
 
-func ErrorLabel(err binding.String) fyne.CanvasObject {
-	dangerBox := fynext.ErrorBox(err)
-	dangerBox.Hide()
-	err.AddListener(binding.NewDataListener(func() {
-		if s, e := err.Get(); s != "" && e == nil {
-			dangerBox.Show()
-		}
-	}))
-	return dangerBox
-}
-
-func (state *state) showError() {
+func showErrorDialog() {
 	dlg := func(w fyne.Window) dialog.Dialog {
 		var d *dialog.CustomDialog
 
@@ -284,7 +280,7 @@ func (state *state) showError() {
 		d = dialog.NewCustomWithoutButtons(
 			"ERROR",
 			container.NewVBox(
-				help.Widget(state.err),
+				help.NewWidget(guiState.err),
 				cancelBtn(),
 			),
 			w,
@@ -293,6 +289,6 @@ func (state *state) showError() {
 	}
 
 	fyne.Do(func() {
-		fynext.ShowWindowDialog(state.window, "ERROR", dlg)
+		fynext.ShowWindowDialog(guiState.window, "ERROR", dlg)
 	})
 }

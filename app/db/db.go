@@ -10,7 +10,7 @@ import (
 )
 
 func Open(dirPath string) (*sqlite.Conn, error) {
-	dbPath := dbPath(dirPath)
+	dbPath := DBPath(dirPath)
 	if err := utils.TouchFile(dbPath); err != nil {
 		return nil, help.Stacktrace(err, "creating db", help.DelBackupDir)
 	}
@@ -27,22 +27,22 @@ func Open(dirPath string) (*sqlite.Conn, error) {
 	return conn, nil
 }
 
-func dbPath(dirPath string) string {
+func DBPath(dirPath string) string {
 	return path.Join(dirPath, "maeve.db")
 }
 
 func flushWrites(conn *sqlite.Conn) error {
 	err := sqlitex.ExecuteTransient(conn, "PRAGMA wal_checkpoint(FULL);", nil)
 	if err != nil {
-		return help.DevError(err, "creating checkpoint")
+		return help.DevReport(err, "creating checkpoint")
 	}
 	err = sqlitex.ExecuteTransient(conn, "PRAGMA synchronous=FULL;", nil)
 	if err != nil {
-		return help.DevError(err, "syncing DB")
+		return help.DevReport(err, "syncing DB")
 	}
 	err = sqlitex.ExecuteTransient(conn, "PRAGMA optimize;", nil)
 	if err != nil {
-		return help.DevError(err, "optimising DB")
+		return help.DevReport(err, "optimising DB")
 	}
 	return nil
 }

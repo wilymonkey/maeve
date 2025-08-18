@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/fynext"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 type Help int
@@ -23,8 +24,9 @@ const (
 	DelBackupDir
 	DelDB
 	DelPrivateKey
-	CheckNodeConn
-	devError
+	checkBackupDir
+	checkNodeConn
+	devReport
 )
 
 func (c Help) string() string {
@@ -43,51 +45,52 @@ func (c Help) string() string {
 		return "delete the .db file in the backup folder"
 	case DelPrivateKey:
 		return "delete the private key"
-	case CheckNodeConn:
+	case checkBackupDir:
+		return "check if the backup folder is one I have access to"
+	case checkNodeConn:
 		return "check if the backup pc (name, ip and port) is correct"
-	case devError:
+	case devReport:
 		return "report it to the developer"
 	default:
 		return "...this shouldn't be possible"
 	}
 }
 
-func DevError(err error, task string) error {
-	return Stacktrace(err, task, devError)
+func CheckBackupDir(err error, task string) error {
+	return newHelpError(err, task, checkBackupDir)
+}
+
+func CheckNodeConn(err error, task string) error {
+	return newHelpError(err, task, checkNodeConn)
+}
+
+func DevReport(err error, task string) error {
+	return newHelpError(err, task, devReport)
 }
 
 func Stacktrace(err error, task string, help Help) error {
-	var stack strings.Builder
-	WriteStacktrace(&stack)
-	return &helpError{
-		help:  help,
-		task:  task,
-		err:   err,
-		stack: stack.String(),
-	}
+	return newHelpError(err, task, help)
 }
 
-func WriteStacktrace(b *strings.Builder) {
-	b.WriteString("...")
+func getStacktrace(start, number int) string {
+	var b strings.Builder
 	before := b.Len()
-	for i := 4; i > 1; i-- {
+	for i := start + number; i > start; i-- {
 		pc, _, _, ok := runtime.Caller(i)
 		if !ok {
-			continue
+			break
 		}
 		fn := runtime.FuncForPC(pc)
 		if fn == nil {
-			continue
+			break
 		}
 		// Extract just the function name (without full package path).
-		fnName := filepath.Base(fn.Name())
-		b.WriteString(" →  ")
-		b.WriteString(fnName)
+		fmt.Fprintf(&b, "%s: ", filepath.Base(fn.Name()))
 	}
 	after := b.Len()
-	if before == after {
-		panic("unable to build stacktrace")
-	}
+	utils.Assert("stacktrace shouldn't be empty", before == after)
+	result := b.String()
+	return result[:b.Len()-2]
 }
 
 type helpError struct {
@@ -97,47 +100,58 @@ type helpError struct {
 	stack string
 }
 
+func newHelpError(err error, task string, help Help) error {
+	return &helpError{
+		help:  help,
+		task:  task,
+		err:   err,
+		stack: getStacktrace(2, 4),
+	}
+}
+
 func (e *helpError) Error() string {
 	return fmt.Sprintf("I was doing %q but got %q", e.task, e.err.Error())
 }
 
-func Widget(errBinding binding.Item[error]) fyne.CanvasObject {
-	// Create a container that will update when the error changes
-	container := widget.NewCard("", "", nil)
+type Widget struct {
+	widget.BaseWidget
+	bound binding.Item[error]
+}
 
-	// Function to update the container's content based on the current error
-	updateContent := func(err error) {
-		var hErr *helpError
-		if errors.As(err, &hErr) {
-			e := err.(*helpError)
-			sl := widget.NewLabel(e.stack)
-			sl.Wrapping = fyne.TextWrapWord
-			content := fynext.VBox(
-				fynext.SmallTxt("Possible Fix"),
-				widget.NewLabel(e.help.string()),
-				fynext.SmallTxt("Task Attempted"),
-				widget.NewLabel(e.task),
-				fynext.SmallTxt("Error"),
-				widget.NewLabel(e.err.Error()),
-				fynext.SmallTxt("Stacktrace"),
-				sl,
-			)
-			container.SetContent(content)
-		} else {
-			container.SetContent(widget.NewLabel(err.Error()))
-		}
-	}
-
-	if err := fynext.GetOrPanic(errBinding); err != nil {
-		updateContent(err)
-	}
-
-	// Set up listener for changes
-	errBinding.AddListener(binding.NewDataListener(func() {
-		if err := fynext.GetOrPanic(errBinding); err != nil {
-			updateContent(err)
-		}
+func NewWidget(err binding.Item[error]) *Widget {
+	w := &Widget{bound: err}
+	w.ExtendBaseWidget(w)
+	w.bound.AddListener(binding.NewDataListener(func() {
+		w.Refresh()
 	}))
+	return w
+}
 
-	return container
+func (w *Widget) CreateRenderer() fyne.WidgetRenderer {
+	val := fynext.GetOrPanic(w.bound)
+
+	if val == nil {
+		lbl := widget.NewLabel("")
+		return widget.NewSimpleRenderer(lbl)
+	}
+
+	var hErr *helpError
+	if errors.As(val, &hErr) {
+		sl := widget.NewLabel(hErr.stack)
+		sl.Wrapping = fyne.TextWrapWord
+
+		content := fynext.VBox(
+			fynext.SmallTxt("Possible Fix"),
+			widget.NewLabel(hErr.help.string()),
+			fynext.SmallTxt("Task Attempted"),
+			widget.NewLabel(hErr.task),
+			fynext.SmallTxt("Error"),
+			widget.NewLabel(hErr.err.Error()),
+			fynext.SmallTxt("Stacktrace"),
+			sl,
+		)
+		return widget.NewSimpleRenderer(content)
+	}
+
+	return widget.NewSimpleRenderer(widget.NewLabel(val.Error()))
 }

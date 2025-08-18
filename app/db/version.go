@@ -36,7 +36,7 @@ func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevError(err, "finding table version signature")
+		return nil, help.DevReport(err, "finding table version signature")
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -51,7 +51,7 @@ func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevError(err, "querying db_version rows")
+		return nil, help.DevReport(err, "querying db_version rows")
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -63,7 +63,7 @@ func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevError(err, "counting file_meta rows")
+		return nil, help.DevReport(err, "counting file_meta rows")
 	}
 
 	return &result, nil
@@ -82,7 +82,7 @@ func SetDBVersion(conn *sqlite.Conn, dirPath string) error {
 			Args: []any{sig},
 		})
 	if err != nil {
-		return help.DevError(err, "inserting db signature")
+		return help.DevReport(err, "inserting db signature")
 	}
 	return nil
 }
@@ -101,7 +101,7 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevError(err, "counting file_meta rows")
+		return nil, help.DevReport(err, "counting file_meta rows")
 	}
 
 	addHashes := func(stmt *sqlite.Stmt) error {
@@ -119,26 +119,26 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			&sqlitex.ExecOptions{ResultFunc: addHashes},
 		)
 		if err != nil {
-			return nil, help.DevError(err, "hashing rows")
+			return nil, help.DevReport(err, "hashing rows")
 		}
 	} else {
 		for _, offset := range evenOffsets(total, maxRows) {
 			stmt, err := conn.Prepare("SELECT hash FROM file_meta ORDER BY hash LIMIT 1 OFFSET ?;")
 			if err != nil {
-				return nil, help.DevError(err, "preparing hash selecting")
+				return nil, help.DevReport(err, "preparing hash selecting")
 			}
 			defer stmt.Finalize()
 
 			stmt.BindInt64(1, int64(offset))
 			hasRow, err := stmt.Step()
 			if err != nil {
-				return nil, help.DevError(err, "stepping through rows")
+				return nil, help.DevReport(err, "stepping through rows")
 			}
 			if !hasRow {
 				break
 			}
 			if err := addHashes(stmt); err != nil {
-				return nil, help.DevError(err, "hashing stepped row")
+				return nil, help.DevReport(err, "hashing stepped row")
 			}
 		}
 	}

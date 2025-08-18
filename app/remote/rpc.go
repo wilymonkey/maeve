@@ -106,14 +106,39 @@ func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply
 	return nil
 }
 
-func (nc *NodeConn) GetDBVersion() (*db.DBVersion, error) {
+func (n *NodeConn) GetDBVersion() (*db.DBVersion, error) {
 	args := &GetDBVersionArgs{Node: conf.GetConf().Name}
 	var reply GetDBVersionReply
-	if err := nc.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
+	if err := n.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
 		return reply.Version, help.Stacktrace(err, "getting rpc db version", help.UpdateMaeve)
 	}
 	return reply.Version, nil
 }
+
+type BackupDirArgs struct {
+	Node string
+}
+type BackupDirReply struct {
+	Path string
+}
+
+func (h *RPCFuncs) BackupDir(args *BackupDirArgs, reply *BackupDirReply) error {
+	reply.Path = conf.GetConf().NodeDir(args.Node)
+	return nil
+}
+
+func (n *NodeConn) backupDir() (string, error) {
+	args := &BackupDirArgs{Node: conf.GetConf().Name}
+	var reply BackupDirReply
+	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
+		return "", help.DevReport(err, "fetching my remote backup dir")
+	}
+	return reply.Path, nil
+}
+
+// =======================================
+// TODO: REMOVE ALL OF THE FOLLOWING
+// =======================================
 
 type TempLocationArgs struct {
 	Node string

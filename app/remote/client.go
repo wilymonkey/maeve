@@ -26,7 +26,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", host, port), config)
 	if err != nil {
-		return nil, help.Stacktrace(err, "dialing ssh server", help.CheckNodeConn)
+		return nil, help.CheckNodeConn(err, "dialing ssh server")
 	}
 	return client, nil
 }

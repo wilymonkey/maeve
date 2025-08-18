@@ -47,6 +47,14 @@ func RedBoldTxt(text string) *canvas.Text {
 	}
 }
 
+func LabelBold(text string) *widget.Label {
+	return widget.NewLabelWithStyle(
+		text,
+		fyne.TextAlignLeading,
+		fyne.TextStyle{Bold: true},
+	)
+}
+
 func LabelDisableUntil[M ~int](label *widget.Label, b binding.Int, match M) *widget.Label {
 	update := func() {
 		if M(GetOrPanic(b)) == match {
