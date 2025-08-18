@@ -18,15 +18,15 @@ import (
 )
 
 type SendStatus struct {
-	Hash      hs.FileHash
+	Hash      hs.OldFileHash
 	Curr      int64
 	Total     int64
 	Verifying bool
 	IsGood    bool
 }
 
-func NewDoneStatus(hash hs.FileHash) (SendStatus, error) {
-	path := hash.AbsPath(conf.GetConf().MyNode())
+func NewDoneStatus(hash hs.OldFileHash) (SendStatus, error) {
+	path := hash.AbsPath(conf.MyNode())
 	localFile, err := os.Open(path)
 	if err != nil {
 		return SendStatus{}, utils.WrapErr(err)
@@ -47,7 +47,7 @@ func NewDoneStatus(hash hs.FileHash) (SendStatus, error) {
 }
 
 func SendFiles(
-	hashes []hs.FileHash,
+	hashes []hs.OldFileHash,
 	sftpClient *sftp.Client,
 	rpcClient *netRPC.Client,
 	ctx context.Context,
@@ -60,7 +60,7 @@ func SendFiles(
 		return utils.WrapErr(err)
 	}
 
-	downChan := make(chan hs.FileHash, 2)
+	downChan := make(chan hs.OldFileHash, 2)
 	verifyChan := make(chan SendStatus, 1)
 
 	eGrp.Go(func() error {
@@ -137,14 +137,14 @@ func SendFiles(
 
 func pushFile(
 	sftpClient *sftp.Client,
-	hash hs.FileHash,
+	hash hs.OldFileHash,
 	remoteDir string,
 	ctx context.Context,
 	progChan chan SendStatus,
 ) (SendStatus, error) {
 	status := SendStatus{Hash: hash}
 
-	path := hash.AbsPath(conf.GetConf().MyNode())
+	path := hash.AbsPath(conf.MyNode())
 	localFile, err := os.Open(path)
 	if err != nil {
 		return status, utils.WrapErr(err)

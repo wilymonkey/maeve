@@ -15,9 +15,8 @@ var guiState *state
 
 type state struct {
 	currTask      binding.Int
-	dbState       binding.String
-	backupDirMeta []BackupDirMeta
-	nodeStates    map[string]*nodeStatus
+	updateDBState binding.String
+	pullStates    []*pullState
 	ctx           context.Context
 	ctxCancel     context.CancelFunc
 	window        fyne.Window
@@ -25,6 +24,7 @@ type state struct {
 	exitOnDone    bool
 
 	// OLD
+	nodeStates  map[string]*nodeStatus
 	hashDone    bool
 	totalFiles  int
 	hashNum     int
@@ -55,16 +55,6 @@ type nodeStatus struct {
 func loadState(window fyne.Window, exitOnDone bool) {
 	cfg := conf.GetConf()
 
-	backupDirs := make([]BackupDirMeta, len(cfg.BackupDirs))
-	for i, dir := range cfg.BackupDirs {
-		backupDirs[i] = BackupDirMeta{
-			path:     dir,
-			number:   binding.NewInt(),
-			size:     binding.NewInt(),
-			hashsums: binding.NewFloat(),
-		}
-	}
-
 	nodeStates := make(map[string]*nodeStatus, len(cfg.RemoteNodes))
 	for _, node := range cfg.RemoteNodes {
 		nodeStates[node] = &nodeStatus{
@@ -75,8 +65,8 @@ func loadState(window fyne.Window, exitOnDone bool) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	guiState = &state{
 		currTask:      binding.NewInt(),
-		dbState:       binding.NewString(),
-		backupDirMeta: backupDirs,
+		updateDBState: binding.NewString(),
+		pullStates:    newPullState(),
 		nodeStates:    nodeStates,
 		ctx:           ctx,
 		ctxCancel:     ctxCancel,
@@ -95,4 +85,11 @@ func loadState(window fyne.Window, exitOnDone bool) {
 			showErrorDialog()
 		}
 	}))
+}
+
+func (s *state) nextTask() {
+	curr := fynext.Unwrap(s.currTask)
+	if curr < int(done) {
+		s.currTask.Set(curr + 1)
+	}
 }

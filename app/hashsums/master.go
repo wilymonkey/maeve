@@ -19,7 +19,7 @@ type MasterHash struct {
 	HashMap map[[32]byte]local.RelPath
 }
 
-func (mh *MasterHash) Exists(fileHash FileHash) *local.RelPath {
+func (mh *MasterHash) Exists(fileHash OldFileHash) *local.RelPath {
 	if relPath, exists := mh.HashMap[fileHash.Hash]; exists {
 		return &relPath
 	}
@@ -30,7 +30,7 @@ func (mh *MasterHash) Exists(fileHash FileHash) *local.RelPath {
 // dirs as well (i.e. they have been added to the hashes map).
 // Only returns a value if it's invalid.
 func (mh *MasterHash) validate(node string) error {
-	entries, err := os.ReadDir(conf.GetConf().NodeDir(node))
+	entries, err := os.ReadDir(conf.NodeDir(node))
 	if err != nil {
 		return utils.WrapErr(err)
 	}
@@ -91,7 +91,7 @@ func readMaster(node string) (MasterHash, error) {
 func genMasterHash(node string) (MasterHash, error) {
 	var mh MasterHash
 
-	baseDir := conf.GetConf().NodeDir(node)
+	baseDir := conf.NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

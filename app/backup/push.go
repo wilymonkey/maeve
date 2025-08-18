@@ -16,7 +16,7 @@ type pushingNode struct {
 	index int
 }
 
-func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
+func pushChanges(ctx context.Context, hashes []hs.OldFileHash) error {
 	hashGob, err := hs.GetSelfHashGob()
 	if err != nil {
 		return utils.WrapErr(err)
@@ -35,7 +35,7 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 }
 
 type pushProgress struct {
-	operations *utils.UniqueCircSlice[hs.FileHash, remote.SendStatus]
+	operations *utils.UniqueCircSlice[hs.OldFileHash, remote.SendStatus]
 	curr       int
 	total      int
 }
@@ -44,13 +44,13 @@ func newPushProgress(total int) pushProgress {
 	return pushProgress{
 		operations: utils.NewUniqueCircSlice(
 			5,
-			func(item remote.SendStatus) hs.FileHash { return item.Hash },
+			func(item remote.SendStatus) hs.OldFileHash { return item.Hash },
 		),
 		total: total,
 	}
 }
 
-func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
+func pushToNode(ctx context.Context, hashes []hs.OldFileHash, node string) error {
 	sshClient, err := remote.NewSSHClient(node)
 	if err != nil {
 		return utils.WrapErr(err)
@@ -114,7 +114,7 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 }
 
 // Updates progChan using what hashes are missing.
-func updateProg(prev, curr []hs.FileHash, progChan chan remote.SendStatus) ([]hs.FileHash, error) {
+func updateProg(prev, curr []hs.OldFileHash, progChan chan remote.SendStatus) ([]hs.OldFileHash, error) {
 	currSet := utils.SliceToSet(curr)
 	for _, h := range prev {
 		if _, exists := currSet[h]; !exists {

@@ -19,8 +19,8 @@ func DummyErr(s string) error {
 	return fmt.Errorf("DummyErr: %s", s)
 }
 
-func Sleep(t time.Duration) {
-	time.Sleep(time.Millisecond * t)
+func Sleep(ms int) {
+	time.Sleep(time.Millisecond * time.Duration(ms))
 }
 
 // If the world state has been violated, panic the program.

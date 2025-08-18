@@ -13,18 +13,18 @@ type hashProg struct {
 	hashNum int
 }
 type doneHashsums struct {
-	hashes []hs.FileHash
+	hashes []hs.OldFileHash
 }
 
 func newHashes(parentCtx context.Context) tea.Msg {
 	selfDir := conf.GetConf().SelfDir()
 
-	progChan := make(chan hs.FileHash, 100)
+	progChan := make(chan hs.OldFileHash, 100)
 	defer close(progChan)
 	hashNum := 0
 	utils.Throttle(
 		progChan,
-		func(hash hs.FileHash) {
+		func(hash hs.OldFileHash) {
 			hashNum++
 		},
 		func() {

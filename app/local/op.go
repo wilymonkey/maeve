@@ -6,8 +6,15 @@ import (
 	"time"
 
 	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 )
+
+const DirTimeFormat = "02Jan2006-1504"
+
+func MkDir(path string) error {
+	return os.MkdirAll(path, 0755)
+}
 
 func PathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
@@ -20,6 +27,33 @@ func PathExists(path string) (bool, error) {
 	return true, nil
 }
 
+func NewLatestDir() (string, error) {
+	currentTime := time.Now().Format(conf.TIMEFORMAT)
+	path := filepath.Join(conf.MyNode(), currentTime)
+	if err := MkDir(path); err != nil {
+		return "", help.CheckBackupDir(err, "creating latest folder")
+	}
+	return path, nil
+}
+
+func RemoveChildDirs(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return help.CheckBackupDir(err, "reading files in backup folder")
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
+			if err != nil {
+				return help.CheckBackupDir(err, "deleting stale folders in backup")
+			}
+		}
+	}
+	return nil
+}
+
+// Deprecated.
 func StampDate(node string) (string, error) {
 	oldPath := conf.GetConf().NodeDirTemp(node)
 	currentTime := time.Now().Format(conf.TIMEFORMAT)

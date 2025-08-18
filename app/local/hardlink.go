@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -73,15 +74,15 @@ func Hardlink(sourcePath, targetPath string) error {
 		return nil
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(filepath.Dir(targetPath), os.ModeDir); err != nil {
-			return utils.WrapErr(err)
+		if err := MkDir(filepath.Dir(targetPath)); err != nil {
+			return help.CheckBackupDir(err, "creating folders in latest")
 		}
 		// Try to link the file again.
 		if err := os.Link(sourcePath, targetPath); err != nil {
-			return utils.WrapErr(err)
+			return help.CheckBackupDir(err, "linking file into latest AGAIN")
 		}
 		return nil
 	}
 
-	return utils.WrapErr(err)
+	return help.DevReport(err, "linking file into latest")
 }

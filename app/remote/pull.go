@@ -20,7 +20,7 @@ func (n *NodeConn) PullDB() error {
 	}
 	defer sourceFile.Close()
 
-	localFile, err := os.Create(db.DBPath(conf.GetConf().MyNode()))
+	localFile, err := os.Create(db.DBPath(conf.MyNode()))
 	if err != nil {
 		return help.CheckBackupDir(err, "opening local file")
 	}

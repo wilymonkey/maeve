@@ -57,3 +57,70 @@ func ParseHumanBytes(s string) (int64, error) {
 
 	return int64(val * float64(multiplier)), nil
 }
+
+func TruncateString(txt string, maxwidth int) string {
+	txtWidth := stringWidth(txt)
+	if txtWidth <= maxwidth {
+		return txt
+	}
+
+	ellipsis := "…"
+	ellipsisWidth := widthWide
+	availWidth := maxwidth - ellipsisWidth
+	if availWidth <= 0 {
+		return ellipsis
+	}
+
+	avgCharWidth := txtWidth / len(txt)
+	estChars := availWidth / avgCharWidth
+	if estChars <= 0 {
+		return ellipsis
+	}
+	if estChars > len(txt) {
+		return txt
+	}
+	start := len(txt) - estChars
+	return ellipsis + txt[start:]
+}
+
+const (
+	widthThin   = 1
+	widthNormal = 2
+	widthWide   = 3
+	widthCJK    = 4
+)
+
+var runeWidth = map[rune]int{
+	// THIN
+	'i': widthThin, 'l': widthThin, '!': widthThin, '.': widthThin,
+	',': widthThin, ':': widthThin, ';': widthThin, '|': widthThin,
+	'\'': widthThin, '"': widthThin,
+	// THICC
+	'W': widthWide, 'M': widthWide, 'O': widthWide, 'Q': widthWide,
+}
+
+func stringWidth(s string) int {
+	var width int
+	for _, r := range s {
+		switch {
+		// Fast path for ASCII first
+		case r < 0x80:
+			if val, ok := runeWidth[r]; ok {
+				width += val
+			} else {
+				width += widthNormal
+			}
+		// CJK ranges (common + extensions + Hangul + Kana)
+		case (r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified
+			(r >= 0x3400 && r <= 0x4DBF) || // CJK Extension A
+			(r >= 0xAC00 && r <= 0xD7AF) || // Hangul
+			(r >= 0x3040 && r <= 0x309F) || // Hiragana
+			(r >= 0x30A0 && r <= 0x30FF): // Katakana
+			width += widthCJK
+
+		default:
+			width += widthNormal
+		}
+	}
+	return width
+}

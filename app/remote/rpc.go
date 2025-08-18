@@ -122,7 +122,7 @@ type BackupDirReply struct {
 }
 
 func (h *RPCFuncs) BackupDir(args *BackupDirArgs, reply *BackupDirReply) error {
-	reply.Path = conf.GetConf().NodeDir(args.Node)
+	reply.Path = conf.NodeDir(args.Node)
 	return nil
 }
 
@@ -161,7 +161,7 @@ func TempLocation(rpc *rpc.Client) (string, error) {
 }
 
 type VerifyFuncArgs struct {
-	Hash hs.FileHash
+	Hash hs.OldFileHash
 	Node string
 }
 type VerifyFuncReply struct {
@@ -179,7 +179,7 @@ func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) 
 	return fmt.Errorf("NOT COMPLETE")
 }
 
-func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
+func VerifyFile(rpc *rpc.Client, hash hs.OldFileHash) (bool, error) {
 	args := &VerifyFuncArgs{
 		Hash: hash,
 		Node: conf.GetConf().Name,
@@ -192,11 +192,11 @@ func VerifyFile(rpc *rpc.Client, hash hs.FileHash) (bool, error) {
 }
 
 type LinkExistingArgs struct {
-	Hashes []hs.FileHash
+	Hashes []hs.OldFileHash
 	Node   string
 }
 type LinkExistingReply struct {
-	Hashes []hs.FileHash
+	Hashes []hs.OldFileHash
 }
 
 func (h *RPCFuncs) LinkExisting(args *LinkExistingArgs, reply *LinkExistingReply) error {
@@ -208,7 +208,7 @@ func (h *RPCFuncs) LinkExisting(args *LinkExistingArgs, reply *LinkExistingReply
 	return nil
 }
 
-func LinkExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
+func LinkExisting(rpc *rpc.Client, hashes []hs.OldFileHash) ([]hs.OldFileHash, error) {
 	args := &LinkExistingArgs{Node: conf.GetConf().Name, Hashes: hashes}
 	var reply LinkExistingReply
 	if err := rpc.Call("RPCFuncs.LinkExisting", args, &reply); err != nil {
@@ -218,11 +218,11 @@ func LinkExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) 
 }
 
 type ValiExistingArgs struct {
-	Hashes []hs.FileHash
+	Hashes []hs.OldFileHash
 	Node   string
 }
 type ValiExistingReply struct {
-	Hashes []hs.FileHash
+	Hashes []hs.OldFileHash
 }
 
 func (h *RPCFuncs) ValiExisting(args *ValiExistingArgs, reply *ValiExistingReply) error {
@@ -234,7 +234,7 @@ func (h *RPCFuncs) ValiExisting(args *ValiExistingArgs, reply *ValiExistingReply
 	return nil
 }
 
-func ValiExisting(rpc *rpc.Client, hashes []hs.FileHash) ([]hs.FileHash, error) {
+func ValiExisting(rpc *rpc.Client, hashes []hs.OldFileHash) ([]hs.OldFileHash, error) {
 	args := &ValiExistingArgs{
 		Hashes: hashes,
 		Node:   conf.GetConf().Name,

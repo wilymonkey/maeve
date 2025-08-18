@@ -19,12 +19,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const (
-	TIMEFORMAT = "02Jan2006-1504"
-)
+const TIMEFORMAT = "02Jan2006-1504"
+
+var Version = "DEV"
+
+// =======================================
+// CONFIG
+// =======================================
 
 var (
-	Version   = "DEV"
 	maeveConf *MaeveConf
 	once      sync.Once
 )
@@ -37,7 +40,7 @@ type MaeveConf struct {
 	MaxBackups    int
 	MaxUpload     int64
 	RemoteNodes   []string
-	BackupDirs    []string
+	SourceDirs    []string
 }
 
 func GetConf() *MaeveConf {
@@ -118,8 +121,8 @@ func (c *MaeveConf) applyDefaults() error {
 		c.RemoteNodes = make([]string, 0)
 	}
 
-	if c.BackupDirs == nil {
-		c.BackupDirs = make([]string, 0)
+	if c.SourceDirs == nil {
+		c.SourceDirs = make([]string, 0)
 	}
 
 	// Ignore: MaxUpload
@@ -151,6 +154,10 @@ func (c *MaeveConf) SaveToFile() error {
 	return nil
 }
 
+// =======================================
+// PATHS
+// =======================================
+
 func configPath() (string, error) {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
@@ -160,16 +167,18 @@ func configPath() (string, error) {
 	return confPath, nil
 }
 
-func (c *MaeveConf) MyNode() string {
-	pubKey, err := ssh.NewPublicKey(c.SSHPrivateKey.Public())
+func MyNode() string {
+	conf := GetConf()
+	pubKey, err := ssh.NewPublicKey(conf.SSHPrivateKey.Public())
 	utils.AssertNoErr("cannot generate pub key from config private key", err)
 	sum := blake3.Sum512(pubKey.Marshal())
 	keyHash := hex.EncodeToString(sum[:3])
-	return filepath.Join(c.MaeveDir, fmt.Sprintf("%s_%s", c.Name, keyHash))
+	return filepath.Join(conf.MaeveDir, fmt.Sprintf("%s_%s", conf.Name, keyHash))
 }
 
-func (c *MaeveConf) NodeDir(node string) string {
-	return filepath.Join(c.MaeveDir, node)
+func NodeDir(node string) string {
+	conf := GetConf()
+	return filepath.Join(conf.MaeveDir, node)
 }
 
 // =======================================
@@ -178,7 +187,7 @@ func (c *MaeveConf) NodeDir(node string) string {
 
 // Hash file path for a given directory.
 func (c *MaeveConf) MasterHashFile(node string) string {
-	return filepath.Join(c.NodeDir(node), "maeve_hashmap.gob")
+	return filepath.Join(NodeDir(node), "maeve_hashmap.gob")
 }
 
 // Hash file path for a given directory.
@@ -191,17 +200,17 @@ func (c *MaeveConf) SelfDir() string {
 }
 
 func (c *MaeveConf) NodeDirTemp(node string) string {
-	return filepath.Join(c.NodeDir(node), "latest")
+	return filepath.Join(NodeDir(node), "latest")
 }
 
 func (c *MaeveConf) NodeSnapshotDir(node, snapshot string) string {
-	return filepath.Join(c.NodeDir(node), snapshot)
+	return filepath.Join(NodeDir(node), snapshot)
 }
 
 // Lists snapshots for a given node from oldest to newest.
 // Returns absolute paths to those snapshots.
 func (c *MaeveConf) NodeSnapshots(node string) ([]string, error) {
-	baseDir := c.NodeDir(node)
+	baseDir := NodeDir(node)
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		return nil, utils.WrapErr(err)

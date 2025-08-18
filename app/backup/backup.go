@@ -31,12 +31,17 @@ func runBackup() {
 }
 
 func dispatcher() error {
-	conn, err := db.Open(conf.GetConf().MyNode())
+	conn, err := db.Open(conf.MyNode())
 	if err != nil {
 		return err
 	}
 
 	if err = updateDB(&conn); err != nil {
+		return err
+	}
+
+	guiState.nextTask()
+	if err = newLatest(); err != nil {
 		return err
 	}
 

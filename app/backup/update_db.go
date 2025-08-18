@@ -40,7 +40,7 @@ func UDBDone(version *db.DBVersion) string {
 func updateDBUI() fyne.CanvasObject {
 	title := widget.NewLabel("Update database:")
 	title.TextStyle.Bold = true
-	state := widget.NewLabelWithData(guiState.dbState)
+	state := widget.NewLabelWithData(guiState.updateDBState)
 	state.Wrapping = fyne.TextWrapWord
 	return container.NewBorder(
 		nil, nil,
@@ -60,13 +60,13 @@ type nodeVersion struct {
 }
 
 func updateDB(conn **sqlite.Conn) error {
-	guiState.dbState.Set(UDBGetLocal)
+	guiState.updateDBState.Set(UDBGetLocal)
 	localVersion, err := db.GetVersion((*conn))
 	if err != nil {
 		return err
 	}
 
-	guiState.dbState.Set(UDBGetRemote)
+	guiState.updateDBState.Set(UDBGetRemote)
 	versionChan := make(chan nodeVersion, 10)
 	collectVersions := utils.CollectChan(versionChan)
 	eGrp, _ := guiState.ErrGroup(2)
@@ -97,15 +97,15 @@ func updateDB(conn **sqlite.Conn) error {
 	}
 	remoteVersions := collectVersions()
 
-	guiState.dbState.Set(UDBCompare)
+	guiState.updateDBState.Set(UDBCompare)
 	lv := nodeVersion{"", localVersion}
 	node := findBestVersion(append([]nodeVersion{lv}, remoteVersions...))
 	if node == "" {
-		guiState.dbState.Set(UDBDone(localVersion))
+		guiState.updateDBState.Set(UDBDone(localVersion))
 		return nil
 	}
 
-	guiState.dbState.Set(UDBFetch(node))
+	guiState.updateDBState.Set(UDBFetch(node))
 	(*conn).Close()
 	nodeConn, err := remote.NewNodeConn(node, func(err error) {
 		guiState.err.Set(err)
@@ -120,7 +120,7 @@ func updateDB(conn **sqlite.Conn) error {
 	if err := nodeConn.PullDB(); err != nil {
 		return err
 	}
-	*conn, err = db.Open(conf.GetConf().MyNode())
+	*conn, err = db.Open(conf.MyNode())
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func updateDB(conn **sqlite.Conn) error {
 		return err
 	}
 
-	guiState.dbState.Set(UDBDone(localVersion))
+	guiState.updateDBState.Set(UDBDone(localVersion))
 	return nil
 }
 

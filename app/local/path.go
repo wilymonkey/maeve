@@ -37,7 +37,7 @@ func NewAbsPath(path string) AbsPath {
 }
 
 func (a *AbsPath) Path() string {
-	return filepath.Join(conf.GetConf().NodeDir(a.Node), a.SnapshotPath, a.RelPath)
+	return filepath.Join(conf.NodeDir(a.Node), a.SnapshotPath, a.RelPath)
 }
 
 type RelPath struct {
@@ -46,7 +46,7 @@ type RelPath struct {
 }
 
 func (r *RelPath) Resolve(node string) string {
-	return filepath.Join(conf.GetConf().NodeDir(node), r.Snapshot, r.Path)
+	return filepath.Join(conf.NodeDir(node), r.Snapshot, r.Path)
 }
 
 type SnapshotRelPath struct {

@@ -11,14 +11,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func LinkExisting(node string, hashes []FileHash) ([]FileHash, error) {
+func LinkExisting(node string, hashes []OldFileHash) ([]OldFileHash, error) {
 	mh, err := getMaster(node)
 	if err != nil {
 		return nil, utils.WrapErr(err)
 	}
 
-	missingChan := make(chan FileHash, 100)
-	var missing []FileHash
+	missingChan := make(chan OldFileHash, 100)
+	var missing []OldFileHash
 	wg := utils.GoWait(func() {
 		for hash := range missingChan {
 			missing = append(missing, hash)

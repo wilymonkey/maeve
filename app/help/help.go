@@ -24,6 +24,7 @@ const (
 	DelBackupDir
 	DelDB
 	DelPrivateKey
+	checkSource
 	checkBackupDir
 	checkNodeConn
 	devReport
@@ -45,6 +46,8 @@ func (c Help) string() string {
 		return "delete the .db file in the backup folder"
 	case DelPrivateKey:
 		return "delete the private key"
+	case checkSource:
+		return "check if I have permission to access the backup source files/folders"
 	case checkBackupDir:
 		return "check if the backup folder is one I have access to"
 	case checkNodeConn:
@@ -54,6 +57,10 @@ func (c Help) string() string {
 	default:
 		return "...this shouldn't be possible"
 	}
+}
+
+func CheckSource(err error, task string) error {
+	return newHelpError(err, task, checkSource)
 }
 
 func CheckBackupDir(err error, task string) error {
@@ -74,11 +81,10 @@ func Stacktrace(err error, task string, help Help) error {
 
 func getStacktrace(start, number int) string {
 	var b strings.Builder
-	before := b.Len()
 	for i := start + number; i > start; i-- {
 		pc, _, _, ok := runtime.Caller(i)
 		if !ok {
-			break
+			continue
 		}
 		fn := runtime.FuncForPC(pc)
 		if fn == nil {
@@ -87,8 +93,7 @@ func getStacktrace(start, number int) string {
 		// Extract just the function name (without full package path).
 		fmt.Fprintf(&b, "%s: ", filepath.Base(fn.Name()))
 	}
-	after := b.Len()
-	utils.Assert("stacktrace shouldn't be empty", before == after)
+	utils.Assert("stacktrace shouldn't be empty", b.Len() != 0)
 	result := b.String()
 	return result[:b.Len()-2]
 }
@@ -137,6 +142,8 @@ func (w *Widget) CreateRenderer() fyne.WidgetRenderer {
 
 	var hErr *helpError
 	if errors.As(val, &hErr) {
+		errLbl := widget.NewLabel(hErr.err.Error())
+		errLbl.Wrapping = fyne.TextWrapWord
 		sl := widget.NewLabel(hErr.stack)
 		sl.Wrapping = fyne.TextWrapWord
 
@@ -146,7 +153,7 @@ func (w *Widget) CreateRenderer() fyne.WidgetRenderer {
 			fynext.SmallTxt("Task Attempted"),
 			widget.NewLabel(hErr.task),
 			fynext.SmallTxt("Error"),
-			widget.NewLabel(hErr.err.Error()),
+			errLbl,
 			fynext.SmallTxt("Stacktrace"),
 			sl,
 		)

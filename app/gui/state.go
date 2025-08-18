@@ -30,7 +30,7 @@ func LoadState(window fyne.Window) {
 		MaxBackups:  binding.BindInt(&cfg.MaxBackups),
 		MaxUpload:   binding.NewString(),
 		RemoteNodes: binding.BindStringList(&cfg.RemoteNodes),
-		SourceDirs:  binding.BindStringList(&cfg.BackupDirs),
+		SourceDirs:  binding.BindStringList(&cfg.SourceDirs),
 		Window:      window,
 	}
 

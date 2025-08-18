@@ -4,34 +4,29 @@ import (
 	"time"
 )
 
-func Throttle[T any](tChan chan T, every func(T), emit func()) {
+func Throttle[T any](in <-chan T, onEach func(T), emit func()) {
 	go func() {
-		throttleDuration := 200 * time.Millisecond
+		tick := time.NewTicker(200 * time.Millisecond)
+		defer tick.Stop()
 
-		var (
-			timer     *time.Timer
-			timerChan <-chan time.Time
-			canEmit   = true
-		)
-
+		dirty := false
 		for {
 			select {
-			case value, ok := <-tChan:
-				if ok {
-					every(value)
-					if canEmit {
+			case v, ok := <-in:
+				if !ok {
+					if dirty {
 						emit()
-						canEmit = false
-						timer = time.NewTimer(throttleDuration)
-						timerChan = timer.C
-					}
-				} else {
-					emit()
+					} // final flush
 					return
 				}
+				onEach(v)
+				dirty = true
 
-			case <-timerChan:
-				canEmit = true
+			case <-tick.C:
+				if dirty {
+					emit()
+					dirty = false
+				}
 			}
 		}
 	}()

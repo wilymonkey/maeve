@@ -1,8 +1,6 @@
 package backup
 
 import (
-	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -32,12 +30,13 @@ func mainWindow() fyne.CanvasObject {
 					fynext.H2("Updating My State"),
 					guiState.currTask,
 					updatingDB,
-					pulling,
+					pushing,
 				),
 				nil, nil, nil,
-				container.NewVBox(
+				container.NewBorder(
 					updateDBUI(),
-					backupDirMetaTable(guiState.backupDirMeta),
+					nil, nil, nil,
+					pullStateUI(),
 				),
 			),
 			container.NewBorder(
@@ -77,67 +76,6 @@ func cancelBtn() fyne.CanvasObject {
 	}()
 
 	return cancelBtn
-}
-
-func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {
-	totalRows := len(backupDirMeta) + 1
-	totalCols := 4
-
-	table := widget.NewTable(
-		func() (int, int) {
-			return totalRows, totalCols
-		},
-		func() fyne.CanvasObject {
-			return fynext.LabelDisableUntil(
-				widget.NewLabel(""),
-				guiState.currTask,
-				pulling,
-			)
-		},
-		func(cell widget.TableCellID, o fyne.CanvasObject) {
-			label := o.(*widget.Label)
-			row := cell.Row
-			col := cell.Col
-
-			if row == 0 {
-				switch col {
-				case 0:
-					label.SetText("Dir")
-				case 1:
-					label.SetText("Files")
-					label.Alignment = fyne.TextAlignCenter
-				case 2:
-					label.SetText("Size")
-					label.Alignment = fyne.TextAlignCenter
-				case 3:
-					label.SetText("Hashsums")
-					label.Alignment = fyne.TextAlignCenter
-				}
-			} else {
-				meta := backupDirMeta[row-1]
-				switch col {
-				case 0:
-					label.SetText(meta.path)
-					fynext.TruncLabel(label, 200)
-				case 1:
-					label.SetText(fmt.Sprintf("%d", fynext.Unwrap(meta.number)))
-					label.Alignment = fyne.TextAlignCenter
-				case 2:
-					label.SetText(fmt.Sprintf("%d", fynext.Unwrap(meta.size)))
-					label.Alignment = fyne.TextAlignCenter
-				case 3:
-					perc := int(fynext.Unwrap(meta.hashsums) * 100)
-					label.SetText(fmt.Sprintf("%d", perc))
-					label.Alignment = fyne.TextAlignCenter
-				}
-			}
-		},
-	)
-	table.SetColumnWidth(0, 250)
-	table.SetColumnWidth(1, 90)
-	table.SetColumnWidth(2, 90)
-	table.SetColumnWidth(3, 90)
-	return table
 }
 
 func nodeStatusTable(nodeStatus map[string]*nodeStatus) fyne.CanvasObject {
