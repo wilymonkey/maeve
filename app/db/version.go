@@ -18,7 +18,7 @@ type DBVersion struct {
 	Rows           int64
 }
 
-func GetVersion(conn *sqlite.Conn, dirPath string) (*DBVersion, error) {
+func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 	var result DBVersion
 	var err error
 

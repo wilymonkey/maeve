@@ -128,7 +128,7 @@ func NewWidget(err binding.Item[error]) *Widget {
 }
 
 func (w *Widget) CreateRenderer() fyne.WidgetRenderer {
-	val := fynext.GetOrPanic(w.bound)
+	val := fynext.Unwrap(w.bound)
 
 	if val == nil {
 		lbl := widget.NewLabel("")

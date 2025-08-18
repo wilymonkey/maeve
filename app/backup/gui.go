@@ -1,154 +1,26 @@
 package backup
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/fynext"
-	"golang.org/x/sync/errgroup"
 )
-
-var guiState *state
-
-type state struct {
-	currTask      binding.Int
-	dbState       binding.String
-	backupDirMeta []BackupDirMeta
-	nodeStates    map[string]*nodeStatus
-	ctx           context.Context
-	ctxCancel     context.CancelFunc
-	window        fyne.Window
-	err           binding.Item[error]
-
-	// OLD
-	hashDone    bool
-	totalFiles  int
-	hashNum     int
-	pushProg    pushProgress
-	pushingNode int
-	pushDone    bool
-}
-
-func (s *state) ErrGroup(scaling int) (*errgroup.Group, context.Context) {
-	eGrp, ctx := errgroup.WithContext(s.ctx)
-	eGrp.SetLimit(scaling * runtime.NumCPU())
-	return eGrp, ctx
-}
-
-type currTask int
-
-const (
-	updatingDB currTask = iota
-	pulling
-	pushing
-	done
-)
-
-type nodeStatus struct {
-	err binding.Item[error]
-}
-
-func loadState(window fyne.Window) {
-	cfg := conf.GetConf()
-
-	backupDirs := make([]BackupDirMeta, len(cfg.BackupDirs))
-	for i, dir := range cfg.BackupDirs {
-		backupDirs[i] = BackupDirMeta{
-			path:     dir,
-			number:   binding.NewInt(),
-			size:     binding.NewInt(),
-			hashsums: binding.NewFloat(),
-		}
-	}
-
-	nodeStates := make(map[string]*nodeStatus, len(cfg.RemoteNodes))
-	for _, node := range cfg.RemoteNodes {
-		nodeStates[node] = &nodeStatus{
-			err: fynext.NewErrBinding(),
-		}
-	}
-
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	guiState = &state{
-		currTask:      binding.NewInt(),
-		dbState:       binding.NewString(),
-		backupDirMeta: backupDirs,
-		nodeStates:    nodeStates,
-		ctx:           ctx,
-		ctxCancel:     ctxCancel,
-		window:        window,
-		err:           fynext.NewErrBinding(),
-
-		// OLD
-		pushProg: newPushProgress(0),
-	}
-
-	guiState.err.AddListener(binding.NewDataListener(func() {
-		err := fynext.GetOrPanic(guiState.err)
-		if err != nil {
-			guiState.ctxCancel()
-			showErrorDialog()
-		}
-	}))
-}
 
 func Launch(app fyne.App, exitOnDone bool) fyne.Window {
 	window := app.NewWindow("Maeve - Backing Up")
-	loadState(window)
-	window.SetContent(mainWindow(exitOnDone))
+	loadState(window, exitOnDone)
+	window.SetContent(mainWindow())
 	return window
 }
 
-func mainWindow(exitOnDone bool) fyne.CanvasObject {
-	go func() {
-		if err := Backup(); err != nil {
-			guiState.err.Set(err)
-		}
-		guiState.ctxCancel()
-
-		for _, node := range guiState.nodeStates {
-			if fynext.GetOrPanic(node.err) != nil {
-				guiState.err.Set(errors.New("One or more PCs failed to sync"))
-				break
-			}
-		}
-		if fynext.GetOrPanic(guiState.err) == nil && exitOnDone {
-			// TODO: remove this when done.
-			// fyne.Do(state.window.Close)
-		}
-	}()
-
-	cancelBtn := func() fyne.CanvasObject {
-		var cancelBtn *widget.Button
-		cancelBtn = widget.NewButton(
-			"Cancel",
-			func() {
-				if cancelBtn.Importance == widget.MediumImportance {
-					guiState.ctxCancel()
-				} else {
-					fyne.Do(guiState.window.Close)
-				}
-			},
-		)
-		go func() {
-			<-guiState.ctx.Done()
-			fyne.Do(func() {
-				cancelBtn.SetText("Okay")
-				cancelBtn.Importance = widget.SuccessImportance
-				cancelBtn.Refresh()
-			})
-		}()
-		return cancelBtn
-	}
+func mainWindow() fyne.CanvasObject {
+	go runBackup()
 
 	return container.NewBorder(
 		nil,
@@ -180,6 +52,31 @@ func mainWindow(exitOnDone bool) fyne.CanvasObject {
 			),
 		),
 	)
+}
+
+func cancelBtn() fyne.CanvasObject {
+	var cancelBtn *widget.Button
+
+	onTap := func() {
+		if cancelBtn.Importance == widget.MediumImportance {
+			guiState.ctxCancel()
+		} else {
+			fyne.Do(guiState.window.Close)
+		}
+	}
+
+	cancelBtn = widget.NewButton("Cancel", onTap)
+
+	go func() {
+		<-guiState.ctx.Done()
+		fyne.Do(func() {
+			cancelBtn.SetText("Okay")
+			cancelBtn.Importance = widget.SuccessImportance
+			cancelBtn.Refresh()
+		})
+	}()
+
+	return cancelBtn
 }
 
 func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {
@@ -223,13 +120,13 @@ func backupDirMetaTable(backupDirMeta []BackupDirMeta) fyne.CanvasObject {
 					label.SetText(meta.path)
 					fynext.TruncLabel(label, 200)
 				case 1:
-					label.SetText(fmt.Sprintf("%d", fynext.GetOrPanic(meta.number)))
+					label.SetText(fmt.Sprintf("%d", fynext.Unwrap(meta.number)))
 					label.Alignment = fyne.TextAlignCenter
 				case 2:
-					label.SetText(fmt.Sprintf("%d", fynext.GetOrPanic(meta.size)))
+					label.SetText(fmt.Sprintf("%d", fynext.Unwrap(meta.size)))
 					label.Alignment = fyne.TextAlignCenter
 				case 3:
-					perc := int(fynext.GetOrPanic(meta.hashsums) * 100)
+					perc := int(fynext.Unwrap(meta.hashsums) * 100)
 					label.SetText(fmt.Sprintf("%d", perc))
 					label.Alignment = fyne.TextAlignCenter
 				}

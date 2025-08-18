@@ -98,8 +98,7 @@ func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply
 	if err != nil {
 		return err
 	}
-	nodeDir := conf.GetConf().NodeDir(args.Node)
-	reply.Version, err = db.GetVersion(conn, nodeDir)
+	reply.Version, err = db.GetVersion(conn)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/wilymonkey/maeve/app/help"
 )
 
-func (n *NodeConn) PullDB(node string) error {
+func (n *NodeConn) PullDB() error {
 	remoteDir, err := n.backupDir()
 	if err != nil {
 		return err

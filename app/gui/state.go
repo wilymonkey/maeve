@@ -36,7 +36,7 @@ func LoadState(window fyne.Window) {
 
 	state.MaxUpload.Set(utils.BytesToHuman(cfg.MaxUpload))
 	state.MaxUpload.AddListener(binding.NewDataListener(func() {
-		val := fynext.GetOrPanic(state.MaxUpload)
+		val := fynext.Unwrap(state.MaxUpload)
 		max, err := utils.ParseHumanBytes(val)
 		if err != nil {
 			state.ShowError(err)

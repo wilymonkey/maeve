@@ -15,16 +15,27 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
+// =======================================
+// STATES
+// =======================================
+
 const (
-	UDB_GetLocal  = "getting version of local database..."
-	UDB_GetRemote = "fetching remote databases..."
-	UDB_Compare   = "comparing databases to find the best one..."
+	UDBGetLocal  = "getting version of local database..."
+	UDBGetRemote = "fetching remote databases..."
+	UDBCompare   = "comparing databases to find the best one..."
 )
 
-func UDB_Done(version *db.DBVersion) {
-	state := fmt.Sprintf("Done! Current database has %d entries.", version.Rows)
-	guiState.dbState.Set(state)
+func UDBFetch(node string) string {
+	return fmt.Sprintf("fetching best version from %s...", node)
 }
+
+func UDBDone(version *db.DBVersion) string {
+	return fmt.Sprintf("Done! Current database has %d entries.", version.Rows)
+}
+
+// =======================================
+// UI
+// =======================================
 
 func updateDBUI() fyne.CanvasObject {
 	title := widget.NewLabel("Update database:")
@@ -39,22 +50,25 @@ func updateDBUI() fyne.CanvasObject {
 	)
 }
 
+// =======================================
+// METHODS
+// =======================================
+
 type nodeVersion struct {
 	node    string
 	version *db.DBVersion
 }
 
-func repairDB(conn *sqlite.Conn) error {
-	guiState.dbState.Set(UDB_GetLocal)
-
-	localVersion, err := db.GetVersion(conn, conf.GetConf().MyNode())
+func updateDB(conn **sqlite.Conn) error {
+	guiState.dbState.Set(UDBGetLocal)
+	localVersion, err := db.GetVersion((*conn))
 	if err != nil {
 		return err
 	}
+
+	guiState.dbState.Set(UDBGetRemote)
 	versionChan := make(chan nodeVersion, 10)
 	collectVersions := utils.CollectChan(versionChan)
-
-	guiState.dbState.Set(UDB_GetRemote)
 	eGrp, _ := guiState.ErrGroup(2)
 	for node, nodeState := range guiState.nodeStates {
 		eGrp.Go(func() error {
@@ -83,14 +97,16 @@ func repairDB(conn *sqlite.Conn) error {
 	}
 	remoteVersions := collectVersions()
 
-	guiState.dbState.Set(UDB_Compare)
+	guiState.dbState.Set(UDBCompare)
 	lv := nodeVersion{"", localVersion}
 	node := findBestVersion(append([]nodeVersion{lv}, remoteVersions...))
 	if node == "" {
-		UDB_Done(localVersion)
+		guiState.dbState.Set(UDBDone(localVersion))
 		return nil
 	}
 
+	guiState.dbState.Set(UDBFetch(node))
+	(*conn).Close()
 	nodeConn, err := remote.NewNodeConn(node, func(err error) {
 		guiState.err.Set(err)
 	})
@@ -101,15 +117,19 @@ func repairDB(conn *sqlite.Conn) error {
 	if err := nodeConn.AddSFTP(); err != nil {
 		return err
 	}
-	if err := nodeConn.AddSFTP(); err != nil {
+	if err := nodeConn.PullDB(); err != nil {
 		return err
 	}
-	localVersion, err = db.GetVersion(conn, conf.GetConf().MyNode())
+	*conn, err = db.Open(conf.GetConf().MyNode())
 	if err != nil {
 		return err
 	}
-	UDB_Done(localVersion)
+	localVersion, err = db.GetVersion((*conn))
+	if err != nil {
+		return err
+	}
 
+	guiState.dbState.Set(UDBDone(localVersion))
 	return nil
 }
 
