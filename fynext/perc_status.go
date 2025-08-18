@@ -1,4 +1,4 @@
-package theme
+package fynext
 
 import (
 	"fmt"

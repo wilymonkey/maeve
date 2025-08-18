@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/help"
 	"golang.org/x/crypto/ssh"
 )
 

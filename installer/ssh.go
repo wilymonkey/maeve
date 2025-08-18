@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wilymonkey/maeve/installer/utils"
+	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
 )
 

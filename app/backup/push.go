@@ -4,10 +4,9 @@ import (
 	"context"
 
 	"github.com/pkg/sftp"
-	"github.com/wilymonkey/maeve/conf"
-	hs "github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/overseer"
-	"github.com/wilymonkey/maeve/remote"
+	"github.com/wilymonkey/maeve/app/conf"
+	hs "github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/remote"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -24,14 +23,14 @@ func pushChanges(ctx context.Context, hashes []hs.FileHash) error {
 	}
 	hashes = append(hashes, hashGob)
 
-	for i, node := range conf.GetConf().RemoteNodes {
-		overseer.Global.Send(pushingNode{index: i})
+	for _, node := range conf.GetConf().RemoteNodes {
+		// overseer.Global.Send(pushingNode{index: i})
 		if err := pushToNode(ctx, hashes, node); err != nil {
 			return utils.WrapErr(err)
 		}
 	}
 
-	overseer.Global.Send(doneSend{})
+	// overseer.Global.Send(doneSend{})
 	return nil
 }
 
@@ -86,7 +85,7 @@ func pushToNode(ctx context.Context, hashes []hs.FileHash, node string) error {
 			pushProg.operations.Push(status)
 		},
 		func() {
-			overseer.Global.Send(pushProg)
+			// overseer.Global.Send(pushProg)
 		})
 
 	currHashes, err := remote.ValiExisting(rpcClient, hashes)

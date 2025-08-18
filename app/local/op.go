@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wilymonkey/maeve/conf"
+	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/utils"
 )
 

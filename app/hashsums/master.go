@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
 )
 

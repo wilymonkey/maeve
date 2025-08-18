@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	"github.com/wilymonkey/maeve/conf"
-	hs "github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/conf"
+	hs "github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )

@@ -2,9 +2,10 @@ package remote
 
 import (
 	"bufio"
+	"errors"
 	"net/rpc"
 
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/help"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -20,7 +21,7 @@ func (n *NodeConn) Close() {
 	n.sshClient.Close()
 }
 
-func NewNodeConn(node string, onStderr func(err string)) (*NodeConn, error) {
+func NewNodeConn(node string, onStderr func(err error) error) (*NodeConn, error) {
 	checkConn := func(err error, task string) error {
 		return help.Stacktrace(err, task, help.CheckNodeConn)
 	}
@@ -54,7 +55,8 @@ func NewNodeConn(node string, onStderr func(err string)) (*NodeConn, error) {
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			onStderr(scanner.Text())
+			err := errors.New(scanner.Text())
+			onStderr(help.DevError(err, "scanning error pipe"))
 		}
 	}()
 

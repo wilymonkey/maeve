@@ -1,4 +1,4 @@
-package theme
+package fynext
 
 import (
 	"image/color"
@@ -11,8 +11,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/theme/internal/icons"
-	"github.com/wilymonkey/maeve/utils"
+	"github.com/wilymonkey/maeve/fynext/internal/icons"
 )
 
 func H1(text string) *canvas.Text {
@@ -32,13 +31,67 @@ func H2(text string) *canvas.Text {
 		TextStyle: fyne.TextStyle{Bold: true},
 	}
 }
-func SmallText(text string) *canvas.Text {
+func SmallTxt(text string) *canvas.Text {
 	return &canvas.Text{
 		Color:    zinc700,
 		Text:     text,
 		TextSize: theme.Size(theme.SizeNameCaptionText),
 	}
 }
+func RedBoldTxt(text string) *canvas.Text {
+	return &canvas.Text{
+		Color:     red600,
+		Text:      text,
+		TextSize:  theme.Size(theme.SizeNameCaptionText),
+		TextStyle: fyne.TextStyle{Bold: true},
+	}
+}
+
+func LabelDisableUntil[M ~int](label *widget.Label, b binding.Int, match M) *widget.Label {
+	update := func() {
+		if M(GetOrPanic(b)) == match {
+			label.Importance = widget.MediumImportance
+		} else {
+			label.Importance = widget.LowImportance
+		}
+		canvas.Refresh(label)
+	}
+	update()
+	b.AddListener(binding.NewDataListener(update))
+	return label
+}
+
+func ColorWhen[M ~int](text *canvas.Text, b binding.Int, match M) *canvas.Text {
+	baseColor := text.Color
+	update := func() {
+		if M(GetOrPanic(b)) == match {
+			text.Color = baseColor
+		} else {
+			text.Color = zinc400
+		}
+		canvas.Refresh(text)
+	}
+	update()
+	b.AddListener(binding.NewDataListener(update))
+	return text
+}
+
+func ColorWithin[M ~int](text *canvas.Text, b binding.Int, from, to M) *canvas.Text {
+	baseColor := text.Color
+	update := func() {
+		val := GetOrPanic(b)
+		if val >= int(from) && val < int(to) {
+			text.Color = baseColor
+		} else {
+			text.Color = zinc400
+		}
+		canvas.Refresh(text)
+	}
+	update()
+	b.AddListener(binding.NewDataListener(update))
+	return text
+}
+
 func HighBtn(label string, tapped func()) *widget.Button {
 	btn := widget.NewButton(label, tapped)
 	btn.Importance = widget.HighImportance
@@ -104,7 +157,11 @@ func ErrorBox(ErrMsg binding.String) fyne.CanvasObject {
 	richtext.Wrapping = fyne.TextWrapWord
 
 	ErrMsg.AddListener(binding.NewDataListener(func() {
-		text.Text = utils.GetOrPanic(ErrMsg)
+		txt, err := ErrMsg.Get()
+		if err != nil {
+			panic(err)
+		}
+		text.Text = txt
 	}))
 	return container.NewStack(
 		bg,

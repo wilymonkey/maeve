@@ -4,8 +4,8 @@ import (
 	"crypto/ed25519"
 	"time"
 
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/zeebo/blake3"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"

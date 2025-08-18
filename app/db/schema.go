@@ -1,7 +1,7 @@
 package db
 
 import (
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/help"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )

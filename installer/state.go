@@ -6,7 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"github.com/wilymonkey/maeve/installer/utils"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 var Global State

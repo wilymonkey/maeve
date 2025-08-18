@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/theme"
 )
 
@@ -34,7 +35,7 @@ func sourceDirs() fyne.CanvasObject {
 		}
 	}
 	w := container.NewScroll(
-		theme.GreyBox(
+		fynext.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(
 					global.SourceDirs,
@@ -61,6 +62,6 @@ func addSourceDir() fyne.CanvasObject {
 		}, w)
 	}
 	return theme.HighBtn("Add Folder", func() {
-		theme.ShowWindowDialog(global.Window, "Select Folder", dlg)
+		fynext.ShowWindowDialog(global.Window, "Select Folder", dlg)
 	})
 }

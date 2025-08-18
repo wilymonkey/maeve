@@ -6,6 +6,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/widget"
+	"github.com/wilymonkey/maeve/fynext"
 )
 
 type Help int
@@ -22,7 +27,7 @@ const (
 	devError
 )
 
-func (c Help) String() string {
+func (c Help) string() string {
 	switch c {
 	case AddKey:
 		return "add the Maeve Key to the backup PC"
@@ -52,14 +57,14 @@ func DevError(err error, task string) error {
 }
 
 func Stacktrace(err error, task string, help Help) error {
-	var b strings.Builder
-	fmt.Fprintf(&b, "To solve this: %s.\n", help.String())
-	fmt.Fprintf(&b, "DEVELOPER INFO\n")
-	fmt.Fprintf(&b, "Task: %q.\nOutcome: %q.\n", task, err.Error())
-	b.WriteString("Stack: ")
-	WriteStacktrace(&b)
-	b.WriteRune('.')
-	return errors.New(b.String())
+	var stack strings.Builder
+	WriteStacktrace(&stack)
+	return &helpError{
+		help:  help,
+		task:  task,
+		err:   err,
+		stack: stack.String(),
+	}
 }
 
 func WriteStacktrace(b *strings.Builder) {
@@ -83,4 +88,56 @@ func WriteStacktrace(b *strings.Builder) {
 	if before == after {
 		panic("unable to build stacktrace")
 	}
+}
+
+type helpError struct {
+	help  Help
+	task  string
+	err   error
+	stack string
+}
+
+func (e *helpError) Error() string {
+	return fmt.Sprintf("I was doing %q but got %q", e.task, e.err.Error())
+}
+
+func Widget(errBinding binding.Item[error]) fyne.CanvasObject {
+	// Create a container that will update when the error changes
+	container := widget.NewCard("", "", nil)
+
+	// Function to update the container's content based on the current error
+	updateContent := func(err error) {
+		var hErr *helpError
+		if errors.As(err, &hErr) {
+			e := err.(*helpError)
+			sl := widget.NewLabel(e.stack)
+			sl.Wrapping = fyne.TextWrapWord
+			content := fynext.VBox(
+				fynext.SmallTxt("Possible Fix"),
+				widget.NewLabel(e.help.string()),
+				fynext.SmallTxt("Task Attempted"),
+				widget.NewLabel(e.task),
+				fynext.SmallTxt("Error"),
+				widget.NewLabel(e.err.Error()),
+				fynext.SmallTxt("Stacktrace"),
+				sl,
+			)
+			container.SetContent(content)
+		} else {
+			container.SetContent(widget.NewLabel(err.Error()))
+		}
+	}
+
+	if err := fynext.GetOrPanic(errBinding); err != nil {
+		updateContent(err)
+	}
+
+	// Set up listener for changes
+	errBinding.AddListener(binding.NewDataListener(func() {
+		if err := fynext.GetOrPanic(errBinding); err != nil {
+			updateContent(err)
+		}
+	}))
+
+	return container
 }

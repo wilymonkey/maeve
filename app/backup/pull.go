@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"fyne.io/fyne/v2/data/binding"
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
 )
 

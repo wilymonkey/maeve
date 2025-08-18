@@ -3,7 +3,7 @@ package db
 import (
 	"path"
 
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"

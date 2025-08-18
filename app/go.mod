@@ -1,4 +1,4 @@
-module github.com/wilymonkey/maeve
+module github.com/wilymonkey/maeve/app
 
 go 1.24.3
 
@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/pkg/sftp v1.13.9
+	github.com/wilymonkey/maeve v0.1.1
 	github.com/wilymonkey/maeve/theme v0.0.0-20250801105705-292004aaed17
 	github.com/zeebo/blake3 v0.2.4
 	zombiezen.com/go/sqlite v1.4.2
@@ -36,7 +37,7 @@ require (
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/kr/text v0.1.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.5.1 // indirect

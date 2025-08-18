@@ -8,11 +8,11 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"github.com/wilymonkey/maeve/backup"
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/gui"
-	"github.com/wilymonkey/maeve/remote"
-	"github.com/wilymonkey/maeve/theme"
+	"github.com/wilymonkey/maeve/app/backup"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/gui"
+	"github.com/wilymonkey/maeve/app/remote"
+	"github.com/wilymonkey/maeve/fynext"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	}
 
 	// Visible
-	flagBackupAll := fs.Bool("backup-all", false, "Backup to all nodes in config")
+	flagBackupAll := fs.Bool("backup", false, "Backup to all nodes in config")
 	flagVersion := fs.Bool("version", false, "Print the current version")
 
 	// Hidden, internal use only
@@ -50,11 +50,9 @@ func main() {
 		return
 
 	case *flagServer:
-		log.Println("RPC Server: Starting...")
 		if err := remote.RunServer(); err != nil {
 			log.Fatalf("RPC Server Failed:  %v", err)
 		}
-		log.Println("RPC Server: Exiting.")
 		return
 
 	default:
@@ -69,7 +67,7 @@ func main() {
 
 func startApp(window func(app fyne.App) fyne.Window) {
 	a := app.NewWithID("wilymonkey/maeve")
-	a.Settings().SetTheme(&theme.Theme{})
+	a.Settings().SetTheme(&fynext.Theme{})
 	w := window(a)
 	w.ShowAndRun()
 }

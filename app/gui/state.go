@@ -4,7 +4,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"github.com/wilymonkey/maeve/conf"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -35,7 +36,7 @@ func LoadState(window fyne.Window) {
 
 	state.MaxUpload.Set(utils.BytesToHuman(cfg.MaxUpload))
 	state.MaxUpload.AddListener(binding.NewDataListener(func() {
-		val := utils.GetOrPanic(state.MaxUpload)
+		val := fynext.GetOrPanic(state.MaxUpload)
 		max, err := utils.ParseHumanBytes(val)
 		if err != nil {
 			state.ShowError(err)

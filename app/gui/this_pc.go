@@ -9,9 +9,9 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/clipboard"
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/theme"
+	"github.com/wilymonkey/maeve/app/clipboard"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/fynext"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -53,7 +53,7 @@ func editableLabel(
 	entry.Validator = nil
 
 	var editBtn *widget.Button
-	editBtn = theme.EditBtn(
+	editBtn = fynext.EditBtn(
 		label.Visible,
 		func() {
 			label.Hide()
@@ -79,8 +79,8 @@ func editableLabel(
 	return container.NewBorder(
 		nil, nil, nil,
 		editBtn,
-		theme.VBox(
-			theme.SmallText(name),
+		fynext.VBox(
+			fynext.SmallTxt(name),
 			container.NewHScroll(
 				container.NewStack(label, entry),
 			),
@@ -103,7 +103,7 @@ func backupDir() fyne.CanvasObject {
 		)
 	}
 	openFinder := func() {
-		theme.ShowWindowDialog(
+		fynext.ShowWindowDialog(
 			global.Window,
 			"Select Backup Folder",
 			finderDlg,
@@ -111,9 +111,9 @@ func backupDir() fyne.CanvasObject {
 	}
 	return container.NewBorder(
 		nil, nil, nil,
-		theme.PencilBtn(openFinder),
-		theme.VBox(
-			theme.SmallText("Backup Folder"),
+		fynext.PencilBtn(openFinder),
+		fynext.VBox(
+			fynext.SmallTxt("Backup Folder"),
 			container.NewHScroll(
 				widget.NewLabelWithData(global.MaeveDir),
 			),
@@ -139,9 +139,9 @@ func maeveKey() fyne.CanvasObject {
 
 	return container.NewBorder(
 		nil, nil, nil,
-		theme.DupliBtn(copyKey),
-		theme.VBox(
-			theme.SmallText("Maeve Key"),
+		fynext.DupliBtn(copyKey),
+		fynext.VBox(
+			fynext.SmallTxt("Maeve Key"),
 			container.NewHScroll(info),
 		),
 	)
@@ -150,13 +150,13 @@ func maeveKey() fyne.CanvasObject {
 func trustedPCs() fyne.CanvasObject {
 	openDialog := func() {}
 	info := widget.NewLabel("PCs that have accepted files from this PC before.")
-	btn := theme.PencilBtn(openDialog)
+	btn := fynext.PencilBtn(openDialog)
 
 	return container.NewBorder(
 		nil, nil, nil,
 		btn,
-		theme.VBox(
-			theme.SmallText("Trusted PCs"),
+		fynext.VBox(
+			fynext.SmallTxt("Trusted PCs"),
 			container.NewHScroll(info),
 		),
 	)

@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )

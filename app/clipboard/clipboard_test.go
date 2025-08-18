@@ -7,7 +7,7 @@ package clipboard_test
 import (
 	"testing"
 
-	. "github.com/wilymonkey/maeve/clipboard"
+	. "github.com/wilymonkey/maeve/app/clipboard"
 )
 
 func TestCopyAndPaste(t *testing.T) {

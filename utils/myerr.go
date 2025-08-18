@@ -4,11 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
-
-	"github.com/wilymonkey/maeve/help"
-	"github.com/wilymonkey/maeve/style"
 )
 
 // Wraps the error with file and codeline location.
@@ -27,33 +23,16 @@ func Sleep(t time.Duration) {
 	time.Sleep(time.Millisecond * t)
 }
 
-func PrintErr(err error) string {
-	fail := style.Fail.Render("Failed!")
-	s := fmt.Sprintf("%s %s %v", style.ICross, fail, err)
-	return style.Wrap(s)
-}
-
-func BoolView(b bool) string {
-	if b {
-		return style.ITick
-	}
-	return style.ICross
-}
-
+// If the world state has been violated, panic the program.
 func Assert(reason string, pred bool) {
 	if !pred {
-		var b strings.Builder
-		help.WriteStacktrace(&b)
-		fmt.Fprintf(&b, ": %s", reason)
-		panic(b.String())
+		panic(reason)
 	}
 }
 
+// If there is an error, panic and crash the program.
 func AssertNoErr(reason string, err error) {
 	if err != nil {
-		var b strings.Builder
-		help.WriteStacktrace(&b)
-		fmt.Fprintf(&b, "\n%s: %v", reason, err)
-		panic(b.String())
+		panic(reason)
 	}
 }

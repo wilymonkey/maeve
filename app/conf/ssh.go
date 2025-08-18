@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/help"
 	"golang.org/x/crypto/ssh"
 )
 

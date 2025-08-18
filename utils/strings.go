@@ -6,25 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-
-	"github.com/charmbracelet/x/ansi"
-	"github.com/wilymonkey/maeve/help"
 )
-
-func TruncateStr(s string, width int) string {
-	sWidth := ansi.StringWidth(s)
-	if sWidth > width {
-		// We need space for the ellipsis.
-		availWidth := width - 2
-
-		// Convert to runes for proper Unicode character handling.
-		runes := []rune(s)
-		if len(runes) > availWidth {
-			return "… " + string(runes[len(runes)-availWidth:])
-		}
-	}
-	return s
-}
 
 func BytesToHuman(bytes int64) string {
 	var units = []string{"KB", "MB", "GB", "TB", "PB"}
@@ -65,13 +47,12 @@ func ParseHumanBytes(s string) (int64, error) {
 
 	multiplier, ok := units[unit]
 	if !ok {
-		err := fmt.Errorf("unknown unit: %q", unit)
-		return 0, help.DevError(err, "parsing unit")
+		return 0, fmt.Errorf("unknown unit: %q", unit)
 	}
 
 	val, err := strconv.ParseFloat(numStr, 64)
 	if err != nil {
-		return 0, help.DevError(err, "parsing number")
+		return 0, fmt.Errorf("parsing number: %w", err)
 	}
 
 	return int64(val * float64(multiplier)), nil

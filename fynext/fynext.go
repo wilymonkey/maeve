@@ -1,4 +1,4 @@
-package theme
+package fynext
 
 import (
 	_ "embed"
@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/wilymonkey/maeve/theme/internal/icons"
+	"github.com/wilymonkey/maeve/fynext/internal/icons"
 )
 
 type Theme struct{}

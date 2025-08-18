@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/theme"
+	"github.com/wilymonkey/maeve/fynext"
 )
 
 func makeGUI() fyne.CanvasObject {
@@ -18,9 +18,9 @@ func makeGUI() fyne.CanvasObject {
 			container.NewBorder(
 				container.NewHBox(
 					favicon(64),
-					theme.H1("Maeve Installer"),
+					fynext.H1("Maeve Installer"),
 				),
-				theme.HighBtn("Install", func() {
+				fynext.HighBtn("Install", func() {
 					if err := Global.Install(); err != nil {
 						panic(err)
 					}
@@ -34,11 +34,11 @@ func makeGUI() fyne.CanvasObject {
 }
 
 func body() *fyne.Container {
-	keysDisabled := container.NewCenter(theme.H2("Backup PCs Only"))
+	keysDisabled := container.NewCenter(fynext.H2("Backup PCs Only"))
 	keyTable := widget.NewListWithData(Global.sshKeys,
 		func() fyne.CanvasObject {
 			label := widget.NewLabel("")
-			deleteBtn := theme.DeleteBtn(func() {})
+			deleteBtn := fynext.DeleteBtn(func() {})
 			return container.NewBorder(
 				nil,
 				nil,
@@ -92,17 +92,17 @@ If a key is no longer being used please remove it.`)
 	serverExp.Wrapping = fyne.TextWrapWord
 
 	return container.NewVBox(
-		theme.H2("Is this a Backup PC?"),
+		fynext.H2("Is this a Backup PC?"),
 		widget.NewCheckWithData("Yes, this is where backups will be kept.", Global.isServer),
-		theme.H2("Maeve Keys"),
+		fynext.H2("Maeve Keys"),
 		serverExp,
-		theme.GreyBox(sshKeys),
+		fynext.GreyBox(sshKeys),
 		inputSSH(),
 	)
 }
 
 func statusAndLabel(t string, b binding.Float) *fyne.Container {
-	x := theme.NewPercStatus(b)
+	x := fynext.NewPercStatus(b)
 	x.Resize(fyne.NewSize(20, 20))
 	return container.New(
 		layout.NewCustomPaddedHBoxLayout(0),
@@ -129,7 +129,7 @@ func inputSSH() *fyne.Container {
 		}
 	}))
 
-	addButton := theme.HighBtn("  +  ", func() {
+	addButton := fynext.HighBtn("  +  ", func() {
 		Global.AddKey(inputEntry.Text)
 		inputEntry.SetText("")
 	})

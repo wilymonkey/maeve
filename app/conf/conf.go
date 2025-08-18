@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
 	"golang.org/x/crypto/ssh"

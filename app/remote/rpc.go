@@ -9,13 +9,11 @@ import (
 	"os"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/db"
-	hs "github.com/wilymonkey/maeve/hashsums"
-	"github.com/wilymonkey/maeve/help"
-	"github.com/wilymonkey/maeve/local"
-	"github.com/wilymonkey/maeve/overseer"
+	"github.com/wilymonkey/maeve/app/conf"
+	"github.com/wilymonkey/maeve/app/db"
+	hs "github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/help"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/crypto/ssh"
 )
@@ -77,9 +75,9 @@ func New(session *ssh.Session) (*rpc.Client, error) {
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			overseer.Global.Send(func() tea.Msg {
-				return utils.WrapErr(fmt.Errorf("remote stderr: %s", scanner.Text()))
-			})
+			// overseer.Global.Send(func() tea.Msg {
+			// 	return utils.WrapErr(fmt.Errorf("remote stderr: %s", scanner.Text()))
+			// })
 		}
 	}()
 

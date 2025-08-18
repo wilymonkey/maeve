@@ -8,8 +8,8 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/backup"
-	"github.com/wilymonkey/maeve/theme"
+	"github.com/wilymonkey/maeve/app/backup"
+	"github.com/wilymonkey/maeve/fynext"
 )
 
 func Render() fyne.CanvasObject {
@@ -28,25 +28,25 @@ func Render() fyne.CanvasObject {
 	return container.NewBorder(
 		container.NewHBox(
 			favicon(42),
-			theme.H1("Maeve"),
+			fynext.H1("Maeve"),
 		),
-		theme.HighBtn("Backup Now", launchBackup),
+		fynext.HighBtn("Backup Now", launchBackup),
 		nil,
 		nil,
 		container.NewGridWithRows(3,
 			container.NewBorder(
-				theme.H2("This PC"),
+				fynext.H2("This PC"),
 				nil, nil, nil,
 				thisPC(),
 			),
 			container.NewBorder(
-				theme.H2("Folders"),
+				fynext.H2("Folders"),
 				addSourceDir(),
 				nil, nil,
 				sourceDirs(),
 			),
 			container.NewBorder(
-				theme.H2("Backup PCs"),
+				fynext.H2("Backup PCs"),
 				addRemoteNote(),
 				nil, nil,
 				remoteNotes(),
@@ -58,7 +58,7 @@ func Render() fyne.CanvasObject {
 func remoteNotes() fyne.CanvasObject {
 	emptyRows := func() fyne.CanvasObject {
 		label := widget.NewLabel("")
-		deleteBtn := theme.DeleteBtn(func() {})
+		deleteBtn := fynext.DeleteBtn(func() {})
 		return container.NewBorder(
 			nil, nil, nil,
 			deleteBtn,
@@ -80,7 +80,7 @@ func remoteNotes() fyne.CanvasObject {
 		}
 	}
 	w := container.NewScroll(
-		theme.GreyBox(
+		fynext.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(
 					global.RemoteNodes,
@@ -96,7 +96,7 @@ func remoteNotes() fyne.CanvasObject {
 
 func addRemoteNote() *fyne.Container {
 	inputEntry := widget.NewEntry()
-	addButton := theme.HighBtn("  +  ", func() {
+	addButton := fynext.HighBtn("  +  ", func() {
 		global.RemoteNodes.Append(inputEntry.Text)
 		inputEntry.SetText("")
 	})
