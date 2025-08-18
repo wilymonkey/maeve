@@ -57,7 +57,7 @@ func LabelBold(text string) *widget.Label {
 
 func LabelDisableUntil[M ~int](label *widget.Label, b binding.Int, match M) *widget.Label {
 	update := func() {
-		if M(GetOrPanic(b)) == match {
+		if M(Unwrap(b)) == match {
 			label.Importance = widget.MediumImportance
 		} else {
 			label.Importance = widget.LowImportance
@@ -72,7 +72,7 @@ func LabelDisableUntil[M ~int](label *widget.Label, b binding.Int, match M) *wid
 func ColorWhen[M ~int](text *canvas.Text, b binding.Int, match M) *canvas.Text {
 	baseColor := text.Color
 	update := func() {
-		if M(GetOrPanic(b)) == match {
+		if M(Unwrap(b)) == match {
 			text.Color = baseColor
 		} else {
 			text.Color = zinc400
@@ -87,7 +87,7 @@ func ColorWhen[M ~int](text *canvas.Text, b binding.Int, match M) *canvas.Text {
 func ColorWithin[M ~int](text *canvas.Text, b binding.Int, from, to M) *canvas.Text {
 	baseColor := text.Color
 	update := func() {
-		val := GetOrPanic(b)
+		val := Unwrap(b)
 		if val >= int(from) && val < int(to) {
 			text.Color = baseColor
 		} else {
