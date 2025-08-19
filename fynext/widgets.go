@@ -62,9 +62,8 @@ func LabelDisableUntil[M ~int](label *widget.Label, b binding.Int, match M) *wid
 		} else {
 			label.Importance = widget.LowImportance
 		}
-		canvas.Refresh(label)
+		label.Refresh()
 	}
-	update()
 	b.AddListener(binding.NewDataListener(update))
 	return label
 }

@@ -15,8 +15,9 @@ var guiState *state
 
 type state struct {
 	currTask      binding.Int
-	updateDBState binding.String
+	repairDBState binding.String
 	pullStates    []*pullState
+	updateDBState binding.String
 	ctx           context.Context
 	ctxCancel     context.CancelFunc
 	window        fyne.Window
@@ -42,8 +43,9 @@ func (s *state) ErrGroup(scaling int) (*errgroup.Group, context.Context) {
 type currTask int
 
 const (
-	updatingDB currTask = iota
+	repairingDB currTask = iota
 	pulling
+	updatingDB
 	pushing
 	done
 )
@@ -65,8 +67,9 @@ func loadState(window fyne.Window, exitOnDone bool) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	guiState = &state{
 		currTask:      binding.NewInt(),
-		updateDBState: binding.NewString(),
+		repairDBState: binding.NewString(),
 		pullStates:    newPullState(),
+		updateDBState: binding.NewString(),
 		nodeStates:    nodeStates,
 		ctx:           ctx,
 		ctxCancel:     ctxCancel,

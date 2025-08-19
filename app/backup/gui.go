@@ -29,14 +29,15 @@ func mainWindow() fyne.CanvasObject {
 				fynext.ColorWithin(
 					fynext.H2("Updating My State"),
 					guiState.currTask,
-					updatingDB,
+					repairingDB,
 					pushing,
 				),
 				nil, nil, nil,
 				container.NewBorder(
+					repairDBUI(),
 					updateDBUI(),
-					nil, nil, nil,
-					pullStateUI(),
+					nil, nil,
+					pullStateTable(),
 				),
 			),
 			container.NewBorder(

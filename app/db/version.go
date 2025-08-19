@@ -2,7 +2,6 @@ package db
 
 import (
 	"crypto/ed25519"
-	"time"
 
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
@@ -12,7 +11,7 @@ import (
 )
 
 type DBVersion struct {
-	LatestSnapshot time.Time
+	LatestSnapshot int64
 	Hash           []byte
 	HashSign       []byte
 	Rows           int64
@@ -41,12 +40,12 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 
 	err = sqlitex.ExecuteTransient(conn,
 		`SELECT DISTINCT snapshot 
-		FROM file_hash 
+		FROM path_to_hash
 		ORDER BY snapshot DESC 
 		LIMIT 1;`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				result.LatestSnapshot = time.Unix(stmt.ColumnInt64(0), 0)
+				result.LatestSnapshot = stmt.ColumnInt64(0)
 				return nil
 			},
 		})
@@ -55,7 +54,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
-		"SELECT COUNT(*) FROM file_hash;",
+		"SELECT COUNT(*) FROM path_to_hash;",
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				result.Rows = stmt.ColumnInt64(0)
@@ -108,9 +107,6 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 		var savedHash []byte
 		stmt.ColumnBytes(0, savedHash)
 		hasher.Write(savedHash)
-		if _, err := hasher.Write(savedHash); err != nil {
-			return err
-		}
 		return nil
 	}
 	if total <= maxRows {
@@ -121,29 +117,28 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 		if err != nil {
 			return nil, help.DevReport(err, "hashing rows")
 		}
-	} else {
-		for _, offset := range evenOffsets(total, maxRows) {
-			stmt, err := conn.Prepare("SELECT hash FROM file_meta ORDER BY hash LIMIT 1 OFFSET ?;")
-			if err != nil {
-				return nil, help.DevReport(err, "preparing hash selecting")
-			}
-			defer stmt.Finalize()
+		return hasher.Sum(nil), nil
+	}
 
-			stmt.BindInt64(1, int64(offset))
-			hasRow, err := stmt.Step()
-			if err != nil {
-				return nil, help.DevReport(err, "stepping through rows")
-			}
-			if !hasRow {
-				break
-			}
-			if err := addHashes(stmt); err != nil {
-				return nil, help.DevReport(err, "hashing stepped row")
-			}
+	endTx, err := sqlitex.ImmediateTransaction(conn)
+	if err != nil {
+		return nil, help.DevReport(err, "creating immediate transaction")
+	}
+	defer endTx(&err)
+
+	for _, offset := range evenOffsets(total, maxRows) {
+		err = sqlitex.Execute(conn, "SELECT hash FROM file_meta ORDER BY hash LIMIT 1 OFFSET ?;",
+			&sqlitex.ExecOptions{
+				Args:       []any{offset},
+				ResultFunc: addHashes,
+			},
+		)
+		if err != nil {
+			return nil, help.DevReport(err, "selecting evenly spread hashsums")
 		}
 	}
 
-	return hasher.Sum(nil), nil
+	return hasher.Sum(nil), err
 }
 
 func evenOffsets(dataLen, maxRows int) []int {

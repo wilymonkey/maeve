@@ -8,19 +8,20 @@ import (
 
 func createSchema(conn *sqlite.Conn) error {
 	const schema = `
-	CREATE TABLE IF NOT EXISTS file_hash (
+	CREATE TABLE IF NOT EXISTS file_meta (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		hash BLOB NOT NULL,
-		snapshot TEXT NOT NULL,
-		rel_path TEXT NOT NULL
+		hash BLOB NOT NULL UNIQUE,
+		size INTEGER NOT NULL,
+		mod_time INTEGER NOT NULL
 	);
 
-	CREATE TABLE IF NOT EXISTS file_meta (
-		hash BLOB PRIMARY KEY,
-		rel_path TEXT NOT NULL,
-		size INTEGER NOT NULL,
-		mod_time TEXT NOT NULL
+	CREATE TABLE IF NOT EXISTS path_to_hash (
+		rel_path_hash BLOB PRIMARY KEY,
+		file_meta_id INTEGER NOT NULL,
+		snapshot INTEGER NOT NULL,
+		FOREIGN KEY (file_meta_id) REFERENCES file_meta(id)
 	);
+
 	CREATE TABLE IF NOT EXISTS hash_sign (
 	    id INTEGER PRIMARY KEY CHECK (id = 1),
 	    sign BLOB NOT NULL

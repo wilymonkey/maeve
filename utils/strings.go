@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -59,28 +60,64 @@ func ParseHumanBytes(s string) (int64, error) {
 }
 
 func TruncateString(txt string, maxwidth int) string {
-	txtWidth := stringWidth(txt)
-	if txtWidth <= maxwidth {
-		return txt
+	var width int
+
+	iter := NewRuneIterBackward(txt)
+	for {
+		r, ok := iter.Next()
+		if !ok {
+			return txt
+		}
+		width += runeWidth(r)
+		if width >= maxwidth-widthWide {
+			return "…" + txt[iter.i:]
+		}
+	}
+}
+
+type RuneIterBackward struct {
+	s string
+	i int
+}
+
+func NewRuneIterBackward(s string) *RuneIterBackward {
+	return &RuneIterBackward{s: s, i: len(s) - 1}
+}
+
+// Next returns the next rune going backwards, or ok=false when done.
+func (it *RuneIterBackward) Next() (r rune, ok bool) {
+	if it.i < 0 {
+		return 0, false
 	}
 
-	ellipsis := "…"
-	ellipsisWidth := widthWide
-	availWidth := maxwidth - ellipsisWidth
-	if availWidth <= 0 {
-		return ellipsis
+	// Move to the start byte of the rune (skip continuation bytes)
+	for (it.s[it.i] & 0xC0) == 0x80 {
+		it.i--
 	}
 
-	avgCharWidth := txtWidth / len(txt)
-	estChars := availWidth / avgCharWidth
-	if estChars <= 0 {
-		return ellipsis
+	b := it.s[it.i]
+	switch {
+	case b&0x80 == 0: // 1-byte rune
+		r = rune(b)
+	case b&0xE0 == 0xC0: // 2-byte rune
+		r = rune(b&0x1F)<<6 |
+			rune(it.s[it.i+1]&0x3F)
+	case b&0xF0 == 0xE0: // 3-byte rune
+		r = rune(b&0x0F)<<12 |
+			rune(it.s[it.i+1]&0x3F)<<6 |
+			rune(it.s[it.i+2]&0x3F)
+	case b&0xF8 == 0xF0: // 4-byte rune
+		r = rune(b&0x07)<<18 |
+			rune(it.s[it.i+1]&0x3F)<<12 |
+			rune(it.s[it.i+2]&0x3F)<<6 |
+			rune(it.s[it.i+3]&0x3F)
+	default:
+		// invalid UTF-8 leading byte, treat as raw byte
+		r = rune(b)
 	}
-	if estChars > len(txt) {
-		return txt
-	}
-	start := len(txt) - estChars
-	return ellipsis + txt[start:]
+
+	it.i-- // step left
+	return r, true
 }
 
 const (
@@ -90,37 +127,65 @@ const (
 	widthCJK    = 4
 )
 
-var runeWidth = map[rune]int{
-	// THIN
-	'i': widthThin, 'l': widthThin, '!': widthThin, '.': widthThin,
-	',': widthThin, ':': widthThin, ';': widthThin, '|': widthThin,
-	'\'': widthThin, '"': widthThin,
-	// THICC
-	'W': widthWide, 'M': widthWide, 'O': widthWide, 'Q': widthWide,
+var (
+	asciiWidth [128]int
+	initOnce   sync.Once
+)
+
+func initAsciiWidth() {
+	for i := range asciiWidth {
+		asciiWidth[i] = widthNormal
+	}
+	for _, r := range []byte{'i', 'l', '!', '.', ',', ':', ';', '|', '\'', '"'} {
+		asciiWidth[r] = widthThin
+	}
+	for _, r := range []byte{'W', 'M', 'O', 'Q'} {
+		asciiWidth[r] = widthWide
+	}
 }
 
-func stringWidth(s string) int {
-	var width int
-	for _, r := range s {
-		switch {
-		// Fast path for ASCII first
-		case r < 0x80:
-			if val, ok := runeWidth[r]; ok {
-				width += val
-			} else {
-				width += widthNormal
-			}
-		// CJK ranges (common + extensions + Hangul + Kana)
-		case (r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified
-			(r >= 0x3400 && r <= 0x4DBF) || // CJK Extension A
-			(r >= 0xAC00 && r <= 0xD7AF) || // Hangul
-			(r >= 0x3040 && r <= 0x309F) || // Hiragana
-			(r >= 0x30A0 && r <= 0x30FF): // Katakana
-			width += widthCJK
+func runeWidth(r rune) int {
+	initOnce.Do(initAsciiWidth)
 
-		default:
-			width += widthNormal
-		}
+	if r < 0x80 {
+		return asciiWidth[r]
+
 	}
-	return width
+
+	switch {
+	case r < 0x3000:
+		// Nothing interesting below 0x3000 except ASCII/Latin ext already handled
+		return widthNormal
+
+	case r < 0x3100:
+		// Hiragana 3040–309F
+		if r >= 0x3040 {
+			return widthCJK
+		}
+		return widthNormal
+
+	case r < 0x3400:
+		// Katakana 30A0–30FF
+		if r >= 0x30A0 && r <= 0x30FF {
+			return widthCJK
+		}
+		return widthNormal
+
+	case r < 0xA000:
+		// CJK Unified 4E00–9FFF
+		if r >= 0x4E00 {
+			return widthCJK
+		}
+		return widthNormal
+
+	case r < 0xD800:
+		// Hangul AC00–D7AF
+		if r >= 0xAC00 {
+			return widthCJK
+		}
+		return widthNormal
+
+	default:
+		return widthNormal
+	}
 }

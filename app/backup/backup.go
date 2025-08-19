@@ -35,15 +35,23 @@ func dispatcher() error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
-	if err = updateDB(&conn); err != nil {
+	if err = repairDB(&conn); err != nil {
 		return err
 	}
 
 	guiState.nextTask()
-	if err = newLatest(); err != nil {
+	fileMetas, err := newLatest(conn)
+	if err != nil {
 		return err
 	}
 
+	guiState.nextTask()
+	if err = updateDB(conn, fileMetas); err != nil {
+		return err
+	}
+
+	guiState.nextTask()
 	return nil
 }
