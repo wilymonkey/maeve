@@ -15,11 +15,19 @@ func createSchema(conn *sqlite.Conn) error {
 		mod_time INTEGER NOT NULL
 	);
 
-	CREATE TABLE IF NOT EXISTS path_to_hash (
-		rel_path_hash BLOB PRIMARY KEY,
+	CREATE TABLE IF NOT EXISTS path_hash (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		hash BLOB NOT NULL UNIQUE
+	);
+
+	CREATE TABLE IF NOT EXISTS path_meta_link (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		path_id INTEGER NOT NULL,
 		file_meta_id INTEGER NOT NULL,
 		snapshot INTEGER NOT NULL,
-		FOREIGN KEY (file_meta_id) REFERENCES file_meta(id)
+		FOREIGN KEY (path_id) REFERENCES path_hash(id),
+		FOREIGN KEY (file_meta_id) REFERENCES file_meta(id),
+		UNIQUE (path_id, file_meta_id, snapshot)
 	);
 
 	CREATE TABLE IF NOT EXISTS hash_sign (

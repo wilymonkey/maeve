@@ -40,7 +40,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 
 	err = sqlitex.ExecuteTransient(conn,
 		`SELECT DISTINCT snapshot 
-		FROM path_to_hash
+		FROM path_meta_link
 		ORDER BY snapshot DESC 
 		LIMIT 1;`,
 		&sqlitex.ExecOptions{
@@ -50,11 +50,11 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "querying db_version rows")
+		return nil, help.DevReport(err, "getting latest snapshot")
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
-		"SELECT COUNT(*) FROM path_to_hash;",
+		"SELECT COUNT(*) FROM path_meta_link;",
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				result.Rows = stmt.ColumnInt64(0)
@@ -62,7 +62,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "counting file_meta rows")
+		return nil, help.DevReport(err, "counting path_meta_link rows")
 	}
 
 	return &result, nil

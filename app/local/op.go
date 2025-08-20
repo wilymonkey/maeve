@@ -1,10 +1,8 @@
 package local
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/wilymonkey/maeve/app/conf"
@@ -16,20 +14,6 @@ const DirTimeFormat = "02Jan2006-1504"
 
 func MkDir(path string) error {
 	return os.MkdirAll(path, 0755)
-}
-
-func UnixFromPath(rel_path string) (int64, error) {
-	cleaned := filepath.Clean(rel_path)
-	parts := strings.Split(cleaned, string(filepath.Separator))
-	if len(parts) < 0 && parts[0] == "" {
-		err := fmt.Errorf("%q has no root folder", rel_path)
-		return 0, help.DevReport(err, "getting root folder")
-	}
-	result, err := time.Parse(DirTimeFormat, parts[0])
-	if err != nil {
-		return 0, help.DevReport(err, "parsing root folder as time")
-	}
-	return result.Unix(), nil
 }
 
 func PathExists(path string) (bool, error) {

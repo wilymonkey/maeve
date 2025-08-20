@@ -38,7 +38,7 @@ const (
 	UDBAddEntries = "adding new entries into database..."
 )
 
-func UDBDone(rows int) string {
+func UDBDone(rows int64) string {
 	return fmt.Sprintf("Done! Added %d entries.", rows)
 }
 
