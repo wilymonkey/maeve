@@ -1,129 +1,218 @@
 package backup
 
 import (
-	"context"
-
-	"github.com/pkg/sftp"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
-	hs "github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/db"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/app/remote"
+	"github.com/wilymonkey/maeve/fynext"
+	"github.com/wilymonkey/maeve/fynext/icons"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-type doneSend struct{}
+// =======================================
+// STATES
+// =======================================
 
-type pushingNode struct {
-	index int
+type pushState struct {
+	path      binding.String
+	percent   binding.Float
+	currSize  binding.Item[int64]
+	totalSize binding.Item[int64]
 }
 
-func pushChanges(ctx context.Context, hashes []hs.OldFileHash) error {
-	hashGob, err := hs.GetSelfHashGob()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	hashes = append(hashes, hashGob)
-
-	for _, node := range conf.GetConf().RemoteNodes {
-		// overseer.Global.Send(pushingNode{index: i})
-		if err := pushToNode(ctx, hashes, node); err != nil {
-			return utils.WrapErr(err)
-		}
-	}
-
-	// overseer.Global.Send(doneSend{})
-	return nil
-}
-
-type pushProgress struct {
-	operations *utils.UniqueCircSlice[hs.OldFileHash, remote.SendStatus]
-	curr       int
-	total      int
-}
-
-func newPushProgress(total int) pushProgress {
-	return pushProgress{
-		operations: utils.NewUniqueCircSlice(
-			5,
-			func(item remote.SendStatus) hs.OldFileHash { return item.Hash },
-		),
-		total: total,
+func newPushState() pushState {
+	return pushState{
+		path:      binding.NewString(),
+		percent:   binding.NewFloat(),
+		currSize:  fynext.BindNewInt64(),
+		totalSize: fynext.BindNewInt64(),
 	}
 }
 
-func pushToNode(ctx context.Context, hashes []hs.OldFileHash, node string) error {
-	sshClient, err := remote.NewSSHClient(node)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer sshClient.Close()
-	rpcSesh, err := sshClient.NewSession()
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer rpcSesh.Close()
-	rpcClient, err := remote.New(rpcSesh)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer rpcClient.Close()
-	sftpClient, err := sftp.NewClient(sshClient)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	defer sftpClient.Close()
+type nodeState struct {
+	name        string
+	isConnected binding.Bool
+	isDone      binding.Bool
+	err         binding.Item[error]
+}
 
-	progChan := make(chan remote.SendStatus, 100)
-	defer close(progChan)
-	pushProg := newPushProgress(len(hashes))
-
-	utils.Throttle(
-		progChan,
-		func(status remote.SendStatus) {
-			if status.IsGood {
-				pushProg.curr++
-			}
-			pushProg.operations.Push(status)
-		},
-		func() {
-			// overseer.Global.Send(pushProg)
+func newNodeStates() []*nodeState {
+	cfg := conf.GetConf()
+	states := make([]*nodeState, 0, len(cfg.RemoteNodes))
+	for _, node := range cfg.RemoteNodes {
+		states = append(states, &nodeState{
+			name:        node,
+			isConnected: binding.NewBool(),
+			isDone:      binding.NewBool(),
+			err:         fynext.BindNewErr(),
 		})
-
-	currHashes, err := remote.ValiExisting(rpcClient, hashes)
-	if err != nil {
-		return utils.WrapErr(err)
 	}
-	hashes, err = updateProg(hashes, currHashes, progChan)
+	return states
+}
 
-	currHashes, err = remote.LinkExisting(rpcClient, hashes)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	hashes, err = updateProg(hashes, currHashes, progChan)
+// =======================================
+// UI
+// =======================================
 
-	if len(hashes) > 0 {
-		if err := remote.SendFiles(hashes, sftpClient, rpcClient, ctx, progChan); err != nil {
-			return utils.WrapErr(err)
+func nodeStateGrid() fyne.CanvasObject {
+	objects := make([]fyne.CanvasObject, 0, len(guiState.nodeStates))
+
+	for _, state := range guiState.nodeStates {
+		showErr := func() {
+			err := fynext.Unwrap(state.err)
+			if err != nil {
+				showErrorDialog(err)
+			}
 		}
+		name := utils.TruncateString(state.name, 30)
+		btn := widget.NewButtonWithIcon(name, nil, showErr)
+
+		state.isConnected.AddListener(binding.NewDataListener(func() {
+			if fynext.Unwrap(state.err) != nil {
+				return
+			}
+			if fynext.Unwrap(state.isConnected) {
+				btn.Enable()
+				btn.Icon = icons.LinkSvg
+				return
+			} else {
+				btn.Disable()
+				btn.Icon = nil
+			}
+			btn.Refresh()
+		}))
+
+		state.isDone.AddListener(binding.NewDataListener(func() {
+			if fynext.Unwrap(state.err) != nil {
+				return
+			}
+			if fynext.Unwrap(state.isDone) {
+				btn.Enable()
+				btn.Icon = icons.CheckSvg
+				btn.Importance = widget.SuccessImportance
+				btn.Refresh()
+			}
+		}))
+
+		state.err.AddListener(binding.NewDataListener(func() {
+			if fynext.Unwrap(state.err) != nil {
+				btn.Enable()
+				btn.Icon = icons.DangerSvg
+				btn.Importance = widget.DangerImportance
+				btn.Refresh()
+			}
+		}))
+
+		objects = append(objects, btn)
 	}
 
-	if err := remote.FinSnapshot(rpcClient); err != nil {
-		return utils.WrapErr(err)
+	grid := container.NewGridWrap(fyne.NewSize(200, 50), objects...)
+	return container.NewVScroll(grid)
+}
+
+func pushStateCard() fyne.CanvasObject {
+	return fynext.VBox(
+		widget.NewLabelWithData(guiState.pushState.path),
+		widget.NewProgressBarWithData(guiState.pushState.percent),
+	)
+}
+
+// =======================================
+// METHODS
+// =======================================
+
+func pushChanges() error {
+	for _, state := range guiState.nodeStates {
+		nodeConn, err := remote.NewNodeConn(state.name, func(err error) {
+			state.err.Set(err)
+		})
+		if err != nil {
+			return err
+		}
+		defer nodeConn.Close()
+
+		state.isConnected.Set(true)
+		defer state.isConnected.Set(false)
+
+		dbPath := db.DBPath(conf.MyNode())
+		if err := nodeConn.PushDB(dbPath, guiState.ctx); err != nil {
+			return err
+		}
+
+		missingIds, err := nodeConn.ConformToDB()
+		if err != nil {
+			return err
+		}
+
+		metas, err := processIds(missingIds)
+		if err != nil {
+			return err
+		}
+
+		var progPath string
+		var progSize int64
+		var totalProgSize int64
+		var sentSize int64
+		totalSize := fynext.Unwrap(guiState.pushState.totalSize)
+		progChan := make(chan *remote.PushStatus, 10)
+		utils.Throttle(
+			progChan,
+			func(p *remote.PushStatus) {
+				if p.Meta.RelPath != progPath {
+					progPath = p.Meta.RelPath
+					progSize = 0
+					sentSize += totalProgSize
+					totalProgSize = p.Meta.Size
+				} else {
+					progSize = p.SentSize
+				}
+			},
+			func() {
+				if fynext.Unwrap(guiState.pushState.path) != progPath {
+					guiState.pushState.path.Set(progPath)
+				}
+				currSize := sentSize + progSize
+				guiState.pushState.currSize.Set(currSize)
+				percent := float64(currSize) / float64(totalSize)
+				guiState.pushState.percent.Set(percent)
+			},
+		)
+		if err := nodeConn.PushLinks(metas, guiState.ctx, progChan); err != nil {
+			return err
+		}
+
+		state.isDone.Set(true)
 	}
 
 	return nil
 }
 
-// Updates progChan using what hashes are missing.
-func updateProg(prev, curr []hs.OldFileHash, progChan chan remote.SendStatus) ([]hs.OldFileHash, error) {
-	currSet := utils.SliceToSet(curr)
-	for _, h := range prev {
-		if _, exists := currSet[h]; !exists {
-			status, err := remote.NewDoneStatus(h)
-			if err != nil {
-				return nil, utils.WrapErr(err)
-			}
-			progChan <- status
-		}
+// Converts linkIds to FileMeta and updates currSize.
+func processIds(linkIds []int64) ([]*local.FileMeta, error) {
+	conn, err := db.OpenRead(conf.MyNode())
+	if err != nil {
+		return nil, err
 	}
-	return curr, nil
+	defer func() {
+		err = conn.Close()
+	}()
+
+	metas, err := db.MetaFromIds(conn, linkIds)
+	if err != nil {
+		return nil, err
+	}
+
+	var missingSize int64
+	for _, m := range metas {
+		missingSize += m.Size
+	}
+	totalSize := fynext.Unwrap(guiState.pushState.totalSize)
+	guiState.pushState.currSize.Set(totalSize - missingSize)
+
+	return metas, err
 }

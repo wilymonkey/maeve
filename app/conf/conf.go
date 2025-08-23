@@ -19,7 +19,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const TIMEFORMAT = "02Jan2006-1504"
+const TimeFormat = "02Jan2006-1504"
+const DirTimeFormat = "02Jan2006-1504"
 
 var Version = "DEV"
 
@@ -226,8 +227,8 @@ func (c *MaeveConf) NodeSnapshots(node string) ([]string, error) {
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
-		ti, err1 := time.Parse(TIMEFORMAT, result[i])
-		tj, err2 := time.Parse(TIMEFORMAT, result[j])
+		ti, err1 := time.Parse(TimeFormat, result[i])
+		tj, err2 := time.Parse(TimeFormat, result[j])
 		if err1 != nil || err2 != nil {
 			return result[i] < result[j]
 		}

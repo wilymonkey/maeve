@@ -15,9 +15,9 @@ func createSchema(conn *sqlite.Conn) error {
 		mod_time INTEGER NOT NULL
 	);
 
-	CREATE TABLE IF NOT EXISTS path_hash (
+	CREATE TABLE IF NOT EXISTS file_path (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		hash BLOB NOT NULL UNIQUE
+		path TEXT NOT NULL UNIQUE
 	);
 
 	CREATE TABLE IF NOT EXISTS path_meta_link (

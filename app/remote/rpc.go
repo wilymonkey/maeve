@@ -1,21 +1,18 @@
 package remote
 
 import (
-	"bufio"
-	"fmt"
 	"io"
 	"net"
 	"net/rpc"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/db"
-	hs "github.com/wilymonkey/maeve/app/hashsums"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
-	"github.com/wilymonkey/maeve/utils"
-	"golang.org/x/crypto/ssh"
+	"github.com/zeebo/blake3"
 )
 
 type sshPipeConn struct {
@@ -52,38 +49,6 @@ func RunServer() error {
 	return nil
 }
 
-// Deprecated: Use NewNodeConn.
-func New(session *ssh.Session) (*rpc.Client, error) {
-	stdinPipe, err := session.StdinPipe()
-	if err != nil {
-		return nil, utils.WrapErr(err)
-	}
-	stdoutPipe, err := session.StdoutPipe()
-	if err != nil {
-		return nil, utils.WrapErr(err)
-	}
-	stderrPipe, err := session.StderrPipe()
-	if err != nil {
-		return nil, utils.WrapErr(err)
-	}
-
-	if err := session.Start("maeve --server"); err != nil {
-		return nil, utils.WrapErr(err)
-	}
-
-	// Report to TUI
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			// overseer.Global.Send(func() tea.Msg {
-			// 	return utils.WrapErr(fmt.Errorf("remote stderr: %s", scanner.Text()))
-			// })
-		}
-	}()
-
-	return rpc.NewClient(&sshPipeConn{reader: stdoutPipe, writer: stdinPipe}), nil
-}
-
 type RPCFuncs int
 
 type GetDBVersionArgs struct {
@@ -94,10 +59,21 @@ type GetDBVersionReply struct {
 }
 
 func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply) error {
-	conn, err := db.Open(args.Node)
+	exists, err := local.PathExists(db.DBPath(args.Node))
 	if err != nil {
 		return err
 	}
+	if !exists {
+		reply.Version = &db.DBVersion{}
+		return nil
+	}
+
+	conn, err := db.OpenRead(args.Node)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	reply.Version, err = db.GetVersion(conn)
 	if err != nil {
 		return err
@@ -126,143 +102,88 @@ func (h *RPCFuncs) BackupDir(args *BackupDirArgs, reply *BackupDirReply) error {
 	return nil
 }
 
-func (n *NodeConn) backupDir() (string, error) {
+func (n *NodeConn) addBackupDir() error {
 	args := &BackupDirArgs{Node: conf.GetConf().Name}
 	var reply BackupDirReply
 	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
-		return "", help.DevReport(err, "fetching my remote backup dir")
+		return help.DevReport(err, "fetching my remote backup dir")
 	}
-	return reply.Path, nil
-}
-
-// =======================================
-// TODO: REMOVE ALL OF THE FOLLOWING
-// =======================================
-
-type TempLocationArgs struct {
-	Node string
-}
-type TempLocationReply struct {
-	Path string
-}
-
-func (h *RPCFuncs) TempLocation(args *TempLocationArgs, reply *TempLocationReply) error {
-	reply.Path = conf.GetConf().NodeDirTemp(args.Node)
+	n.backupDir = reply.Path
 	return nil
 }
 
-func TempLocation(rpc *rpc.Client) (string, error) {
-	args := &TempLocationArgs{Node: conf.GetConf().Name}
-	var reply TempLocationReply
-	if err := rpc.Call("RPCFuncs.TempLocation", args, &reply); err != nil {
-		return "", utils.WrapErr(err)
-	}
-	return reply.Path, nil
-}
-
-type VerifyFuncArgs struct {
-	Hash hs.OldFileHash
+type VerifyFileArgs struct {
+	Hash *local.FileMeta
 	Node string
 }
-type VerifyFuncReply struct {
-	HashGood bool
+type VerifyFileReply struct {
+	IsGood bool
 }
 
-func (h *RPCFuncs) VerifyTempfile(args *VerifyFuncArgs, reply *VerifyFuncReply) error {
-
-	// path := args.Hash.Path.ResolveTemp(args.Node)
-	// hashGood, err := args.Hash.Validate(path)
-	// if err != nil {
-	// 	return utils.WrapErr(err)
-	// }
-	// reply.HashGood = hashGood
-	return fmt.Errorf("NOT COMPLETE")
+func (h *RPCFuncs) VerifyFile(args *VerifyFileArgs, reply *VerifyFileReply) error {
+	nodeDir := conf.NodeDir(args.Node)
+	path := filepath.Join(nodeDir, args.Hash.RelPath)
+	isGood, err := args.Hash.Validate(path, blake3.New())
+	if err != nil {
+		return err
+	}
+	reply.IsGood = isGood
+	return nil
 }
 
-func VerifyFile(rpc *rpc.Client, hash hs.OldFileHash) (bool, error) {
-	args := &VerifyFuncArgs{
+func (n *NodeConn) VerifyFile(hash *local.FileMeta) (bool, error) {
+	args := &VerifyFileArgs{
 		Hash: hash,
 		Node: conf.GetConf().Name,
 	}
-	var reply VerifyFuncReply
-	if err := rpc.Call("RPCFuncs.VerifyTempfile", args, &reply); err != nil {
-		return false, utils.WrapErr(err)
+	var reply VerifyFileReply
+	if err := n.rpcClient.Call("RPCFuncs.VerifyFile", args, &reply); err != nil {
+		return false, help.DevReport(err, "verifying remote file")
 	}
-	return reply.HashGood, nil
+	return reply.IsGood, nil
 }
 
-type LinkExistingArgs struct {
-	Hashes []hs.OldFileHash
-	Node   string
-}
-type LinkExistingReply struct {
-	Hashes []hs.OldFileHash
-}
-
-func (h *RPCFuncs) LinkExisting(args *LinkExistingArgs, reply *LinkExistingReply) error {
-	hashes, err := hs.LinkExisting(args.Node, args.Hashes)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	reply.Hashes = hashes
-	return nil
-}
-
-func LinkExisting(rpc *rpc.Client, hashes []hs.OldFileHash) ([]hs.OldFileHash, error) {
-	args := &LinkExistingArgs{Node: conf.GetConf().Name, Hashes: hashes}
-	var reply LinkExistingReply
-	if err := rpc.Call("RPCFuncs.LinkExisting", args, &reply); err != nil {
-		return nil, utils.WrapErr(err)
-	}
-	return reply.Hashes, nil
-}
-
-type ValiExistingArgs struct {
-	Hashes []hs.OldFileHash
-	Node   string
-}
-type ValiExistingReply struct {
-	Hashes []hs.OldFileHash
-}
-
-func (h *RPCFuncs) ValiExisting(args *ValiExistingArgs, reply *ValiExistingReply) error {
-	hashes, err := hs.ValidateExisting(args.Hashes, args.Node)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	reply.Hashes = hashes
-	return nil
-}
-
-func ValiExisting(rpc *rpc.Client, hashes []hs.OldFileHash) ([]hs.OldFileHash, error) {
-	args := &ValiExistingArgs{
-		Hashes: hashes,
-		Node:   conf.GetConf().Name,
-	}
-	var reply ValiExistingReply
-	if err := rpc.Call("RPCFuncs.ValiExisting", args, &reply); err != nil {
-		return hashes, utils.WrapErr(err)
-	}
-	return reply.Hashes, nil
-}
-
-type FinSnapshotArgs struct {
+type ConformToDBArgs struct {
 	Node string
 }
+type ConformToDBReply struct {
+	MissingLinkIds []int64
+}
 
-func (h *RPCFuncs) FinSnapshot(args *FinSnapshotArgs, reply *struct{}) error {
-	if err := local.CullSnapshots(args.Node); err != nil {
-		return utils.WrapErr(err)
+func (h *RPCFuncs) ConformToDB(args *ConformToDBArgs, reply *ConformToDBReply) error {
+	nodeDir := conf.NodeDir(args.Node)
+	conn, err := db.OpenRead(nodeDir)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	metas, err := db.GetLatestMeta(conn)
+	if err != nil {
+		return err
 	}
 
+	missing, err := GetMissing(nodeDir, metas)
+	if err != nil {
+		return err
+	}
+
+	ids, err := db.IdsFromMetas(conn, missing)
+	if err != nil {
+		return err
+	}
+
+	reply.MissingLinkIds = ids
 	return nil
 }
 
-func FinSnapshot(rpc *rpc.Client) error {
-	args := &FinSnapshotArgs{Node: conf.GetConf().Name}
-	var reply struct{}
-	if err := rpc.Call("RPCFuncs.FinSnapshot", args, &reply); err != nil {
-		return utils.WrapErr(err)
+func (n *NodeConn) ConformToDB() ([]int64, error) {
+	args := &ConformToDBArgs{
+		Node: conf.GetConf().Name,
 	}
-	return nil
+	var reply ConformToDBReply
+	if err := n.rpcClient.Call("RPCFuncs.ConformToDB", args, &reply); err != nil {
+		return nil, help.DevReport(err, "linking existing files")
+	}
+	return reply.MissingLinkIds, nil
 }

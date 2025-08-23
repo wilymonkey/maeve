@@ -1,21 +1,17 @@
 package db
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
-	"github.com/zeebo/blake3"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
 // Returns rows inserted.
-func InsertFileMetas(conn *sqlite.Conn, fileMetas []*hashsums.FileMeta) (int64, error) {
+func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, error) {
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
 		return 0, help.DevReport(err, "creating immediate transaction")
@@ -54,21 +50,21 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*hashsums.FileMeta) (int64, 
 			return 0, help.DevReport(err, "insert row into file_meta")
 		}
 
-		snapshot, pathHash, err := formatRelpath(meta.RelPath)
+		snapshot, otherpath, err := formatRelpath(meta.RelPath)
 		if err != nil {
 			return 0, err
 		}
 
-		var pathHashId int
+		var pathId int
 		err = sqlitex.Execute(conn,
-			`INSERT INTO path_hash (hash)
+			`INSERT INTO file_path (path)
 			VALUES (?)
-			ON CONFLICT(hash) DO UPDATE SET hash = hash
+			ON CONFLICT(path) DO UPDATE SET path = path
 			RETURNING id;`,
 			&sqlitex.ExecOptions{
-				Args: []any{pathHash},
+				Args: []any{otherpath},
 				ResultFunc: func(stmt *sqlite.Stmt) error {
-					pathHashId = stmt.ColumnInt(0)
+					pathId = stmt.ColumnInt(0)
 					return nil
 				},
 			},
@@ -82,7 +78,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*hashsums.FileMeta) (int64, 
 			VALUES (?, ?, ?)
 			ON CONFLICT DO NOTHING;`,
 			&sqlitex.ExecOptions{
-				Args: []any{pathHashId, fileMetaId, snapshot},
+				Args: []any{pathId, fileMetaId, snapshot},
 			},
 		)
 		if err != nil {
@@ -107,25 +103,15 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*hashsums.FileMeta) (int64, 
 }
 
 // Splits the relpath into a unix timestamp and a hash of the remaining path.
-func formatRelpath(relpath string) (int64, [32]byte, error) {
-	var result [32]byte
-
-	cleaned := filepath.Clean(relpath)
-	parts := strings.Split(cleaned, string(filepath.Separator))
-	if len(parts) == 0 || parts[0] == "" {
-		err := fmt.Errorf("%q has no root folder", relpath)
-		return 0, result, help.DevReport(err, "getting root folder")
-	}
-	snapshot, err := time.Parse(local.DirTimeFormat, parts[0])
+func formatRelpath(relpath string) (int64, string, error) {
+	root, rest, err := local.SplitAtRootPath(relpath)
 	if err != nil {
-		return 0, result, help.DevReport(err, "parsing root folder as time")
+		return 0, "", err
 	}
-	if len(parts) < 2 || parts[1] == "" {
-		err := fmt.Errorf("%q has no child path", relpath)
-		return 0, result, help.DevReport(err, "getting child path")
+	snapshot, err := time.Parse(conf.DirTimeFormat, root)
+	if err != nil {
+		return 0, "", help.DevReport(err, "parsing root folder as time")
 	}
-	childpath := filepath.Join(parts[1:]...)
-	result = blake3.Sum256([]byte(childpath))
 
-	return snapshot.Unix(), result, nil
+	return snapshot.Unix(), rest, nil
 }

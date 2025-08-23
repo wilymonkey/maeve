@@ -24,6 +24,7 @@ const (
 	DelBackupDir
 	DelDB
 	DelPrivateKey
+	badNodeConn
 	checkSource
 	checkBackupDir
 	checkNodeConn
@@ -46,6 +47,8 @@ func (c Help) string() string {
 		return "delete the .db file in the backup folder"
 	case DelPrivateKey:
 		return "delete the private key"
+	case badNodeConn:
+		return "the connection with the backup PC seems to be bad"
 	case checkSource:
 		return "check if I have permission to access the backup source files/folders"
 	case checkBackupDir:
@@ -57,6 +60,10 @@ func (c Help) string() string {
 	default:
 		return "...this shouldn't be possible"
 	}
+}
+
+func BadNodeConn(err error, task string) error {
+	return newHelpError(err, task, badNodeConn)
 }
 
 func CheckSource(err error, task string) error {
@@ -116,6 +123,31 @@ func newHelpError(err error, task string, help Help) error {
 
 func (e *helpError) Error() string {
 	return fmt.Sprintf("I was doing %q but got %q", e.task, e.err.Error())
+}
+
+func Render(err error) fyne.CanvasObject {
+	var helpErr *helpError
+	if errors.As(err, &helpErr) {
+		errLbl := widget.NewLabel(helpErr.err.Error())
+		errLbl.Wrapping = fyne.TextWrapWord
+		sl := widget.NewLabel(helpErr.stack)
+		sl.Wrapping = fyne.TextWrapWord
+
+		content := fynext.VBox(
+			fynext.SmallTxt("Possible Fix"),
+			widget.NewLabel(helpErr.help.string()),
+			fynext.SmallTxt("Task Attempted"),
+			widget.NewLabel(helpErr.task),
+			fynext.SmallTxt("Error"),
+			errLbl,
+			fynext.SmallTxt("Stacktrace"),
+			sl,
+		)
+		return content
+	}
+
+	return widget.NewLabel(err.Error())
+
 }
 
 type Widget struct {

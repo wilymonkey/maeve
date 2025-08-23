@@ -9,11 +9,11 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/db"
-	"github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/app/remote"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
-	"zombiezen.com/go/sqlite"
+	"golang.org/x/sync/errgroup"
 )
 
 // =======================================
@@ -83,19 +83,28 @@ type nodeVersion struct {
 	version *db.DBVersion
 }
 
-func repairDB(conn **sqlite.Conn) error {
+func repairDB() error {
 	guiState.repairDBState.Set(RDBGetLocal)
-	localVersion, err := db.GetVersion((*conn))
+	localVersion, err := getLocalVer()
 	if err != nil {
 		return err
 	}
 
 	guiState.repairDBState.Set(RDBGetRemote)
+
+	eGrp, ctx := errgroup.WithContext(guiState.ctx)
+	eGrp.SetLimit(10)
+
 	versionChan := make(chan nodeVersion, 10)
 	collectVersions := utils.CollectChan(versionChan)
-	eGrp, _ := guiState.ErrGroup(2)
-	for node, nodeState := range guiState.nodeStates {
+
+	for _, nodeState := range guiState.nodeStates {
 		eGrp.Go(func() error {
+			node := nodeState.name
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+
 			nodeConn, err := remote.NewNodeConn(node, func(err error) {
 				nodeState.err.Set(err)
 			})
@@ -104,6 +113,9 @@ func repairDB(conn **sqlite.Conn) error {
 				return nil
 			}
 			defer nodeConn.Close()
+
+			nodeState.isConnected.Set(true)
+			defer nodeState.isConnected.Set(false)
 
 			dbVersion, err := nodeConn.GetDBVersion()
 			if err != nil {
@@ -130,7 +142,6 @@ func repairDB(conn **sqlite.Conn) error {
 	}
 
 	guiState.repairDBState.Set(RDBFetch(node))
-	(*conn).Close()
 	nodeConn, err := remote.NewNodeConn(node, func(err error) {
 		guiState.err.Set(err)
 	})
@@ -138,23 +149,42 @@ func repairDB(conn **sqlite.Conn) error {
 		return err
 	}
 	defer nodeConn.Close()
-	if err := nodeConn.AddSFTP(); err != nil {
-		return err
-	}
+
 	if err := nodeConn.PullDB(); err != nil {
 		return err
 	}
-	*conn, err = db.Open(conf.MyNode())
-	if err != nil {
-		return err
-	}
-	localVersion, err = db.GetVersion((*conn))
+
+	localVersion, err = getLocalVer()
 	if err != nil {
 		return err
 	}
 
 	guiState.repairDBState.Set(RDBDone(localVersion))
 	return nil
+}
+
+func getLocalVer() (*db.DBVersion, error) {
+	myNode := conf.MyNode()
+	exists, err := local.PathExists(db.DBPath(myNode))
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return &db.DBVersion{}, nil
+	}
+
+	conn, err := db.OpenRead(myNode)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	ver, err := db.GetVersion(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return ver, nil
 }
 
 func findBestVersion(nodeVersions []nodeVersion) string {
@@ -176,8 +206,15 @@ func findBestVersion(nodeVersions []nodeVersion) string {
 	return nodeVersions[nodeIndex].node
 }
 
-func updateDB(conn *sqlite.Conn, fileMetas []*hashsums.FileMeta) error {
+func updateDB(fileMetas []*local.FileMeta) error {
 	guiState.updateDBState.Set(UDBAddEntries)
+
+	conn, err := db.OpenWrite(conf.MyNode())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	rows, err := db.InsertFileMetas(conn, fileMetas)
 	if err != nil {
 		return err

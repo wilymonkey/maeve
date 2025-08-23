@@ -60,3 +60,10 @@ var DuplicateSvg = &fyne.StaticResource{
 	StaticName:    "duplicate.svg",
 	StaticContent: duplicateIcon,
 }
+
+//go:embed link.svg
+var linkIcon []byte
+var LinkSvg = &fyne.StaticResource{
+	StaticName:    "link.svg",
+	StaticContent: linkIcon,
+}

@@ -9,13 +9,13 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-func Open(dirPath string) (*sqlite.Conn, error) {
+func OpenWrite(dirPath string) (*sqlite.Conn, error) {
 	dbPath := DBPath(dirPath)
 	if err := utils.TouchFile(dbPath); err != nil {
 		return nil, help.Stacktrace(err, "creating db", help.DelBackupDir)
 	}
 
-	conn, err := sqlite.OpenConn(dbPath)
+	conn, err := sqlite.OpenConn(dbPath, sqlite.OpenReadWrite, sqlite.OpenCreate)
 	if err != nil {
 		return nil, help.Stacktrace(err, "opening connection", help.DelBackupDir)
 	}
@@ -24,6 +24,16 @@ func Open(dirPath string) (*sqlite.Conn, error) {
 		return nil, err
 	}
 
+	return conn, nil
+}
+
+// Read only open.
+func OpenRead(dirPath string) (*sqlite.Conn, error) {
+	dbPath := DBPath(dirPath)
+	conn, err := sqlite.OpenConn(dbPath, sqlite.OpenReadOnly)
+	if err != nil {
+		return nil, help.Stacktrace(err, "opening connection", help.DelBackupDir)
+	}
 	return conn, nil
 }
 

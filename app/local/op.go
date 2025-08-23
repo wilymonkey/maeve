@@ -1,19 +1,27 @@
 package local
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+	"strings"
 
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/utils"
 )
 
-const DirTimeFormat = "02Jan2006-1504"
+// Gets the first folder in the given path or an error.
+func SplitAtRootPath(relpath string) (string, string, error) {
+	cleaned := filepath.Clean(relpath)
 
-func MkDir(path string) error {
-	return os.MkdirAll(path, 0755)
+	parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		err := fmt.Errorf("%q must have root and child path", relpath)
+		return "", "", help.DevReport(err, "splitting at root path")
+	}
+	return parts[0], parts[1], nil
 }
 
 func PathExists(path string) (bool, error) {
@@ -22,46 +30,33 @@ func PathExists(path string) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, err // some other error (e.g., permission)
+		return false, help.DevReport(err, "checking if path exists")
 	}
 	return true, nil
 }
 
-func NewLatestDir() (string, error) {
-	currentTime := time.Now().Format(conf.TIMEFORMAT)
-	path := filepath.Join(conf.MyNode(), currentTime)
-	if err := MkDir(path); err != nil {
-		return "", help.CheckBackupDir(err, "creating latest folder")
+// Creates a Hardlink from sourcePath to targetPath, creating
+// directories as needed.
+func Hardlink(sourcePath, targetPath string) error {
+	err := os.Link(sourcePath, targetPath)
+	if err == nil {
+		return nil
 	}
-	return path, nil
-}
-
-func RemoveChildDirs(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return help.CheckBackupDir(err, "reading files in backup folder")
+	if errors.Is(err, os.ErrExist) {
+		return nil
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
-			if err != nil {
-				return help.CheckBackupDir(err, "deleting stale folders in backup")
-			}
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return help.CheckBackupDir(err, "creating folders in latest")
 		}
+		// Try to link the file again.
+		if err := os.Link(sourcePath, targetPath); err != nil {
+			return help.CheckBackupDir(err, "linking file into latest AGAIN")
+		}
+		return nil
 	}
-	return nil
-}
 
-// Deprecated.
-func StampDate(node string) (string, error) {
-	oldPath := conf.GetConf().NodeDirTemp(node)
-	currentTime := time.Now().Format(conf.TIMEFORMAT)
-	newPath := filepath.Join(filepath.Dir(oldPath), currentTime)
-	if err := os.Rename(oldPath, newPath); err != nil {
-		return "", utils.WrapErr(err)
-	}
-	return currentTime, nil
+	return help.DevReport(err, "linking file into latest")
 }
 
 func CullSnapshots(node string) error {

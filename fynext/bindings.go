@@ -11,8 +11,20 @@ func Unwrap[T any](b binding.Item[T]) T {
 	return t
 }
 
-func NewErrBinding() binding.Item[error] {
+func BindNewErr() binding.Item[error] {
 	return binding.NewItem(func(err1, err2 error) bool {
 		return err1 == err2
 	})
+}
+
+func BindNewInt64() binding.Item[int64] {
+	return binding.NewItem(func(i1, i2 int64) bool {
+		return i1 == i2
+	})
+}
+
+func BindNewString(init string) binding.String {
+	b := binding.NewString()
+	b.Set(init)
+	return b
 }

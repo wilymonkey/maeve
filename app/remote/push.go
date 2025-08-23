@@ -2,198 +2,182 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	netRPC "net/rpc"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/pkg/sftp"
 	"github.com/wilymonkey/maeve/app/conf"
-	hs "github.com/wilymonkey/maeve/app/hashsums"
+	"github.com/wilymonkey/maeve/app/db"
 	"github.com/wilymonkey/maeve/app/help"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
-	"golang.org/x/sync/errgroup"
+	"github.com/zeebo/blake3"
 )
 
-type SendStatus struct {
-	Hash      hs.OldFileHash
-	Curr      int64
-	Total     int64
-	Verifying bool
-	IsGood    bool
+const (
+	PSUpload = "Uploading"
+	PSVerify = "Verifying"
+	PSDone   = "Done"
+)
+
+type PushStatus struct {
+	Meta       *local.FileMeta
+	SentSize   int64
+	isVerified bool
 }
 
-func NewDoneStatus(hash hs.OldFileHash) (SendStatus, error) {
-	path := hash.AbsPath(conf.MyNode())
-	localFile, err := os.Open(path)
-	if err != nil {
-		return SendStatus{}, utils.WrapErr(err)
-	}
-	defer localFile.Close()
-	fileInfo, err := localFile.Stat()
-	if err != nil {
-		return SendStatus{}, utils.WrapErr(err)
-	}
-	size := fileInfo.Size()
-	return SendStatus{
-		Hash:      hash,
-		Curr:      size,
-		Total:     size,
-		Verifying: true,
-		IsGood:    true,
-	}, nil
+func newPushStatus(meta *local.FileMeta) *PushStatus {
+	return &PushStatus{Meta: meta}
 }
 
-func SendFiles(
-	hashes []hs.OldFileHash,
-	sftpClient *sftp.Client,
-	rpcClient *netRPC.Client,
+// Closes progChan when done.
+func (n *NodeConn) PushLinks(
+	metas []*local.FileMeta,
 	ctx context.Context,
-	progChan chan SendStatus,
+	progChan chan<- *PushStatus,
 ) error {
-	eGrp, ctx := errgroup.WithContext(ctx)
+	defer close(progChan)
 
-	remoteDir, err := TempLocation(rpcClient)
+	conn, err := db.OpenRead(conf.MyNode())
 	if err != nil {
-		return utils.WrapErr(err)
+		return err
+	}
+	defer conn.Close()
+
+	if n.backupDir == "" {
+		if err := n.addBackupDir(); err != nil {
+			return err
+		}
 	}
 
-	downChan := make(chan hs.OldFileHash, 2)
-	verifyChan := make(chan SendStatus, 1)
+	if n.sftpClient == nil {
+		if err := n.addSFTP(); err != nil {
+			return err
+		}
+	}
 
-	eGrp.Go(func() error {
-		defer close(verifyChan)
+	const maxRetries = 3
 
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case hash, ok := <-downChan:
-				if !ok {
-					return nil
-				}
-				status, err := pushFile(sftpClient, hash, remoteDir, ctx, progChan)
-				if err != nil {
-					return utils.WrapErr(err)
-				}
-				verifyChan <- status
+	pushAndVerify := func(m *local.FileMeta) error {
+		if err := n.pushFile(m, ctx, progChan); err != nil {
+			return err
+		}
+
+		isGood, err := n.VerifyFile(m)
+		if err != nil {
+			return err
+		}
+		if !isGood {
+			err := fmt.Errorf("remote file hash did not match local hash")
+			return help.BadNodeConn(err, "verifying sent file")
+		}
+		return nil
+	}
+
+	for _, m := range metas {
+		var err error
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			err = pushAndVerify(m)
+			if err == nil {
+				break
 			}
 		}
-	})
-
-	eGrp.Go(func() error {
-		defer close(downChan)
-
-		i := 0
-		if i < len(hashes) {
-			downChan <- hashes[i]
-			i++
+		if err != nil {
+			return err
 		}
-		if i < len(hashes) {
-			downChan <- hashes[i]
-			i++
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case status, ok := <-verifyChan:
-				if !ok {
-					return nil
-				}
-
-				status.Verifying = true
-				progChan <- status
-
-				isGood, err := VerifyFile(rpcClient, status.Hash)
-				if err != nil {
-					return utils.WrapErr(err)
-				}
-				status.IsGood = isGood
-				progChan <- status
-
-				switch {
-				case !status.IsGood:
-					downChan <- status.Hash
-				case i < len(hashes):
-					downChan <- hashes[i]
-					i++
-				default:
-					return nil
-				}
-			}
-		}
-	})
-
-	if err := eGrp.Wait(); err != nil {
-		return utils.WrapErr(err)
 	}
 
 	return nil
 }
 
-func pushFile(
-	sftpClient *sftp.Client,
-	hash hs.OldFileHash,
-	remoteDir string,
-	ctx context.Context,
-	progChan chan SendStatus,
-) (SendStatus, error) {
-	status := SendStatus{Hash: hash}
+func (n *NodeConn) PushDB(path string, ctx context.Context) error {
+	if n.backupDir == "" {
+		if err := n.addBackupDir(); err != nil {
+			return err
+		}
+	}
 
-	path := hash.AbsPath(conf.MyNode())
-	localFile, err := os.Open(path)
+	if n.sftpClient == nil {
+		if err := n.addSFTP(); err != nil {
+			return err
+		}
+	}
+
+	meta, err := local.GenFileMeta(path, blake3.New())
 	if err != nil {
-		return status, utils.WrapErr(err)
+		return err
+	}
+
+	progChan := make(chan *PushStatus, 10)
+	go func() {
+		for range progChan {
+		}
+	}()
+
+	if err := n.pushFile(&meta, ctx, progChan); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *NodeConn) pushFile(
+	meta *local.FileMeta,
+	ctx context.Context,
+	progChan chan<- *PushStatus,
+) error {
+	utils.Assert("Backup Dir has already been attained", n.backupDir != "")
+
+	status := newPushStatus(meta)
+	source := filepath.Join(conf.MyNode(), meta.RelPath)
+	target := filepath.Join(n.backupDir, meta.RelPath)
+
+	localFile, err := os.Open(source)
+	if err != nil {
+		return help.CheckSource(err, "opening file")
 	}
 	defer localFile.Close()
-	fileInfo, err := localFile.Stat()
+
+	remoteFile, err := n.sftpClient.Create(target)
 	if err != nil {
-		return status, utils.WrapErr(err)
-	}
-	status.Total = fileInfo.Size()
+		var sftpErr *sftp.StatusError
+		if errors.As(err, &sftpErr) && sftpErr.FxCode() == sftp.ErrSSHFxNoSuchFile {
+			return help.CheckSource(err, "creating remote file")
+		}
 
-	remotePath := filepath.Join(remoteDir, hash.RelPath)
-	parentDir := filepath.Dir(remotePath)
-	if err := sftpClient.MkdirAll(parentDir); err != nil {
-		return status, utils.WrapErr(err)
+		parentDir := filepath.Dir(target)
+		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
+			return help.CheckSource(err, "creating parent dir for remote file")
+		}
+		remoteFile, err = n.sftpClient.Create(target)
+		if err != nil {
+			return help.CheckSource(err, "creating remote file AGAIN")
+		}
 	}
-
-	remoteFile, err := sftpClient.Create(remotePath)
 	defer remoteFile.Close()
-	if err != nil {
-		task := fmt.Sprintf("creating file: %q", remotePath)
-		return status, help.Stacktrace(err, task, help.DelBackupDir)
-	}
-	rateKB := conf.GetConf().MaxUpload * 1024
-	pw := &progWriter{
-		writer: remoteFile,
-		total:  status.Total,
-		ctx:    ctx,
-		progress: func(written int64) {
-			status.Curr = written
+
+	pw := newProgWriter(
+		remoteFile, meta.Size, ctx,
+		func(written int64) {
+			status.SentSize = written
 			progChan <- status
 		},
-		rate:       rateKB,
-		burstSize:  rateKB / 2,
-		tokens:     rateKB,
-		lastRefill: time.Now(),
-	}
-
+	)
 	if _, err := io.Copy(pw, localFile); err != nil {
-		return status, utils.WrapErr(err)
+		return help.BadNodeConn(err, "pushing file")
 	}
-	return status, nil
+	return nil
 }
 
 type progWriter struct {
 	writer     io.Writer
 	total      int64
 	written    int64
-	progress   func(written int64)
+	onProgress func(written int64)
 	ctx        context.Context
 	rate       int64
 	burstSize  int64
@@ -201,14 +185,35 @@ type progWriter struct {
 	lastRefill time.Time
 }
 
+func newProgWriter(
+	writer io.Writer,
+	total int64,
+	ctx context.Context,
+	onProgress func(written int64),
+
+) *progWriter {
+	rateKB := conf.GetConf().MaxUpload * 1024
+
+	return &progWriter{
+		writer:     writer,
+		total:      total,
+		ctx:        ctx,
+		onProgress: onProgress,
+		rate:       rateKB,
+		burstSize:  rateKB / 2,
+		tokens:     rateKB,
+		lastRefill: time.Now(), // TODO: Make the time a ticker instead of manually refilling.
+	}
+}
+
 func (pw *progWriter) Write(p []byte) (int, error) {
 	if err := pw.ctx.Err(); err != nil {
-		return 0, utils.WrapErr(err)
+		return 0, err
 	}
 	if pw.rate < 1 {
 		n, err := pw.writer.Write(p)
 		pw.written += int64(n)
-		pw.progress(pw.written)
+		pw.onProgress(pw.written)
 		return n, err
 	}
 
@@ -219,7 +224,7 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 		if toWrite > 0 {
 			n, err := pw.writer.Write(p[:toWrite])
 			if err != nil {
-				return int(pw.written), utils.WrapErr(err)
+				return int(pw.written), help.BadNodeConn(err, "send byte array")
 			}
 			p = p[n:]
 			writtenNow += n
@@ -227,7 +232,7 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 			bytes := int64(n)
 			pw.tokens -= bytes
 			pw.written += bytes
-			pw.progress(pw.written)
+			pw.onProgress(pw.written)
 		}
 
 		if len(p) > 0 {

@@ -10,11 +10,13 @@ import (
 )
 
 func (n *NodeConn) PullDB() error {
-	remoteDir, err := n.backupDir()
-	if err != nil {
+	if err := n.addSFTP(); err != nil {
 		return err
 	}
-	sourceFile, err := n.sftpClient.Open(db.DBPath(remoteDir))
+	if err := n.addBackupDir(); err != nil {
+		return err
+	}
+	sourceFile, err := n.sftpClient.Open(db.DBPath(n.backupDir))
 	if err != nil {
 		return help.CheckBackupDir(err, "opening remote file")
 	}

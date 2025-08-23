@@ -3,8 +3,7 @@ package backup
 import (
 	"errors"
 
-	"github.com/wilymonkey/maeve/app/conf"
-	"github.com/wilymonkey/maeve/app/db"
+	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/fynext"
 )
 
@@ -31,27 +30,34 @@ func runBackup() {
 }
 
 func dispatcher() error {
-	conn, err := db.Open(conf.MyNode())
+	if err := repairDB(); err != nil {
+		return err
+	}
+
+	guiState.nextTask()
+	metas, err := newLatest()
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	updateTotalSize(metas)
 
-	if err = repairDB(&conn); err != nil {
+	guiState.nextTask()
+	if err = updateDB(metas); err != nil {
 		return err
 	}
 
 	guiState.nextTask()
-	fileMetas, err := newLatest(conn)
-	if err != nil {
+	if err = pushChanges(); err != nil {
 		return err
 	}
 
-	guiState.nextTask()
-	if err = updateDB(conn, fileMetas); err != nil {
-		return err
-	}
-
-	guiState.nextTask()
 	return nil
+}
+
+func updateTotalSize(metas []*local.FileMeta) {
+	var total int64
+	for _, m := range metas {
+		total += m.Size
+	}
+	guiState.pushState.totalSize.Set(total)
 }

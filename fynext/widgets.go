@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/fynext/internal/icons"
+	"github.com/wilymonkey/maeve/fynext/icons"
 )
 
 func H1(text string) *canvas.Text {

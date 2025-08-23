@@ -5,7 +5,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/fynext"
 )
@@ -48,7 +47,10 @@ func mainWindow() fyne.CanvasObject {
 					done,
 				),
 				nil, nil, nil,
-				nodeStatusTable(guiState.nodeStates),
+				container.NewGridWithRows(2,
+					nodeStateGrid(),
+					pushStateCard(),
+				),
 			),
 		),
 	)
@@ -79,31 +81,7 @@ func cancelBtn() fyne.CanvasObject {
 	return cancelBtn
 }
 
-func nodeStatusTable(nodeStatus map[string]*nodeStatus) fyne.CanvasObject {
-	cfg := conf.GetConf()
-	objects := make([]fyne.CanvasObject, 0, len(cfg.RemoteNodes)*2)
-	for _, node := range cfg.RemoteNodes {
-		status := nodeStatus[node]
-		errStatus := help.NewWidget(status.err)
-		border := container.NewBorder(
-			nil, nil,
-			fynext.LabelDisableUntil(
-				widget.NewLabel(node),
-				guiState.currTask,
-				pushing,
-			),
-			nil,
-			errStatus,
-		)
-		sep := widget.NewSeparator()
-		objects = append(objects, border, sep)
-	}
-	vbox := container.NewVBox()
-	vbox.Objects = objects[:len(objects)-1] // Remove trailing separator.
-	return container.NewVScroll(vbox)
-}
-
-func showErrorDialog() {
+func showErrorDialog(err error) {
 	dlg := func(w fyne.Window) dialog.Dialog {
 		var d *dialog.CustomDialog
 
@@ -116,7 +94,7 @@ func showErrorDialog() {
 		d = dialog.NewCustomWithoutButtons(
 			"ERROR",
 			container.NewVBox(
-				help.NewWidget(guiState.err),
+				help.Render(err),
 				cancelBtn(),
 			),
 			w,

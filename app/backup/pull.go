@@ -3,19 +3,16 @@ package backup
 import (
 	"os"
 	"path/filepath"
-	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
-	"github.com/wilymonkey/maeve/app/hashsums"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
-	"golang.org/x/sync/errgroup"
-	"zombiezen.com/go/sqlite"
 )
 
 // =======================================
@@ -30,17 +27,15 @@ type pullState struct {
 
 func newPullState() []*pullState {
 	cfg := conf.GetConf()
-	sourceDirs := make([]*pullState, 0, len(cfg.SourceDirs))
+	states := make([]*pullState, 0, len(cfg.SourceDirs))
 	for _, dir := range cfg.SourceDirs {
-		sourceDirs = append(sourceDirs, &pullState{
+		states = append(states, &pullState{
 			path:   dir,
 			number: binding.NewInt(),
-			size: binding.NewItem(func(i1, i2 int64) bool {
-				return i1 == i2
-			}),
+			size:   fynext.BindNewInt64(),
 		})
 	}
-	return sourceDirs
+	return states
 }
 
 // =======================================
@@ -109,27 +104,25 @@ func pullStateTable() fyne.CanvasObject {
 // METHODS
 // =======================================
 
-func newLatest(conn *sqlite.Conn) ([]*hashsums.FileMeta, error) {
-	if err := local.RemoveChildDirs(conf.MyNode()); err != nil {
+func newLatest() ([]*local.FileMeta, error) {
+	if err := removeChildDirs(conf.MyNode()); err != nil {
 		return nil, err
 	}
-	latest, err := local.NewLatestDir()
+	latest, err := newLatestDir()
 	if err != nil {
 		return nil, err
 	}
 
-	var fileMetas []*hashsums.FileMeta
+	var fileMetas []*local.FileMeta
 
 	for _, pState := range guiState.pullStates {
-		targetDir := filepath.Join(latest, filepath.Base(pState.path))
-
-		metaChan := make(chan *hashsums.FileMeta, 100)
+		metaChan := make(chan *local.FileMeta, 100)
 		var totalSize int64
 		var totalFiles int
 
 		utils.Throttle(
 			metaChan,
-			func(meta *hashsums.FileMeta) {
+			func(meta *local.FileMeta) {
 				totalFiles++
 				totalSize += meta.Size
 				fileMetas = append(fileMetas, meta)
@@ -142,71 +135,58 @@ func newLatest(conn *sqlite.Conn) ([]*hashsums.FileMeta, error) {
 			},
 		)
 
-		if err := walkDir(pState.path, targetDir, metaChan); err != nil {
+		sourceDir := pState.path
+		targetDir := filepath.Join(latest, filepath.Base(pState.path))
+
+		if err := os.RemoveAll(targetDir); err != nil {
+			return nil, help.CheckBackupDir(err, "deleting folder to link things to")
+		}
+
+		err := local.WalkDirForMetas(
+			sourceDir,
+			guiState.ctx,
+			metaChan,
+			func(path string) (string, error) {
+				relPath, err := filepath.Rel(sourceDir, path)
+				if err != nil {
+					return "", help.DevReport(err, "creating relative path")
+				}
+				targetPath := filepath.Join(targetDir, relPath)
+				if err := local.Hardlink(path, targetPath); err != nil {
+					return "", err
+				}
+				return targetPath, nil
+			},
+		)
+		if err != nil {
 			return nil, err
 		}
-		close(metaChan)
 	}
 	return fileMetas, nil
 }
 
-func walkDir(sourceDir, targetDir string, metaChan chan *hashsums.FileMeta) error {
-	if err := os.RemoveAll(targetDir); err != nil {
-		return help.CheckBackupDir(err, "deleting folder to link things to")
+func newLatestDir() (string, error) {
+	currentTime := time.Now().Format(conf.TimeFormat)
+	path := filepath.Join(conf.MyNode(), currentTime)
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return "", help.CheckBackupDir(err, "creating latest folder")
 	}
-
-	numWorkers := runtime.NumCPU() * 2
-	paths := make(chan string, numWorkers*2)
-	eGrp, ctx := errgroup.WithContext(guiState.ctx)
-	for range numWorkers {
-		eGrp.Go(func() error {
-			for path := range paths {
-				meta, err := processFiles(sourceDir, targetDir, path)
-				if err != nil {
-					return err
-				}
-				metaChan <- meta
-			}
-			return nil
-		})
-	}
-
-	walkErr := filepath.WalkDir(sourceDir, func(path string, dir os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if dir.Type().IsRegular() {
-			paths <- path
-		}
-		return nil
-	})
-
-	close(paths)
-	if err := eGrp.Wait(); err != nil {
-		return err
-	}
-	if walkErr != nil {
-		return walkErr
-	}
-
-	return nil
+	return path, nil
 }
 
-func processFiles(baseDir, targetDir string, absPath string) (*hashsums.FileMeta, error) {
-	relPath, err := filepath.Rel(baseDir, absPath)
+func removeChildDirs(dir string) error {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, help.DevReport(err, "creating relative path")
+		return help.CheckBackupDir(err, "reading files in backup folder")
 	}
-	targetPath := filepath.Join(targetDir, relPath)
-	if err := local.Hardlink(absPath, targetPath); err != nil {
-		return nil, err
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
+			if err != nil {
+				return help.CheckBackupDir(err, "deleting stale folders in backup")
+			}
+		}
 	}
-	meta, err := hashsums.NewFileMeta(targetPath)
-	if err != nil {
-		return nil, err
-	}
-	return &meta, nil
+	return nil
 }

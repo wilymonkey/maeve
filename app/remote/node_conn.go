@@ -15,6 +15,7 @@ type NodeConn struct {
 	sshSession *ssh.Session
 	rpcClient  *rpc.Client
 	sftpClient *sftp.Client
+	backupDir  string
 }
 
 func (n *NodeConn) Close() {
@@ -73,7 +74,7 @@ func NewNodeConn(node string, onStderr func(err error)) (*NodeConn, error) {
 	}, nil
 }
 
-func (n *NodeConn) AddSFTP() error {
+func (n *NodeConn) addSFTP() error {
 	var err error
 	n.sftpClient, err = sftp.NewClient(n.sshClient)
 	if err != nil {
