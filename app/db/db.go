@@ -19,6 +19,13 @@ func OpenWrite(dirPath string) (*sqlite.Conn, error) {
 	if err != nil {
 		return nil, help.Stacktrace(err, "opening connection", help.DelBackupDir)
 	}
+	err = sqlitex.ExecuteTransient(conn,
+		"PRAGMA foreign_keys=ON",
+		&sqlitex.ExecOptions{},
+	)
+	if err != nil {
+		return nil, help.DelDB(err, "setting foreign keys on")
+	}
 
 	if err := createSchema(conn); err != nil {
 		return nil, err

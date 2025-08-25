@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
@@ -22,9 +22,9 @@ const (
 	DelConfig
 	DelKnownHost
 	DelBackupDir
-	DelDB
 	DelPrivateKey
 	badNodeConn
+	delDB
 	checkSource
 	checkBackupDir
 	checkNodeConn
@@ -43,10 +43,10 @@ func (c Help) string() string {
 		return "the PC we had once connected to has changed, if (and only if) you are certain it's fine, delete the PC entry in \"sshknownkeys\""
 	case DelBackupDir:
 		return "delete the problematic backup folder"
-	case DelDB:
-		return "delete the .db file in the backup folder"
 	case DelPrivateKey:
 		return "delete the private key"
+	case delDB:
+		return "delete the .db file in the backup folder"
 	case badNodeConn:
 		return "the connection with the backup PC seems to be bad"
 	case checkSource:
@@ -58,8 +58,12 @@ func (c Help) string() string {
 	case devReport:
 		return "report it to the developer"
 	default:
-		return "...this shouldn't be possible"
+		return "unable to parse help text"
 	}
+}
+
+func DelDB(err error, task string) error {
+	return newHelpError(err, task, delDB)
 }
 
 func BadNodeConn(err error, task string) error {
@@ -112,6 +116,16 @@ type helpError struct {
 	stack string
 }
 
+func (e *helpError) Error() string {
+	return fmt.Sprintf(
+		"%d||%s||%s||%s",
+		e.help,
+		e.task,
+		e.err.Error(),
+		e.stack,
+	)
+}
+
 func newHelpError(err error, task string, help Help) error {
 	return &helpError{
 		help:  help,
@@ -121,8 +135,22 @@ func newHelpError(err error, task string, help Help) error {
 	}
 }
 
-func (e *helpError) Error() string {
-	return fmt.Sprintf("I was doing %q but got %q", e.task, e.err.Error())
+// Reconstructs a Help Error from the Error() representation.
+func FromErr(err error) error {
+	parts := strings.Split(err.Error(), "||")
+	if len(parts) != 4 || parts[0] == "" || parts[1] == "" || parts[2] == "" || parts[3] == "" {
+		return DevReport(err, "splitting error into parts")
+	}
+	i, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return DevReport(err, "parsing help iota")
+	}
+	return &helpError{
+		help:  Help(i),
+		task:  parts[1],
+		err:   errors.New(parts[2]),
+		stack: parts[3],
+	}
 }
 
 func Render(err error) fyne.CanvasObject {
@@ -148,49 +176,4 @@ func Render(err error) fyne.CanvasObject {
 
 	return widget.NewLabel(err.Error())
 
-}
-
-type Widget struct {
-	widget.BaseWidget
-	bound binding.Item[error]
-}
-
-func NewWidget(err binding.Item[error]) *Widget {
-	w := &Widget{bound: err}
-	w.ExtendBaseWidget(w)
-	w.bound.AddListener(binding.NewDataListener(func() {
-		w.Refresh()
-	}))
-	return w
-}
-
-func (w *Widget) CreateRenderer() fyne.WidgetRenderer {
-	val := fynext.Unwrap(w.bound)
-
-	if val == nil {
-		lbl := widget.NewLabel("")
-		return widget.NewSimpleRenderer(lbl)
-	}
-
-	var hErr *helpError
-	if errors.As(val, &hErr) {
-		errLbl := widget.NewLabel(hErr.err.Error())
-		errLbl.Wrapping = fyne.TextWrapWord
-		sl := widget.NewLabel(hErr.stack)
-		sl.Wrapping = fyne.TextWrapWord
-
-		content := fynext.VBox(
-			fynext.SmallTxt("Possible Fix"),
-			widget.NewLabel(hErr.help.string()),
-			fynext.SmallTxt("Task Attempted"),
-			widget.NewLabel(hErr.task),
-			fynext.SmallTxt("Error"),
-			errLbl,
-			fynext.SmallTxt("Stacktrace"),
-			sl,
-		)
-		return widget.NewSimpleRenderer(content)
-	}
-
-	return widget.NewSimpleRenderer(widget.NewLabel(val.Error()))
 }

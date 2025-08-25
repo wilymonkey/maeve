@@ -85,7 +85,7 @@ func (n *NodeConn) GetDBVersion() (*db.DBVersion, error) {
 	args := &GetDBVersionArgs{Node: conf.GetConf().Name}
 	var reply GetDBVersionReply
 	if err := n.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
-		return reply.Version, help.Stacktrace(err, "getting rpc db version", help.UpdateMaeve)
+		return reply.Version, help.FromErr(err)
 	}
 	return reply.Version, nil
 }
@@ -106,7 +106,7 @@ func (n *NodeConn) addBackupDir() error {
 	args := &BackupDirArgs{Node: conf.GetConf().Name}
 	var reply BackupDirReply
 	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
-		return help.DevReport(err, "fetching my remote backup dir")
+		return help.FromErr(err)
 	}
 	n.backupDir = reply.Path
 	return nil
@@ -138,7 +138,7 @@ func (n *NodeConn) VerifyFile(hash *local.FileMeta) (bool, error) {
 	}
 	var reply VerifyFileReply
 	if err := n.rpcClient.Call("RPCFuncs.VerifyFile", args, &reply); err != nil {
-		return false, help.DevReport(err, "verifying remote file")
+		return false, help.FromErr(err)
 	}
 	return reply.IsGood, nil
 }
@@ -183,7 +183,7 @@ func (n *NodeConn) ConformToDB() ([]int64, error) {
 	}
 	var reply ConformToDBReply
 	if err := n.rpcClient.Call("RPCFuncs.ConformToDB", args, &reply); err != nil {
-		return nil, help.DevReport(err, "linking existing files")
+		return nil, help.FromErr(err)
 	}
 	return reply.MissingLinkIds, nil
 }

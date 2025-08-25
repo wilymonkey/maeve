@@ -25,7 +25,7 @@ func createSchema(conn *sqlite.Conn) error {
 		path_id INTEGER NOT NULL,
 		file_meta_id INTEGER NOT NULL,
 		snapshot INTEGER NOT NULL,
-		FOREIGN KEY (path_id) REFERENCES path_hash(id),
+		FOREIGN KEY (path_id) REFERENCES file_path(id),
 		FOREIGN KEY (file_meta_id) REFERENCES file_meta(id),
 		UNIQUE (path_id, file_meta_id, snapshot)
 	);
@@ -36,7 +36,7 @@ func createSchema(conn *sqlite.Conn) error {
 	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {
-		return help.Stacktrace(err, "creating schema", help.DelDB)
+		return help.DelDB(err, "creating schema")
 	}
 	return nil
 }

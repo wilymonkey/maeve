@@ -39,7 +39,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			ON CONFLICT(hash) DO UPDATE SET size = size
 			RETURNING id;`,
 			&sqlitex.ExecOptions{
-				Args: []any{meta.Hash, meta.Size, meta.ModTime.Unix()},
+				Args: []any{meta.Hash[:], meta.Size, meta.ModTime.Unix()},
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					fileMetaId = stmt.ColumnInt(0)
 					return nil
@@ -70,13 +70,12 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.DevReport(err, "insert row into path_hash")
+			return 0, help.DevReport(err, "insert row into file_path")
 		}
 
 		err = sqlitex.Execute(conn,
 			`INSERT OR IGNORE INTO path_meta_link (path_id, file_meta_id, snapshot)
-			VALUES (?, ?, ?)
-			ON CONFLICT DO NOTHING;`,
+			VALUES (?, ?, ?);`,
 			&sqlitex.ExecOptions{
 				Args: []any{pathId, fileMetaId, snapshot},
 			},

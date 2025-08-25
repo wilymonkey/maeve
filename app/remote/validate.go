@@ -17,6 +17,14 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 	if err != nil {
 		return nil, err
 	}
+	sourceDir := filepath.Join(nodeDir, root)
+	exists, err := local.PathExists(sourceDir)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return metas, nil
+	}
 
 	var missing []*local.FileMeta
 	ctx, cancelCtx := context.WithCancelCause(context.Background())
@@ -48,7 +56,6 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 		}
 	}()
 
-	sourceDir := filepath.Join(nodeDir, root)
 	err = local.WalkDirForMetas(
 		sourceDir,
 		ctx,

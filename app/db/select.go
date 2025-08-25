@@ -1,8 +1,12 @@
 package db
 
 import (
+	"errors"
+	"fmt"
+	"path/filepath"
 	"time"
 
+	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
 	"zombiezen.com/go/sqlite"
@@ -10,7 +14,7 @@ import (
 )
 
 func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) {
-	result := make([]*local.FileMeta, len(linkIds))
+	result := make([]*local.FileMeta, 0, len(linkIds))
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
@@ -19,8 +23,8 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 	defer endTx(&err)
 
 	for _, id := range linkIds {
-		err := sqlitex.ExecuteTransient(conn,
-			`SELECT fm.hash, fp.path, fm.size, fm.mod_time
+		err := sqlitex.Execute(conn,
+			`SELECT fm.hash, pml.snapshot, fp.path, fm.size, fm.mod_time
 			FROM path_meta_link pml
 			JOIN file_meta fm ON pml.file_meta_id = fm.id
 			JOIN file_path fp ON pml.path_id = fp.id
@@ -37,11 +41,21 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 		}
 	}
 
+	if len(result) != len(linkIds) {
+		err := fmt.Errorf("only found %d out of %d FileMetas", len(result), len(linkIds))
+		return nil, help.DevReport(err, "check result length")
+	}
+
 	return result, err
 }
 
 func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
-	result := make([]int64, len(metas))
+	if len(metas) < 1 {
+		err := errors.New("no FileMeta's given to get Ids for")
+		return nil, help.DevReport(err, "checking input length")
+	}
+
+	result := make([]int64, 0, len(metas))
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
@@ -49,14 +63,24 @@ func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 	}
 	defer endTx(&err)
 
+	root, _, err := local.SplitAtRootPath(metas[0].RelPath)
+	if err != nil {
+		return nil, err
+	}
+	rootTime, err := time.Parse(conf.DirTimeFormat, root)
+	if err != nil {
+		return nil, help.DevReport(err, "parsing root folder into time")
+	}
+	snapshot := rootTime.Unix()
+
 	for _, m := range metas {
-		err := sqlitex.ExecuteTransient(conn,
+		err := sqlitex.Execute(conn,
 			`SELECT pml.id
 			FROM file_meta fm
 			JOIN path_meta_link pml ON fm.id = pml.file_meta_id
-			WHERE fm.hash = ?;`,
+			WHERE fm.hash = ? AND pml.snapshot = ?;`,
 			&sqlitex.ExecOptions{
-				Args: []any{m.Hash},
+				Args: []any{m.Hash[:], snapshot},
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					result = append(result, stmt.ColumnInt64(0))
 					return nil
@@ -67,6 +91,11 @@ func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 		}
 	}
 
+	if len(result) != len(metas) {
+		err := fmt.Errorf("only found %d out of %d path meta ids", len(result), len(metas))
+		return nil, help.DevReport(err, "checking result length")
+	}
+
 	return result, err
 }
 
@@ -74,7 +103,7 @@ func GetLatestMeta(conn *sqlite.Conn) ([]*local.FileMeta, error) {
 	var result []*local.FileMeta
 
 	err := sqlitex.ExecuteTransient(conn,
-		`SELECT fm.hash, fp.path, fm.size, fm.mod_time
+		`SELECT fm.hash, pml.snapshot, fp.path, fm.size, fm.mod_time
 			FROM path_meta_link pml
 			JOIN file_meta fm ON pml.file_meta_id = fm.id
 			JOIN file_path fp ON pml.path_id = fp.id
@@ -98,8 +127,10 @@ func GetLatestMeta(conn *sqlite.Conn) ([]*local.FileMeta, error) {
 func metaFromStmt(stmt *sqlite.Stmt) *local.FileMeta {
 	var meta local.FileMeta
 	stmt.ColumnBytes(0, meta.Hash[:])
-	meta.RelPath = stmt.ColumnText(1)
-	meta.Size = stmt.ColumnInt64(2)
-	meta.ModTime = time.Unix(stmt.ColumnInt64(3), 0)
+	snapshot := time.Unix(stmt.ColumnInt64(1), 0)
+	rest := stmt.ColumnText(2)
+	meta.RelPath = filepath.Join(snapshot.Format(conf.DirTimeFormat), rest)
+	meta.Size = stmt.ColumnInt64(3)
+	meta.ModTime = time.Unix(stmt.ColumnInt64(4), 0)
 	return &meta
 }

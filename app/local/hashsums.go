@@ -119,7 +119,7 @@ func WalkDirForMetas(
 		return err
 	}
 	if walkErr != nil {
-		return walkErr
+		return help.CheckBackupDir(walkErr, "walking dir")
 	}
 
 	return nil

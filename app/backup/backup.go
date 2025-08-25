@@ -1,27 +1,24 @@
 package backup
 
 import (
-	"errors"
-
 	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/fynext"
 )
-
-var syncFail = errors.New("One or more PCs failed to sync")
 
 func runBackup() {
 	if err := dispatcher(); err != nil {
 		guiState.err.Set(err)
 	}
 
+	var nodeHasErr bool
 	for _, node := range guiState.nodeStates {
 		if fynext.Unwrap(node.err) != nil {
-			guiState.err.Set(syncFail)
+			nodeHasErr = true
 			break
 		}
 	}
 
-	if fynext.Unwrap(guiState.err) == nil && guiState.exitOnDone {
+	if fynext.Unwrap(guiState.err) == nil && guiState.exitOnDone && !nodeHasErr {
 		// TODO: remove this when done.
 		// fyne.Do(state.window.Close)
 	}

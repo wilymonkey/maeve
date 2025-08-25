@@ -1,6 +1,8 @@
 package backup
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
@@ -18,8 +20,18 @@ import (
 // STATES
 // =======================================
 
+const (
+	PSConnecting = "Connecting to PC..."
+	PSPushDB     = "Sending database to PC..."
+	PSLinking    = "Backup PC is linking files..."
+)
+
+func PSSendFile(path string) string {
+	return fmt.Sprintf("Sending file %s...", path)
+}
+
 type pushState struct {
-	path      binding.String
+	task      binding.String
 	percent   binding.Float
 	currSize  binding.Item[int64]
 	totalSize binding.Item[int64]
@@ -27,7 +39,7 @@ type pushState struct {
 
 func newPushState() pushState {
 	return pushState{
-		path:      binding.NewString(),
+		task:      binding.NewString(),
 		percent:   binding.NewFloat(),
 		currSize:  fynext.BindNewInt64(),
 		totalSize: fynext.BindNewInt64(),
@@ -117,7 +129,7 @@ func nodeStateGrid() fyne.CanvasObject {
 
 func pushStateCard() fyne.CanvasObject {
 	return fynext.VBox(
-		widget.NewLabelWithData(guiState.pushState.path),
+		widget.NewLabelWithData(guiState.pushState.task),
 		widget.NewProgressBarWithData(guiState.pushState.percent),
 	)
 }
@@ -128,30 +140,37 @@ func pushStateCard() fyne.CanvasObject {
 
 func pushChanges() error {
 	for _, state := range guiState.nodeStates {
+		guiState.pushState.task.Set(PSConnecting)
 		nodeConn, err := remote.NewNodeConn(state.name, func(err error) {
 			state.err.Set(err)
 		})
 		if err != nil {
-			return err
+			state.err.Set(err)
+			continue
 		}
 		defer nodeConn.Close()
 
 		state.isConnected.Set(true)
 		defer state.isConnected.Set(false)
 
+		guiState.pushState.task.Set(PSPushDB)
 		dbPath := db.DBPath(conf.MyNode())
 		if err := nodeConn.PushDB(dbPath, guiState.ctx); err != nil {
-			return err
+			state.err.Set(err)
+			continue
 		}
 
+		guiState.pushState.task.Set(PSLinking)
 		missingIds, err := nodeConn.ConformToDB()
 		if err != nil {
-			return err
+			state.err.Set(err)
+			continue
 		}
 
 		metas, err := processIds(missingIds)
 		if err != nil {
-			return err
+			state.err.Set(err)
+			continue
 		}
 
 		var progPath string
@@ -173,8 +192,9 @@ func pushChanges() error {
 				}
 			},
 			func() {
-				if fynext.Unwrap(guiState.pushState.path) != progPath {
-					guiState.pushState.path.Set(progPath)
+				if fynext.Unwrap(guiState.pushState.task) != progPath {
+					task := PSSendFile(progPath)
+					guiState.pushState.task.Set(task)
 				}
 				currSize := sentSize + progSize
 				guiState.pushState.currSize.Set(currSize)
@@ -183,7 +203,8 @@ func pushChanges() error {
 			},
 		)
 		if err := nodeConn.PushLinks(metas, guiState.ctx, progChan); err != nil {
-			return err
+			state.err.Set(err)
+			continue
 		}
 
 		state.isDone.Set(true)
@@ -209,6 +230,7 @@ func processIds(linkIds []int64) ([]*local.FileMeta, error) {
 
 	var missingSize int64
 	for _, m := range metas {
+		println(m.RelPath)
 		missingSize += m.Size
 	}
 	totalSize := fynext.Unwrap(guiState.pushState.totalSize)
