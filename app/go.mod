@@ -5,7 +5,6 @@ go 1.24.3
 require (
 	fyne.io/fyne/v2 v2.6.2
 	github.com/charmbracelet/bubbles v0.21.0
-	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/pkg/sftp v1.13.9
 	github.com/wilymonkey/maeve v0.1.1
@@ -17,6 +16,7 @@ require (
 require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/charmbracelet/bubbletea v1.3.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect

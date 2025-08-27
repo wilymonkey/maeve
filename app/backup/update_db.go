@@ -49,28 +49,28 @@ func UDBDone(rows int64) string {
 func repairDBUI() fyne.CanvasObject {
 	title := widget.NewLabel("Repairing database:")
 	title.TextStyle.Bold = true
-	state := widget.NewLabelWithData(guiState.repairDBState)
+	state := widget.NewLabelWithData(global.repairDBState)
 	state.Wrapping = fyne.TextWrapWord
 
 	return container.NewBorder(
 		nil, nil,
-		fynext.LabelDisableUntil(title, guiState.currTask, repairingDB),
+		fynext.LabelDisableUntil(title, global.currTask, repairingDB),
 		nil,
-		fynext.LabelDisableUntil(state, guiState.currTask, repairingDB),
+		fynext.LabelDisableUntil(state, global.currTask, repairingDB),
 	)
 }
 
 func updateDBUI() fyne.CanvasObject {
 	title := widget.NewLabel("Updating database:")
 	title.TextStyle.Bold = true
-	state := widget.NewLabelWithData(guiState.updateDBState)
+	state := widget.NewLabelWithData(global.updateDBState)
 	state.Wrapping = fyne.TextWrapWord
 
 	return container.NewBorder(
 		nil, nil,
-		fynext.LabelDisableUntil(title, guiState.currTask, updatingDB),
+		fynext.LabelDisableUntil(title, global.currTask, updatingDB),
 		nil,
-		fynext.LabelDisableUntil(state, guiState.currTask, updatingDB),
+		fynext.LabelDisableUntil(state, global.currTask, updatingDB),
 	)
 }
 
@@ -84,21 +84,21 @@ type nodeVersion struct {
 }
 
 func repairDB() error {
-	guiState.repairDBState.Set(RDBGetLocal)
+	global.repairDBState.Set(RDBGetLocal)
 	localVersion, err := getLocalVer()
 	if err != nil {
 		return err
 	}
 
-	guiState.repairDBState.Set(RDBGetRemote)
+	global.repairDBState.Set(RDBGetRemote)
 
-	eGrp, ctx := errgroup.WithContext(guiState.ctx)
+	eGrp, ctx := errgroup.WithContext(global.ctx)
 	eGrp.SetLimit(10)
 
 	versionChan := make(chan nodeVersion, 10)
 	collectVersions := utils.CollectChan(versionChan)
 
-	for _, nodeState := range guiState.nodeStates {
+	for _, nodeState := range global.nodeStates {
 		eGrp.Go(func() error {
 			node := nodeState.name
 			if err := ctx.Err(); err != nil {
@@ -133,17 +133,17 @@ func repairDB() error {
 	}
 	remoteVersions := collectVersions()
 
-	guiState.repairDBState.Set(RDBCompare)
+	global.repairDBState.Set(RDBCompare)
 	lv := nodeVersion{"", localVersion}
 	node := findBestVersion(append([]nodeVersion{lv}, remoteVersions...))
 	if node == "" {
-		guiState.repairDBState.Set(RDBDone(localVersion))
+		global.repairDBState.Set(RDBDone(localVersion))
 		return nil
 	}
 
-	guiState.repairDBState.Set(RDBFetch(node))
+	global.repairDBState.Set(RDBFetch(node))
 	nodeConn, err := remote.NewNodeConn(node, func(err error) {
-		guiState.err.Set(err)
+		global.err.Set(err)
 	})
 	if err != nil {
 		return err
@@ -159,7 +159,7 @@ func repairDB() error {
 		return err
 	}
 
-	guiState.repairDBState.Set(RDBDone(localVersion))
+	global.repairDBState.Set(RDBDone(localVersion))
 	return nil
 }
 
@@ -207,7 +207,7 @@ func findBestVersion(nodeVersions []nodeVersion) string {
 }
 
 func updateDB(fileMetas []*local.FileMeta) error {
-	guiState.updateDBState.Set(UDBAddEntries)
+	global.updateDBState.Set(UDBAddEntries)
 
 	conn, err := db.OpenWrite(conf.MyNode())
 	if err != nil {
@@ -220,6 +220,6 @@ func updateDB(fileMetas []*local.FileMeta) error {
 		return err
 	}
 
-	guiState.updateDBState.Set(UDBDone(rows))
+	global.updateDBState.Set(UDBDone(rows))
 	return nil
 }

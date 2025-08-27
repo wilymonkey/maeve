@@ -18,16 +18,9 @@ import (
 	"github.com/zeebo/blake3"
 )
 
-const (
-	PSUpload = "Uploading"
-	PSVerify = "Verifying"
-	PSDone   = "Done"
-)
-
 type PushStatus struct {
-	Meta       *local.FileMeta
-	SentSize   int64
-	isVerified bool
+	Meta     *local.FileMeta
+	SentSize int64
 }
 
 func newPushStatus(meta *local.FileMeta) *PushStatus {
@@ -46,7 +39,7 @@ func (n *NodeConn) PushLinks(
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer utils.Cleanup(&err, conn.Close)
 
 	if n.backupDir == "" {
 		if err := n.addBackupDir(); err != nil {
@@ -72,7 +65,7 @@ func (n *NodeConn) PushLinks(
 			return err
 		}
 		if !isGood {
-			err := fmt.Errorf("remote file hash did not match local hash")
+			err = fmt.Errorf("remote file hash did not match local hash")
 			return help.BadNodeConn(err, "verifying sent file")
 		}
 		return nil
@@ -80,7 +73,7 @@ func (n *NodeConn) PushLinks(
 
 	for _, m := range metas {
 		var err error
-		for attempt := 1; attempt <= maxRetries; attempt++ {
+		for range maxRetries {
 			err = pushAndVerify(m)
 			if err == nil {
 				break
@@ -91,7 +84,7 @@ func (n *NodeConn) PushLinks(
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (n *NodeConn) PushDB(path string, ctx context.Context) error {
@@ -130,7 +123,7 @@ func (n *NodeConn) pushFile(
 	ctx context.Context,
 	progChan chan<- *PushStatus,
 ) error {
-	utils.Assert("Backup Dir has already been attained", n.backupDir != "")
+	utils.Assert(n.backupDir != "", "Backup Dir has already been attained")
 
 	status := newPushStatus(meta)
 	source := filepath.Join(conf.MyNode(), meta.RelPath)
@@ -140,7 +133,7 @@ func (n *NodeConn) pushFile(
 	if err != nil {
 		return help.CheckSource(err, "opening file")
 	}
-	defer localFile.Close()
+	defer utils.Cleanup(&err, localFile.Close)
 
 	remoteFile, err := n.sftpClient.Create(target)
 	if err != nil {
@@ -158,7 +151,7 @@ func (n *NodeConn) pushFile(
 			return help.CheckSource(err, "creating remote file AGAIN")
 		}
 	}
-	defer remoteFile.Close()
+	defer utils.Cleanup(&err, remoteFile.Close)
 
 	pw := newProgWriter(
 		remoteFile, meta.Size, ctx,
@@ -170,7 +163,8 @@ func (n *NodeConn) pushFile(
 	if _, err := io.Copy(pw, localFile); err != nil {
 		return help.BadNodeConn(err, "pushing file")
 	}
-	return nil
+
+	return err
 }
 
 type progWriter struct {

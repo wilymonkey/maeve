@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, error) {
-	utils.Assert("At least 1 path in metas", len(metas) > 0)
+	utils.Assert(len(metas) > 0, "At least 1 path in metas")
 
 	root, _, err := local.SplitAtRootPath(metas[0].RelPath)
 	if err != nil {
@@ -69,5 +70,8 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 	}
 
 	<-ctx.Done()
-	return missing, ctx.Err()
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		return nil, ctx.Err()
+	}
+	return missing, nil
 }

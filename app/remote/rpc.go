@@ -12,6 +12,7 @@ import (
 	"github.com/wilymonkey/maeve/app/db"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
+	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
 )
 
@@ -72,17 +73,17 @@ func (h *RPCFuncs) GetDBVersion(args *GetDBVersionArgs, reply *GetDBVersionReply
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer utils.Cleanup(&err, conn.Close)
 
 	reply.Version, err = db.GetVersion(conn)
 	if err != nil {
 		return err
 	}
-	return nil
+	return err
 }
 
 func (n *NodeConn) GetDBVersion() (*db.DBVersion, error) {
-	args := &GetDBVersionArgs{Node: conf.GetConf().Name}
+	args := &GetDBVersionArgs{Node: conf.MyName()}
 	var reply GetDBVersionReply
 	if err := n.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
 		return reply.Version, help.FromErr(err)
@@ -98,12 +99,12 @@ type BackupDirReply struct {
 }
 
 func (h *RPCFuncs) BackupDir(args *BackupDirArgs, reply *BackupDirReply) error {
-	reply.Path = conf.NodeDir(args.Node)
+	reply.Path = conf.RemoteTempDir(args.Node)
 	return nil
 }
 
 func (n *NodeConn) addBackupDir() error {
-	args := &BackupDirArgs{Node: conf.GetConf().Name}
+	args := &BackupDirArgs{Node: conf.MyName()}
 	var reply BackupDirReply
 	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
 		return help.FromErr(err)
@@ -121,7 +122,7 @@ type VerifyFileReply struct {
 }
 
 func (h *RPCFuncs) VerifyFile(args *VerifyFileArgs, reply *VerifyFileReply) error {
-	nodeDir := conf.NodeDir(args.Node)
+	nodeDir := conf.RemoteTempDir(args.Node)
 	path := filepath.Join(nodeDir, args.Hash.RelPath)
 	isGood, err := args.Hash.Validate(path, blake3.New())
 	if err != nil {
@@ -134,7 +135,7 @@ func (h *RPCFuncs) VerifyFile(args *VerifyFileArgs, reply *VerifyFileReply) erro
 func (n *NodeConn) VerifyFile(hash *local.FileMeta) (bool, error) {
 	args := &VerifyFileArgs{
 		Hash: hash,
-		Node: conf.GetConf().Name,
+		Node: conf.MyName(),
 	}
 	var reply VerifyFileReply
 	if err := n.rpcClient.Call("RPCFuncs.VerifyFile", args, &reply); err != nil {
@@ -151,12 +152,12 @@ type ConformToDBReply struct {
 }
 
 func (h *RPCFuncs) ConformToDB(args *ConformToDBArgs, reply *ConformToDBReply) error {
-	nodeDir := conf.NodeDir(args.Node)
+	nodeDir := conf.RemoteTempDir(args.Node)
 	conn, err := db.OpenRead(nodeDir)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer utils.Cleanup(&err, conn.Close)
 
 	metas, err := db.GetLatestMeta(conn)
 	if err != nil {
@@ -179,7 +180,7 @@ func (h *RPCFuncs) ConformToDB(args *ConformToDBArgs, reply *ConformToDBReply) e
 
 func (n *NodeConn) ConformToDB() ([]int64, error) {
 	args := &ConformToDBArgs{
-		Node: conf.GetConf().Name,
+		Node: conf.MyName(),
 	}
 	var reply ConformToDBReply
 	if err := n.rpcClient.Call("RPCFuncs.ConformToDB", args, &reply); err != nil {

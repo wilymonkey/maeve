@@ -12,6 +12,8 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 )
 
+var sshNodeReg = regexp.MustCompile(`^[a-zA-Z0-9_]+@(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}$`)
+
 func Render() fyne.CanvasObject {
 	launchBackup := func() {
 		lock := dialog.NewCustomWithoutButtons(
@@ -25,14 +27,13 @@ func Render() fyne.CanvasObject {
 		lock.Show()
 	}
 
-	return container.NewBorder(
+	main := container.NewBorder(
 		container.NewHBox(
 			favicon(42),
 			fynext.H1("Maeve"),
 		),
 		fynext.HighBtn("Backup Now", launchBackup),
-		nil,
-		nil,
+		nil, nil,
 		container.NewGridWithRows(3,
 			container.NewBorder(
 				fynext.H2("This PC"),
@@ -53,6 +54,10 @@ func Render() fyne.CanvasObject {
 			),
 		),
 	)
+
+	return container.NewVScroll(
+		container.NewPadded(main),
+	)
 }
 
 func remoteNotes() fyne.CanvasObject {
@@ -68,18 +73,16 @@ func remoteNotes() fyne.CanvasObject {
 	updateRows := func(i binding.DataItem, o fyne.CanvasObject) {
 		row := o.(*fyne.Container)
 		label := row.Objects[0].(*widget.Label)
+		deleteBtn := row.Objects[1].(*widget.Button)
+
 		label.Bind(i.(binding.String))
 		label.Truncation = fyne.TextTruncateEllipsis
-		deleteBtn := row.Objects[1].(*widget.Button)
+
 		deleteBtn.OnTapped = func() {
-			val, err := i.(binding.String).Get()
-			if err != nil {
-				panic(err)
-			}
-			global.RemoteNodes.Remove(val)
+			global.RemoteNodes.Remove(label.Text)
 		}
 	}
-	w := container.NewScroll(
+	w := container.NewVScroll(
 		fynext.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(
@@ -90,7 +93,6 @@ func remoteNotes() fyne.CanvasObject {
 			),
 		),
 	)
-	w.SetMinSize(fyne.NewSquareSize(200))
 	return w
 }
 
@@ -102,8 +104,7 @@ func addRemoteNote() *fyne.Container {
 	})
 	addButton.Disable()
 	inputEntry.OnChanged = func(s string) {
-		r := regexp.MustCompile(`^[a-zA-Z0-9_]+@(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}$`)
-		if r.MatchString(s) {
+		if sshNodeReg.MatchString(s) {
 			addButton.Enable()
 		} else {
 			addButton.Disable()

@@ -8,7 +8,7 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 )
 
-var guiState *state
+var global *state
 
 type state struct {
 	// STATES
@@ -39,7 +39,7 @@ const (
 
 func loadState(window fyne.Window, exitOnDone bool) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
-	guiState = &state{
+	global = &state{
 		// STATES
 		currTask:      binding.NewInt(),
 		repairDBState: binding.NewString(),
@@ -56,10 +56,10 @@ func loadState(window fyne.Window, exitOnDone bool) {
 		exitOnDone: exitOnDone,
 	}
 
-	guiState.err.AddListener(binding.NewDataListener(func() {
-		err := fynext.Unwrap(guiState.err)
+	global.err.AddListener(binding.NewDataListener(func() {
+		err := fynext.Unwrap(global.err)
 		if err != nil {
-			guiState.ctxCancel()
+			global.ctxCancel()
 			showErrorDialog(err)
 		}
 	}))

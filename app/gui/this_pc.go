@@ -89,8 +89,8 @@ func editableLabel(
 }
 
 func backupDir() fyne.CanvasObject {
-	finderDlg := func(w fyne.Window) dialog.Dialog {
-		return dialog.NewFolderOpen(
+	finderDlg := func() {
+		dialog.ShowFolderOpen(
 			func(list fyne.ListableURI, err error) {
 				if err != nil {
 					global.ShowError(err)
@@ -99,19 +99,12 @@ func backupDir() fyne.CanvasObject {
 					global.MaeveDir.Set(list.Path())
 				}
 			},
-			w,
-		)
-	}
-	openFinder := func() {
-		fynext.ShowWindowDialog(
 			global.Window,
-			"Select Backup Folder",
-			finderDlg,
 		)
 	}
 	return container.NewBorder(
 		nil, nil, nil,
-		fynext.PencilBtn(openFinder),
+		fynext.PencilBtn(finderDlg),
 		fynext.VBox(
 			fynext.SmallTxt("Backup Folder"),
 			container.NewHScroll(

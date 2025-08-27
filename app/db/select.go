@@ -51,7 +51,7 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 
 func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 	if len(metas) < 1 {
-		err := errors.New("no FileMeta's given to get Ids for")
+		err := errors.New("no FileMetas given to get Ids for")
 		return nil, help.DevReport(err, "checking input length")
 	}
 
@@ -63,36 +63,39 @@ func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 	}
 	defer endTx(&err)
 
-	root, _, err := local.SplitAtRootPath(metas[0].RelPath)
+	snapshot, _, err := formatRelpath(metas[0].RelPath)
 	if err != nil {
 		return nil, err
 	}
-	rootTime, err := time.Parse(conf.DirTimeFormat, root)
-	if err != nil {
-		return nil, help.DevReport(err, "parsing root folder into time")
-	}
-	snapshot := rootTime.Unix()
 
 	for _, m := range metas {
-		err := sqlitex.Execute(conn,
+		_, path, err := local.SplitAtRootPath(m.RelPath)
+		if err != nil {
+			return nil, err
+		}
+
+		err = sqlitex.Execute(conn,
 			`SELECT pml.id
-			FROM file_meta fm
-			JOIN path_meta_link pml ON fm.id = pml.file_meta_id
-			WHERE fm.hash = ? AND pml.snapshot = ?;`,
+			FROM path_meta_link pml
+			JOIN file_path fp ON pml.path_id = fp.id
+			JOIN file_meta fm ON pml.file_meta_id = fm.id
+			WHERE fp.path = ?
+			  AND fm.hash = ?
+			  AND pml.snapshot = ?;`,
 			&sqlitex.ExecOptions{
-				Args: []any{m.Hash[:], snapshot},
+				Args: []any{path, m.Hash[:], snapshot},
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					result = append(result, stmt.ColumnInt64(0))
 					return nil
 				},
 			})
 		if err != nil {
-			return nil, help.DevReport(err, "getting FileMeta from link id")
+			return nil, help.DevReport(err, "getting link id from FileMeta")
 		}
 	}
 
 	if len(result) != len(metas) {
-		err := fmt.Errorf("only found %d out of %d path meta ids", len(result), len(metas))
+		err := fmt.Errorf("found %d out of %d path meta ids", len(result), len(metas))
 		return nil, help.DevReport(err, "checking result length")
 	}
 
@@ -126,11 +129,13 @@ func GetLatestMeta(conn *sqlite.Conn) ([]*local.FileMeta, error) {
 // Requires the stmt columns to be in order fo local.FileMeta fields.
 func metaFromStmt(stmt *sqlite.Stmt) *local.FileMeta {
 	var meta local.FileMeta
+
 	stmt.ColumnBytes(0, meta.Hash[:])
-	snapshot := time.Unix(stmt.ColumnInt64(1), 0)
+	snapshot := conf.TimeFromInt64(stmt.ColumnInt64(1))
 	rest := stmt.ColumnText(2)
-	meta.RelPath = filepath.Join(snapshot.Format(conf.DirTimeFormat), rest)
 	meta.Size = stmt.ColumnInt64(3)
 	meta.ModTime = time.Unix(stmt.ColumnInt64(4), 0)
+
+	meta.RelPath = filepath.Join(conf.TimeToString(snapshot), rest)
 	return &meta
 }

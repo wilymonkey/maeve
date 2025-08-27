@@ -4,9 +4,11 @@ import (
 	"time"
 )
 
+const ThrottleMS = 200
+
 func Throttle[T any](in <-chan T, onEach func(item T), emit func()) {
 	go func() {
-		tick := time.NewTicker(200 * time.Millisecond)
+		tick := time.NewTicker(ThrottleMS * time.Millisecond)
 		defer tick.Stop()
 
 		dirty := false

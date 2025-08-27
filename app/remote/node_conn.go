@@ -18,13 +18,22 @@ type NodeConn struct {
 	backupDir  string
 }
 
-func (n *NodeConn) Close() {
+func (n *NodeConn) Close() error {
 	if n.sftpClient != nil {
-		n.sftpClient.Close()
+		if err := n.sftpClient.Close(); err != nil {
+			return err
+		}
 	}
-	n.rpcClient.Close()
-	n.sshSession.Close()
-	n.sshClient.Close()
+	if err := n.rpcClient.Close(); err != nil {
+		return err
+	}
+	if err := n.sshSession.Close(); err != nil {
+		return err
+	}
+	if err := n.sshClient.Close(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewNodeConn(node string, onStderr func(err error)) (*NodeConn, error) {

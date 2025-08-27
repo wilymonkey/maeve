@@ -1,8 +1,6 @@
 package db
 
 import (
-	"time"
-
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
@@ -101,16 +99,16 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 	return endRows - startRows, err
 }
 
-// Splits the relpath into a unix timestamp and a hash of the remaining path.
+// Splits the relpath into a unix timestamp and the remaining path.
 func formatRelpath(relpath string) (int64, string, error) {
 	root, rest, err := local.SplitAtRootPath(relpath)
 	if err != nil {
 		return 0, "", err
 	}
-	snapshot, err := time.Parse(conf.DirTimeFormat, root)
+	snapshot, err := conf.TimeFromString(root)
 	if err != nil {
 		return 0, "", help.DevReport(err, "parsing root folder as time")
 	}
 
-	return snapshot.Unix(), rest, nil
+	return conf.TimeToInt64(snapshot), rest, nil
 }

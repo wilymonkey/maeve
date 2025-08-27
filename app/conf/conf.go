@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 
@@ -18,9 +17,6 @@ import (
 	"github.com/zeebo/blake3"
 	"golang.org/x/crypto/ssh"
 )
-
-const TimeFormat = "02Jan2006-1504"
-const DirTimeFormat = "02Jan2006-1504"
 
 var Version = "DEV"
 
@@ -34,7 +30,7 @@ var (
 )
 
 type MaeveConf struct {
-	Name          string
+	DisplayName   string
 	SSHPrivateKey ed25519.PrivateKey `yaml:"sshprivatekey,flow"`
 	SSHKnownHosts SSHKnownHosts
 	MaeveDir      string
@@ -48,7 +44,7 @@ func GetConf() *MaeveConf {
 	once.Do(func() {
 		var err error
 		maeveConf, err = loadConfig()
-		utils.AssertNoErr("config should be parseable", err)
+		utils.AssertNoErr(err, "config should be parseable")
 	})
 	return maeveConf
 }
@@ -86,12 +82,12 @@ func loadConfig() (*MaeveConf, error) {
 }
 
 func (c *MaeveConf) applyDefaults() error {
-	if c.Name == "" {
+	if c.DisplayName == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
 			return help.DevReport(err, "getting hostname")
 		}
-		c.Name = hostname
+		c.DisplayName = hostname
 	}
 
 	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
@@ -146,7 +142,7 @@ func (c *MaeveConf) SaveToFile() error {
 	if err != nil {
 		return help.Stacktrace(err, "creating config file", help.DelConfig)
 	}
-	defer f.Close()
+	defer utils.Cleanup(&err, f.Close)
 
 	if _, err := f.Write(data); err != nil {
 		return help.Stacktrace(err, "writing data to config file", help.DelConfig)
@@ -168,74 +164,52 @@ func configPath() (string, error) {
 	return confPath, nil
 }
 
-func MyNode() string {
+func MyName() string {
 	conf := GetConf()
 	pubKey, err := ssh.NewPublicKey(conf.SSHPrivateKey.Public())
-	utils.AssertNoErr("cannot generate pub key from config private key", err)
+
+	utils.AssertNoErr(err, "cannot generate pub key from config private key")
+
 	sum := blake3.Sum512(pubKey.Marshal())
 	keyHash := hex.EncodeToString(sum[:3])
-	return filepath.Join(conf.MaeveDir, fmt.Sprintf("%s_%s", conf.Name, keyHash))
+	return fmt.Sprintf("%s_%s", conf.DisplayName, keyHash)
 }
 
-func NodeDir(node string) string {
+func MyNode() string {
+	return filepath.Join(GetConf().MaeveDir, MyName())
+}
+
+func RemoteTempDir(node string) string {
 	conf := GetConf()
-	return filepath.Join(conf.MaeveDir, node)
+	return filepath.Join(conf.MaeveDir, node, "Temp")
 }
 
 // =======================================
-// TODO: REMOVE ALL OF THE FOLLOWING
+// TIME
 // =======================================
 
-// Hash file path for a given directory.
-func (c *MaeveConf) MasterHashFile(node string) string {
-	return filepath.Join(NodeDir(node), "maeve_hashmap.gob")
+const timeFormat = "02Jan2006-1504"
+
+func TimeToInt64(t time.Time) int64 {
+	return t.Unix()
 }
 
-// Hash file path for a given directory.
-func (c *MaeveConf) HashFile(dir string) string {
-	return filepath.Join(dir, "maeve_hashes.gob")
+func TimeToString(t time.Time) string {
+	return t.Format(timeFormat)
 }
 
-func (c *MaeveConf) SelfDir() string {
-	return filepath.Join(c.MaeveDir, "my_latest")
-}
-
-func (c *MaeveConf) NodeDirTemp(node string) string {
-	return filepath.Join(NodeDir(node), "latest")
-}
-
-func (c *MaeveConf) NodeSnapshotDir(node, snapshot string) string {
-	return filepath.Join(NodeDir(node), snapshot)
-}
-
-// Lists snapshots for a given node from oldest to newest.
-// Returns absolute paths to those snapshots.
-func (c *MaeveConf) NodeSnapshots(node string) ([]string, error) {
-	baseDir := NodeDir(node)
-	entries, err := os.ReadDir(baseDir)
+func TimeFromString(s string) (time.Time, error) {
+	snapshot, err := time.Parse(timeFormat, s)
 	if err != nil {
-		return nil, utils.WrapErr(err)
+		return snapshot, help.DevReport(err, "parsing root folder as time")
 	}
-	if len(entries) == 0 {
-		return nil, utils.WrapErr(os.ErrNotExist)
-	}
+	return snapshot, nil
+}
 
-	var result []string
-	for _, d := range entries {
-		if d.IsDir() {
-			result = append(result, d.Name())
-		}
-	}
-	sort.Slice(result, func(i, j int) bool {
-		ti, err1 := time.Parse(TimeFormat, result[i])
-		tj, err2 := time.Parse(TimeFormat, result[j])
-		if err1 != nil || err2 != nil {
-			return result[i] < result[j]
-		}
-		return ti.Before(tj)
-	})
-	for i, snapshot := range result {
-		result[i] = c.NodeSnapshotDir(node, snapshot)
-	}
-	return result, nil
+func TimeFromInt64(t int64) time.Time {
+	return time.Unix(t, 0).UTC()
+}
+
+func TimeNow() time.Time {
+	return time.Now().UTC()
 }

@@ -104,7 +104,7 @@ func getStacktrace(start, number int) string {
 		// Extract just the function name (without full package path).
 		fmt.Fprintf(&b, "%s: ", filepath.Base(fn.Name()))
 	}
-	utils.Assert("stacktrace shouldn't be empty", b.Len() != 0)
+	utils.Assert(b.Len() != 0, "stacktrace shouldn't be empty")
 	result := b.String()
 	return result[:b.Len()-2]
 }

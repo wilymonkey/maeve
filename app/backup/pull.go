@@ -3,7 +3,6 @@ package backup
 import (
 	"os"
 	"path/filepath"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/data/binding"
@@ -45,14 +44,14 @@ func newPullState() []*pullState {
 func pullStateTable() fyne.CanvasObject {
 	table := widget.NewTable(
 		func() (int, int) {
-			return len(guiState.pullStates) + 1, 3
+			return len(global.pullStates) + 1, 3
 		},
 		func() fyne.CanvasObject {
 			label := widget.NewLabel("")
 
 			return fynext.LabelDisableUntil(
 				label,
-				guiState.currTask,
+				global.currTask,
 				pulling,
 			)
 		},
@@ -70,7 +69,7 @@ func pullStateTable() fyne.CanvasObject {
 					label.SetText("Size")
 				}
 			} else {
-				pState := guiState.pullStates[cell.Row-1]
+				pState := global.pullStates[cell.Row-1]
 				switch cell.Col {
 				case 0:
 					label.Unbind()
@@ -105,9 +104,17 @@ func pullStateTable() fyne.CanvasObject {
 // =======================================
 
 func newLatest() ([]*local.FileMeta, error) {
-	if err := removeChildDirs(conf.MyNode()); err != nil {
+	myNode := conf.MyNode()
+	exists, err := local.PathExists(myNode)
+	if err != nil {
 		return nil, err
 	}
+	if exists {
+		if err := removeChildDirs(myNode); err != nil {
+			return nil, err
+		}
+	}
+
 	latest, err := newLatestDir()
 	if err != nil {
 		return nil, err
@@ -115,7 +122,7 @@ func newLatest() ([]*local.FileMeta, error) {
 
 	var fileMetas []*local.FileMeta
 
-	for _, pState := range guiState.pullStates {
+	for _, pState := range global.pullStates {
 		metaChan := make(chan *local.FileMeta, 100)
 		var totalSize int64
 		var totalFiles int
@@ -144,7 +151,7 @@ func newLatest() ([]*local.FileMeta, error) {
 
 		err := local.WalkDirForMetas(
 			sourceDir,
-			guiState.ctx,
+			global.ctx,
 			metaChan,
 			func(path string) (string, error) {
 				relPath, err := filepath.Rel(sourceDir, path)
@@ -166,7 +173,7 @@ func newLatest() ([]*local.FileMeta, error) {
 }
 
 func newLatestDir() (string, error) {
-	currentTime := time.Now().Format(conf.TimeFormat)
+	currentTime := conf.TimeToString(conf.TimeNow())
 	path := filepath.Join(conf.MyNode(), currentTime)
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return "", help.CheckBackupDir(err, "creating latest folder")

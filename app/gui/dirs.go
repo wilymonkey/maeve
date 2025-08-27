@@ -34,7 +34,7 @@ func sourceDirs() fyne.CanvasObject {
 			global.SourceDirs.Remove(val)
 		}
 	}
-	w := container.NewScroll(
+	w := container.NewVScroll(
 		fynext.GreyBox(
 			container.NewPadded(
 				widget.NewListWithData(
@@ -45,13 +45,12 @@ func sourceDirs() fyne.CanvasObject {
 			),
 		),
 	)
-	w.SetMinSize(fyne.NewSquareSize(200))
 	return w
 }
 
 func addSourceDir() fyne.CanvasObject {
-	dlg := func(w fyne.Window) dialog.Dialog {
-		return dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+	dlg := func() {
+		dialog.ShowFolderOpen(func(list fyne.ListableURI, err error) {
 			if err != nil {
 				global.ShowError(err)
 				return
@@ -59,9 +58,7 @@ func addSourceDir() fyne.CanvasObject {
 			if list != nil {
 				global.SourceDirs.Append(list.Path())
 			}
-		}, w)
+		}, global.Window)
 	}
-	return theme.HighBtn("Add Folder", func() {
-		fynext.ShowWindowDialog(global.Window, "Select Folder", dlg)
-	})
+	return theme.HighBtn("Add Folder", dlg)
 }

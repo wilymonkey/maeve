@@ -70,7 +70,7 @@ func TruncateString(txt string, maxwidth int) string {
 		}
 		width += runeWidth(r)
 		if width >= maxwidth-widthWide {
-			return "…" + txt[iter.i:]
+			return "…" + txt[max(iter.i, 0):]
 		}
 	}
 }
@@ -85,6 +85,8 @@ func NewRuneIterBackward(s string) *RuneIterBackward {
 }
 
 // Next returns the next rune going backwards, or ok=false when done.
+// Warning: Make sure to check range check i. It is moved left after each
+// Next() and can be -1.
 func (it *RuneIterBackward) Next() (r rune, ok bool) {
 	if it.i < 0 {
 		return 0, false

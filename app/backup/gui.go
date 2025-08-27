@@ -10,16 +10,17 @@ import (
 )
 
 func Launch(app fyne.App, exitOnDone bool) fyne.Window {
-	window := app.NewWindow("Maeve - Backing Up")
-	loadState(window, exitOnDone)
-	window.SetContent(mainWindow())
-	return window
+	w := app.NewWindow("Maeve - Backing Up")
+	loadState(w, exitOnDone)
+	w.SetContent(mainWindow())
+	w.Resize(fyne.NewSize(500, 1000))
+	return w
 }
 
 func mainWindow() fyne.CanvasObject {
 	go runBackup()
 
-	return container.NewBorder(
+	main := container.NewBorder(
 		nil,
 		cancelBtn(),
 		nil, nil,
@@ -27,7 +28,7 @@ func mainWindow() fyne.CanvasObject {
 			container.NewBorder(
 				fynext.ColorWithin(
 					fynext.H2("Updating My State"),
-					guiState.currTask,
+					global.currTask,
 					repairingDB,
 					pushing,
 				),
@@ -42,7 +43,7 @@ func mainWindow() fyne.CanvasObject {
 			container.NewBorder(
 				fynext.ColorWithin(
 					fynext.H2("Sending Files to PCs"),
-					guiState.currTask,
+					global.currTask,
 					pushing,
 					done,
 				),
@@ -54,6 +55,8 @@ func mainWindow() fyne.CanvasObject {
 			),
 		),
 	)
+
+	return container.NewPadded(main)
 }
 
 func cancelBtn() fyne.CanvasObject {
@@ -61,16 +64,16 @@ func cancelBtn() fyne.CanvasObject {
 
 	onTap := func() {
 		if cancelBtn.Importance == widget.MediumImportance {
-			guiState.ctxCancel()
+			global.ctxCancel()
 		} else {
-			fyne.Do(guiState.window.Close)
+			fyne.Do(global.window.Close)
 		}
 	}
 
 	cancelBtn = widget.NewButton("Cancel", onTap)
 
 	go func() {
-		<-guiState.ctx.Done()
+		<-global.ctx.Done()
 		fyne.Do(func() {
 			cancelBtn.SetText("Okay")
 			cancelBtn.Importance = widget.SuccessImportance
@@ -82,27 +85,24 @@ func cancelBtn() fyne.CanvasObject {
 }
 
 func showErrorDialog(err error) {
-	dlg := func(w fyne.Window) dialog.Dialog {
-		var d *dialog.CustomDialog
+	var d *dialog.CustomDialog
 
-		cancelBtn := func() fyne.CanvasObject {
-			cancelBtn := widget.NewButton("OK", func() { d.Dismiss() })
-			cancelBtn.Importance = widget.HighImportance
-			return cancelBtn
-		}
-
-		d = dialog.NewCustomWithoutButtons(
-			"ERROR",
-			container.NewVBox(
-				help.Render(err),
-				cancelBtn(),
-			),
-			w,
-		)
-		return d
+	cancelBtn := func() fyne.CanvasObject {
+		cancelBtn := widget.NewButton("OK", func() {
+			d.Dismiss()
+		})
+		cancelBtn.Importance = widget.HighImportance
+		return cancelBtn
 	}
 
-	fyne.Do(func() {
-		fynext.ShowWindowDialog(guiState.window, "ERROR", dlg)
-	})
+	d = dialog.NewCustomWithoutButtons(
+		"ERROR",
+		container.NewVBox(
+			help.Render(err),
+			cancelBtn(),
+		),
+		global.window,
+	)
+
+	d.Show()
 }

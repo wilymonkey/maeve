@@ -2,10 +2,12 @@ package backup
 
 import (
 	"fmt"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/db"
@@ -21,13 +23,14 @@ import (
 // =======================================
 
 const (
-	PSConnecting = "Connecting to PC..."
-	PSPushDB     = "Sending database to PC..."
-	PSLinking    = "Backup PC is linking files..."
+	sayConnecting = "Connecting to PC..."
+	sayPushDB     = "Sending database to PC..."
+	sayLinking    = "Backup PC is linking files..."
 )
 
-func PSSendFile(path string) string {
-	return fmt.Sprintf("Sending file %s...", path)
+func saySendFile(path string) string {
+	p := utils.TruncateString(path, 100)
+	return fmt.Sprintf("Sending file %s", p)
 }
 
 type pushState struct {
@@ -35,6 +38,8 @@ type pushState struct {
 	percent   binding.Float
 	currSize  binding.Item[int64]
 	totalSize binding.Item[int64]
+	timeLeft  binding.String
+	speed     binding.String
 }
 
 func newPushState() pushState {
@@ -43,6 +48,8 @@ func newPushState() pushState {
 		percent:   binding.NewFloat(),
 		currSize:  fynext.BindNewInt64(),
 		totalSize: fynext.BindNewInt64(),
+		timeLeft:  binding.NewString(),
+		speed:     binding.NewString(),
 	}
 }
 
@@ -72,9 +79,9 @@ func newNodeStates() []*nodeState {
 // =======================================
 
 func nodeStateGrid() fyne.CanvasObject {
-	objects := make([]fyne.CanvasObject, 0, len(guiState.nodeStates))
+	objects := make([]fyne.CanvasObject, 0, len(global.nodeStates))
 
-	for _, state := range guiState.nodeStates {
+	for _, state := range global.nodeStates {
 		showErr := func() {
 			err := fynext.Unwrap(state.err)
 			if err != nil {
@@ -91,7 +98,6 @@ func nodeStateGrid() fyne.CanvasObject {
 			if fynext.Unwrap(state.isConnected) {
 				btn.Enable()
 				btn.Icon = icons.LinkSvg
-				return
 			} else {
 				btn.Disable()
 				btn.Icon = nil
@@ -129,8 +135,13 @@ func nodeStateGrid() fyne.CanvasObject {
 
 func pushStateCard() fyne.CanvasObject {
 	return fynext.VBox(
-		widget.NewLabelWithData(guiState.pushState.task),
-		widget.NewProgressBarWithData(guiState.pushState.percent),
+		widget.NewLabelWithData(global.pushState.task),
+		widget.NewProgressBarWithData(global.pushState.percent),
+		container.NewHBox(
+			widget.NewLabelWithData(global.pushState.speed),
+			layout.NewSpacer(),
+			widget.NewLabelWithData(global.pushState.timeLeft),
+		),
 	)
 }
 
@@ -138,78 +149,88 @@ func pushStateCard() fyne.CanvasObject {
 // METHODS
 // =======================================
 
-func pushChanges() error {
-	for _, state := range guiState.nodeStates {
-		guiState.pushState.task.Set(PSConnecting)
-		nodeConn, err := remote.NewNodeConn(state.name, func(err error) {
+func pushChanges() {
+	for _, state := range global.nodeStates {
+		if err := pushToNode(state); err != nil {
 			state.err.Set(err)
-		})
-		if err != nil {
-			state.err.Set(err)
-			continue
 		}
-		defer nodeConn.Close()
+	}
+}
 
-		state.isConnected.Set(true)
-		defer state.isConnected.Set(false)
+func pushToNode(state *nodeState) error {
+	global.pushState.task.Set(sayConnecting)
+	nodeConn, err := remote.NewNodeConn(state.name, func(err error) {
+		state.err.Set(err)
+	})
+	if err != nil {
+		return err
+	}
+	defer utils.Cleanup(&err, nodeConn.Close)
 
-		guiState.pushState.task.Set(PSPushDB)
-		dbPath := db.DBPath(conf.MyNode())
-		if err := nodeConn.PushDB(dbPath, guiState.ctx); err != nil {
-			state.err.Set(err)
-			continue
-		}
+	state.isConnected.Set(true)
+	defer state.isConnected.Set(false)
 
-		guiState.pushState.task.Set(PSLinking)
-		missingIds, err := nodeConn.ConformToDB()
-		if err != nil {
-			state.err.Set(err)
-			continue
-		}
-
-		metas, err := processIds(missingIds)
-		if err != nil {
-			state.err.Set(err)
-			continue
-		}
-
-		var progPath string
-		var progSize int64
-		var totalProgSize int64
-		var sentSize int64
-		totalSize := fynext.Unwrap(guiState.pushState.totalSize)
-		progChan := make(chan *remote.PushStatus, 10)
-		utils.Throttle(
-			progChan,
-			func(p *remote.PushStatus) {
-				if p.Meta.RelPath != progPath {
-					progPath = p.Meta.RelPath
-					progSize = 0
-					sentSize += totalProgSize
-					totalProgSize = p.Meta.Size
-				} else {
-					progSize = p.SentSize
-				}
-			},
-			func() {
-				if fynext.Unwrap(guiState.pushState.task) != progPath {
-					task := PSSendFile(progPath)
-					guiState.pushState.task.Set(task)
-				}
-				currSize := sentSize + progSize
-				guiState.pushState.currSize.Set(currSize)
-				percent := float64(currSize) / float64(totalSize)
-				guiState.pushState.percent.Set(percent)
-			},
-		)
-		if err := nodeConn.PushLinks(metas, guiState.ctx, progChan); err != nil {
-			state.err.Set(err)
-			continue
-		}
-
-		state.isDone.Set(true)
+	global.pushState.task.Set(sayPushDB)
+	dbPath := db.DBPath(conf.MyNode())
+	if err := nodeConn.PushDB(dbPath, global.ctx); err != nil {
+		return err
 	}
 
+	global.pushState.task.Set(sayLinking)
+	missingIds, err := nodeConn.ConformToDB()
+	if err != nil {
+		return err
+	}
+
+	metas, err := processIds(missingIds)
+	if err != nil {
+		return err
+	}
+
+	var progPath string
+	var sentSize int64
+	var totalFileSize int64
+	var alreadySentSize int64
+	totalSize := fynext.Unwrap(global.pushState.totalSize)
+	progChan := make(chan *remote.PushStatus, 10)
+
+	utils.Throttle(
+		progChan,
+		func(p *remote.PushStatus) {
+			if p.Meta.RelPath != progPath {
+				progPath = p.Meta.RelPath
+				sentSize = 0
+				alreadySentSize += totalFileSize
+				totalFileSize = p.Meta.Size
+			} else {
+				sentSize = p.SentSize
+			}
+		},
+		func() {
+			if fynext.Unwrap(global.pushState.task) != progPath {
+				task := saySendFile(progPath)
+				global.pushState.task.Set(task)
+			}
+			prevCurrSize := fynext.Unwrap(global.pushState.currSize)
+			currSize := alreadySentSize + sentSize
+
+			speed := (currSize - prevCurrSize) / utils.ThrottleMS * 1000
+			global.pushState.speed.Set(utils.BytesToHuman(speed))
+
+			left := calcTimeLeft(speed, totalSize-currSize)
+			global.pushState.timeLeft.Set(left)
+
+			global.pushState.currSize.Set(currSize)
+			percent := float64(currSize) / float64(totalSize)
+			global.pushState.percent.Set(percent)
+		},
+	)
+
+	if err := nodeConn.PushLinks(metas, global.ctx, progChan); err != nil {
+		return err
+	}
+
+	state.isDone.Set(true)
 	return nil
 }
 
@@ -230,11 +251,18 @@ func processIds(linkIds []int64) ([]*local.FileMeta, error) {
 
 	var missingSize int64
 	for _, m := range metas {
-		println(m.RelPath)
 		missingSize += m.Size
 	}
-	totalSize := fynext.Unwrap(guiState.pushState.totalSize)
-	guiState.pushState.currSize.Set(totalSize - missingSize)
+	totalSize := fynext.Unwrap(global.pushState.totalSize)
+	global.pushState.currSize.Set(totalSize - missingSize)
 
 	return metas, err
+}
+
+func calcTimeLeft(speed int64, size int64) string {
+	if speed <= 0 {
+		return "∞"
+	}
+	d := time.Duration(size/speed) * time.Second
+	return d.String()
 }

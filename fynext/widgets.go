@@ -191,7 +191,7 @@ func VBox(objects ...fyne.CanvasObject) fyne.CanvasObject {
 }
 
 // Show a dialog on a separate window.
-func ShowWindowDialog(
+func DepShowWindowDialog(
 	currWindow fyne.Window,
 	title string,
 	dlg func(w fyne.Window) dialog.Dialog,

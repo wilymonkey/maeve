@@ -60,6 +60,7 @@ func main() {
 			w := app.NewWindow("Maeve")
 			gui.LoadState(w)
 			w.SetContent(gui.Render())
+			w.Resize(fyne.NewSize(500, 1000))
 			return w
 		})
 	}
@@ -69,5 +70,6 @@ func startApp(window func(app fyne.App) fyne.Window) {
 	a := app.NewWithID("wilymonkey/maeve")
 	a.Settings().SetTheme(&fynext.Theme{})
 	w := window(a)
+	w.SetPadded(false)
 	w.ShowAndRun()
 }

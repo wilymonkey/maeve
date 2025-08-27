@@ -2,10 +2,20 @@ package utils
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"runtime"
 	"time"
 )
+
+// Logs error if closer fails.
+func Cleanup(err *error, closer func() error) {
+	if cErr := closer(); cErr != nil {
+		if *err == nil {
+			*err = cErr
+		}
+	}
+}
 
 // Wraps the error with file and codeline location.
 func WrapErr(err error) error {
@@ -23,16 +33,31 @@ func Sleep(ms int) {
 	time.Sleep(time.Millisecond * time.Duration(ms))
 }
 
-// If the world state has been violated, panic the program.
-func Assert(reason string, pred bool) {
-	if !pred {
-		panic(reason)
+var assertData map[string]any = map[string]any{}
+
+func AddAssertData(key string, value any) {
+	assertData[key] = value
+}
+
+func RemoveAssertData(key string) {
+	delete(assertData, key)
+}
+
+func runAssert(msg string) {
+	for k, v := range assertData {
+		log.Printf("context, key %s value %s", k, v)
+	}
+	log.Fatal(msg)
+}
+
+func Assert(truth bool, msg string) {
+	if !truth {
+		runAssert(msg)
 	}
 }
 
-// If there is an error, panic and crash the program.
-func AssertNoErr(reason string, err error) {
+func AssertNoErr(err error, msg string) {
 	if err != nil {
-		panic(reason)
+		runAssert(msg)
 	}
 }

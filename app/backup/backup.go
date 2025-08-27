@@ -7,23 +7,23 @@ import (
 
 func runBackup() {
 	if err := dispatcher(); err != nil {
-		guiState.err.Set(err)
+		global.err.Set(err)
 	}
 
 	var nodeHasErr bool
-	for _, node := range guiState.nodeStates {
+	for _, node := range global.nodeStates {
 		if fynext.Unwrap(node.err) != nil {
 			nodeHasErr = true
 			break
 		}
 	}
 
-	if fynext.Unwrap(guiState.err) == nil && guiState.exitOnDone && !nodeHasErr {
+	if fynext.Unwrap(global.err) == nil && global.exitOnDone && !nodeHasErr {
 		// TODO: remove this when done.
 		// fyne.Do(state.window.Close)
 	}
 
-	guiState.ctxCancel()
+	global.ctxCancel()
 }
 
 func dispatcher() error {
@@ -31,22 +31,20 @@ func dispatcher() error {
 		return err
 	}
 
-	guiState.nextTask()
+	global.nextTask()
 	metas, err := newLatest()
 	if err != nil {
 		return err
 	}
 	updateTotalSize(metas)
 
-	guiState.nextTask()
+	global.nextTask()
 	if err = updateDB(metas); err != nil {
 		return err
 	}
 
-	guiState.nextTask()
-	if err = pushChanges(); err != nil {
-		return err
-	}
+	global.nextTask()
+	pushChanges()
 
 	return nil
 }
@@ -56,5 +54,5 @@ func updateTotalSize(metas []*local.FileMeta) {
 	for _, m := range metas {
 		total += m.Size
 	}
-	guiState.pushState.totalSize.Set(total)
+	global.pushState.totalSize.Set(total)
 }

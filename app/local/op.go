@@ -7,9 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
-	"github.com/wilymonkey/maeve/utils"
 )
 
 // Gets the first folder in the given path or an error.
@@ -60,17 +58,17 @@ func Hardlink(sourcePath, targetPath string) error {
 }
 
 func CullSnapshots(node string) error {
-	snapshots, err := conf.GetConf().NodeSnapshots(node)
-	if err != nil {
-		return utils.WrapErr(err)
-	}
-	snapLen := len(snapshots)
-	if snapLen > conf.GetConf().MaxBackups {
-		for _, p := range snapshots[:snapLen-conf.GetConf().MaxBackups] {
-			if err := os.RemoveAll(p); err != nil {
-				return utils.WrapErr(err)
-			}
-		}
-	}
+	// snapshots, err := conf.GetConf().NodeSnapshots(node)
+	// if err != nil {
+	// 	return utils.WrapErr(err)
+	// }
+	// snapLen := len(snapshots)
+	// if snapLen > conf.GetConf().MaxBackups {
+	// 	for _, p := range snapshots[:snapLen-conf.GetConf().MaxBackups] {
+	// 		if err := os.RemoveAll(p); err != nil {
+	// 			return utils.WrapErr(err)
+	// 		}
+	// 	}
+	// }
 	return nil
 }

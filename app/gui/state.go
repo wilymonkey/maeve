@@ -25,7 +25,7 @@ func LoadState(window fyne.Window) {
 	cfg := conf.GetConf()
 
 	state := State{
-		Name:        binding.BindString(&cfg.Name),
+		Name:        binding.BindString(&cfg.DisplayName),
 		MaeveDir:    binding.BindString(&cfg.MaeveDir),
 		MaxBackups:  binding.BindInt(&cfg.MaxBackups),
 		MaxUpload:   binding.NewString(),
