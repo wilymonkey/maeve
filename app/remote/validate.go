@@ -2,7 +2,7 @@ package remote
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -12,7 +12,10 @@ import (
 )
 
 func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, error) {
-	utils.Assert(len(metas) > 0, "At least 1 path in metas")
+	if len(metas) == 0 {
+		err := fmt.Errorf("no metas received")
+		return nil, help.WrapError(err, "asserting meta array length")
+	}
 
 	root, _, err := local.SplitAtRootPath(metas[0].RelPath)
 	if err != nil {
@@ -27,51 +30,45 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 		return metas, nil
 	}
 
-	var missing []*local.FileMeta
-	ctx, cancelCtx := context.WithCancelCause(context.Background())
 	metaChan := make(chan *local.FileMeta, 100)
-	go func() {
-		defer cancelCtx(nil)
+	var walkErr utils.ThreadSafe[error]
+	onError := func(err error) {
+		walkErr.Set(err)
+	}
 
-		existsMap := make(map[[32]byte]*local.FileMeta, len(metas))
-		for _, m := range metas {
-			existsMap[m.Hash] = m
-		}
-
-		for meta := range metaChan {
-			if _, exists := existsMap[meta.Hash]; exists {
-				delete(existsMap, meta.Hash)
-			} else {
-				path := filepath.Join(nodeDir, meta.RelPath)
-				if err := os.Remove(path); err != nil {
-					err = help.CheckBackupDir(err, "removing partial/incorrect file")
-					cancelCtx(err)
-					return
-				}
-			}
-		}
-
-		missing = make([]*local.FileMeta, 0, len(existsMap))
-		for _, m := range existsMap {
-			missing = append(missing, m)
-		}
-	}()
-
-	err = local.WalkDirForMetas(
+	local.WalkDirForMetas(
 		sourceDir,
-		ctx,
-		metaChan, // Writer (closes).
-		func(path string) (string, error) {
-			return path, nil
-		},
+		context.Background(),
+		metaChan,
+		nil,
+		onError,
 	)
-	if err != nil {
-		return nil, err
+
+	existsMap := make(map[[32]byte]*local.FileMeta, len(metas))
+	for _, m := range metas {
+		existsMap[m.Hash] = m
 	}
 
-	<-ctx.Done()
-	if !errors.Is(ctx.Err(), context.Canceled) {
-		return nil, ctx.Err()
+	for meta := range metaChan {
+		if _, exists := existsMap[meta.Hash]; exists {
+			delete(existsMap, meta.Hash)
+			continue
+		}
+
+		path := filepath.Join(nodeDir, meta.RelPath)
+		if err := os.Remove(path); err != nil {
+			return nil, help.WrapError(err, "removing partial/incorrect file")
+		}
 	}
+
+	missing := make([]*local.FileMeta, 0, len(existsMap))
+	for _, m := range existsMap {
+		missing = append(missing, m)
+	}
+
+	if walkErr.Get() != nil {
+		return nil, walkErr.Get()
+	}
+
 	return missing, nil
 }

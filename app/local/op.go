@@ -17,9 +17,18 @@ func SplitAtRootPath(relpath string) (string, string, error) {
 	parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		err := fmt.Errorf("%q must have root and child path", relpath)
-		return "", "", help.DevReport(err, "splitting at root path")
+		return "", "", help.WrapError(err, "splitting at root path")
 	}
 	return parts[0], parts[1], nil
+}
+
+// Checks if the path exists, returning false on errors.
+func PathOk(path string) bool {
+	exists, err := PathExists(path)
+	if err != nil {
+		return false
+	}
+	return exists
 }
 
 func PathExists(path string) (bool, error) {
@@ -28,7 +37,7 @@ func PathExists(path string) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, help.DevReport(err, "checking if path exists")
+		return false, help.WrapError(err, "checking if path exists")
 	}
 	return true, nil
 }
@@ -45,16 +54,16 @@ func Hardlink(sourcePath, targetPath string) error {
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return help.CheckBackupDir(err, "creating folders in latest")
+			return help.WrapError(err, "creating folders in latest")
 		}
 		// Try to link the file again.
 		if err := os.Link(sourcePath, targetPath); err != nil {
-			return help.CheckBackupDir(err, "linking file into latest AGAIN")
+			return help.WrapError(err, "linking file into latest AGAIN")
 		}
 		return nil
 	}
 
-	return help.DevReport(err, "linking file into latest")
+	return help.WrapError(err, "linking file into latest")
 }
 
 func CullSnapshots(node string) error {

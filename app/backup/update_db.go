@@ -112,7 +112,7 @@ func repairDB() error {
 				nodeState.err.Set(err)
 				return nil
 			}
-			defer nodeConn.Close()
+			defer utils.Cleanup(&err, nodeConn.Close)
 
 			nodeState.isConnected.Set(true)
 			defer nodeState.isConnected.Set(false)
@@ -123,7 +123,7 @@ func repairDB() error {
 				return nil
 			}
 			versionChan <- nodeVersion{node: node, version: dbVersion}
-			return nil
+			return err
 		})
 	}
 	err = eGrp.Wait()
@@ -148,7 +148,7 @@ func repairDB() error {
 	if err != nil {
 		return err
 	}
-	defer nodeConn.Close()
+	defer utils.Cleanup(&err, nodeConn.Close)
 
 	if err := nodeConn.PullDB(); err != nil {
 		return err
@@ -160,7 +160,7 @@ func repairDB() error {
 	}
 
 	global.repairDBState.Set(RDBDone(localVersion))
-	return nil
+	return err
 }
 
 func getLocalVer() (*db.DBVersion, error) {
@@ -177,14 +177,14 @@ func getLocalVer() (*db.DBVersion, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer utils.Cleanup(&err, conn.Close)
 
 	ver, err := db.GetVersion(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	return ver, nil
+	return ver, err
 }
 
 func findBestVersion(nodeVersions []nodeVersion) string {
@@ -207,19 +207,19 @@ func findBestVersion(nodeVersions []nodeVersion) string {
 }
 
 func updateDB(fileMetas []*local.FileMeta) error {
-	global.updateDBState.Set(UDBAddEntries)
+	_ = global.updateDBState.Set(UDBAddEntries)
 
 	conn, err := db.OpenWrite(conf.MyNode())
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer utils.Cleanup(&err, conn.Close)
 
 	rows, err := db.InsertFileMetas(conn, fileMetas)
 	if err != nil {
 		return err
 	}
 
-	global.updateDBState.Set(UDBDone(rows))
-	return nil
+	_ = global.updateDBState.Set(UDBDone(rows))
+	return err
 }

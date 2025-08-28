@@ -13,6 +13,7 @@ import (
 
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/help"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 type FileMeta struct {
@@ -31,12 +32,12 @@ func GenFileMeta(path string, hasher *blake3.Hasher) (FileMeta, error) {
 
 	relPath, err := filepath.Rel(conf.MyNode(), path)
 	if err != nil {
-		return meta, help.DevReport(err, "creating relative path")
+		return meta, help.WrapError(err, "creating relative path")
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return meta, help.CheckSource(err, "getting file stats")
+		return meta, help.WrapError(err, "getting file stats")
 	}
 
 	return FileMeta{
@@ -59,20 +60,43 @@ func NewHashsum(path string, hasher *blake3.Hasher) ([32]byte, error) {
 	var result [32]byte
 	file, err := os.Open(path)
 	if err != nil {
-		return result, help.CheckSource(err, "opening source file")
+		return result, help.WrapError(err, "opening source file")
 	}
-	defer file.Close()
+	defer utils.Cleanup(&err, file.Close)
 
 	hasher.Reset()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return result, help.CheckSource(err, "hashing source file")
+		return result, help.WrapError(err, "hashing source file")
 	}
 	copy(result[:], hasher.Sum(nil))
-	return result, nil
+	return result, err
 }
 
 // Writes FileMetas to a channel and closes channel when done.
+// Launches in a goroutine.
 func WalkDirForMetas(
+	sourceDir string,
+	ctx context.Context,
+	metaChan chan<- *FileMeta,
+	preProcess func(path string) (string, error),
+	onError func(err error),
+) {
+	pp := preProcess
+	if pp == nil {
+		pp = func(path string) (string, error) {
+			return path, nil
+		}
+	}
+	go func() {
+		err := metaWalk(sourceDir, ctx, metaChan, pp)
+		if err != nil {
+			onError(err)
+		}
+	}()
+}
+
+// Writes FileMetas to a channel and closes channel when done.
+func metaWalk(
 	sourceDir string,
 	ctx context.Context,
 	metaChan chan<- *FileMeta,
@@ -101,7 +125,7 @@ func WalkDirForMetas(
 		})
 	}
 
-	walkErr := filepath.WalkDir(sourceDir, func(path string, dir os.DirEntry, err error) error {
+	err := filepath.WalkDir(sourceDir, func(path string, dir os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -118,8 +142,8 @@ func WalkDirForMetas(
 	if err := eGrp.Wait(); err != nil {
 		return err
 	}
-	if walkErr != nil {
-		return help.CheckBackupDir(walkErr, "walking dir")
+	if err != nil {
+		return help.WrapError(err, "walking dir")
 	}
 
 	return nil

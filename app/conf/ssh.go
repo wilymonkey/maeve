@@ -11,17 +11,17 @@ import (
 )
 
 type SSHKnownHosts struct {
-	Hosts map[string]ssh.PublicKey
+	Hosts map[string][]byte
 }
 
 func NewSSHKnownHosts() SSHKnownHosts {
 	return SSHKnownHosts{
-		Hosts: make(map[string]ssh.PublicKey),
+		Hosts: make(map[string][]byte),
 	}
 }
 
 func (s *SSHKnownHosts) Add(hostname string, key ssh.PublicKey) {
-	s.Hosts[hostname] = key
+	s.Hosts[hostname] = key.Marshal()
 }
 
 func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
@@ -29,7 +29,7 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 		host := strings.Split(hostname, ":")[0]
 		if host == "" {
 			err := fmt.Errorf("cannot find host for %s", hostname)
-			return help.Stacktrace(err, "parsing hostname", help.DelKnownHost)
+			return help.WrapError(err, "parsing hostname")
 		}
 		storedKey, exists := s.Hosts[host]
 		if !exists {
@@ -37,9 +37,9 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 			return nil
 		}
 
-		if !bytes.Equal(key.Marshal(), storedKey.Marshal()) {
+		if !bytes.Equal(key.Marshal(), storedKey) {
 			err := fmt.Errorf("host key mismatch for %s", host)
-			return help.Stacktrace(err, "validating keys", help.DelKnownHost)
+			return help.WrapError(err, "validating keys")
 		}
 
 		return nil

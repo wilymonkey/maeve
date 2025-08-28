@@ -12,7 +12,7 @@ import (
 func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, error) {
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return 0, help.DevReport(err, "creating immediate transaction")
+		return 0, help.WrapError(err, "creating immediate transaction")
 	}
 	defer endTx(&err)
 
@@ -26,7 +26,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.DevReport(err, "counting rows before inserts")
+		return 0, help.WrapError(err, "counting rows before inserts")
 	}
 
 	for _, meta := range fileMetas {
@@ -45,14 +45,13 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.DevReport(err, "insert row into file_meta")
+			return 0, help.WrapError(err, "insert row into file_meta")
 		}
 
-		snapshot, otherpath, err := formatRelpath(meta.RelPath)
+		snapshot, rest, err := formatRelpath(meta.RelPath)
 		if err != nil {
 			return 0, err
 		}
-
 		var pathId int
 		err = sqlitex.Execute(conn,
 			`INSERT INTO file_path (path)
@@ -60,7 +59,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			ON CONFLICT(path) DO UPDATE SET path = path
 			RETURNING id;`,
 			&sqlitex.ExecOptions{
-				Args: []any{otherpath},
+				Args: []any{rest},
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					pathId = stmt.ColumnInt(0)
 					return nil
@@ -68,7 +67,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.DevReport(err, "insert row into file_path")
+			return 0, help.WrapError(err, "insert row into file_path")
 		}
 
 		err = sqlitex.Execute(conn,
@@ -79,7 +78,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.DevReport(err, "insert row into path_meta_link")
+			return 0, help.WrapError(err, "insert row into path_meta_link")
 		}
 	}
 
@@ -93,7 +92,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.DevReport(err, "counting rows after inserts")
+		return 0, help.WrapError(err, "counting rows after inserts")
 	}
 
 	return endRows - startRows, err
@@ -107,7 +106,7 @@ func formatRelpath(relpath string) (int64, string, error) {
 	}
 	snapshot, err := conf.TimeFromString(root)
 	if err != nil {
-		return 0, "", help.DevReport(err, "parsing root folder as time")
+		return 0, "", help.WrapError(err, "parsing root folder as time")
 	}
 
 	return conf.TimeToInt64(snapshot), rest, nil

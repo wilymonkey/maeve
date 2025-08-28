@@ -141,6 +141,13 @@ func GreyBox(objects fyne.CanvasObject) fyne.CanvasObject {
 	return container.NewStack(background, objects)
 }
 
+func StackOfSize(size fyne.Size, objects ...fyne.CanvasObject) fyne.CanvasObject {
+	box := canvas.NewRectangle(color.Transparent)
+	box.SetMinSize(size)
+	objects = append(objects, box)
+	return container.NewStack(objects...)
+}
+
 func ErrorBox(ErrMsg binding.String) fyne.CanvasObject {
 	bg := canvas.NewRectangle(theme.Color(theme.ColorNameError))
 	bg.CornerRadius = 8

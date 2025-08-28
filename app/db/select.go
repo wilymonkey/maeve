@@ -18,7 +18,7 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.DevReport(err, "creating read transaction")
+		return nil, help.WrapError(err, "creating read transaction")
 	}
 	defer endTx(&err)
 
@@ -37,13 +37,13 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 				},
 			})
 		if err != nil {
-			return nil, help.DevReport(err, "getting FileMeta from link id")
+			return nil, help.WrapError(err, "getting FileMeta from link id")
 		}
 	}
 
 	if len(result) != len(linkIds) {
 		err := fmt.Errorf("only found %d out of %d FileMetas", len(result), len(linkIds))
-		return nil, help.DevReport(err, "check result length")
+		return nil, help.WrapError(err, "check result length")
 	}
 
 	return result, err
@@ -52,14 +52,14 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 	if len(metas) < 1 {
 		err := errors.New("no FileMetas given to get Ids for")
-		return nil, help.DevReport(err, "checking input length")
+		return nil, help.WrapError(err, "checking input length")
 	}
 
 	result := make([]int64, 0, len(metas))
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.DevReport(err, "creating read transaction")
+		return nil, help.WrapError(err, "creating read transaction")
 	}
 	defer endTx(&err)
 
@@ -90,13 +90,13 @@ func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 				},
 			})
 		if err != nil {
-			return nil, help.DevReport(err, "getting link id from FileMeta")
+			return nil, help.WrapError(err, "getting link id from FileMeta")
 		}
 	}
 
 	if len(result) != len(metas) {
 		err := fmt.Errorf("found %d out of %d path meta ids", len(result), len(metas))
-		return nil, help.DevReport(err, "checking result length")
+		return nil, help.WrapError(err, "checking result length")
 	}
 
 	return result, err
@@ -120,7 +120,7 @@ func GetLatestMeta(conn *sqlite.Conn) ([]*local.FileMeta, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "getting FileMeta from latest snapshot")
+		return nil, help.WrapError(err, "getting FileMeta from latest snapshot")
 	}
 
 	return result, nil

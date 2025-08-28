@@ -15,7 +15,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	signer, err := ssh.NewSignerFromKey(cfg.SSHPrivateKey)
 	if err != nil {
-		return nil, help.Stacktrace(err, "parsing private key", help.DelPrivateKey)
+		return nil, help.WrapError(err, "parsing private key")
 	}
 
 	config := &ssh.ClientConfig{
@@ -26,7 +26,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", host, port), config)
 	if err != nil {
-		return nil, help.CheckNodeConn(err, "dialing ssh server")
+		return nil, help.WrapError(err, "dialing ssh server")
 	}
 	return client, nil
 }

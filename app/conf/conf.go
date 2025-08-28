@@ -64,11 +64,11 @@ func loadConfig() (*MaeveConf, error) {
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, help.Stacktrace(err, "parsing config file", help.DelConfig)
+			return nil, help.WrapError(err, "parsing config file")
 		}
 		// File exists since there is no error, so unmarshal it.
 	} else if err := yaml.Unmarshal(data, conf); err != nil {
-		return nil, help.Stacktrace(err, "unmarshalling config file", help.DelConfig)
+		return nil, help.WrapError(err, "unmarshalling config file")
 	}
 
 	if err := conf.applyDefaults(); err != nil {
@@ -85,7 +85,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.DisplayName == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return help.DevReport(err, "getting hostname")
+			return help.WrapError(err, "getting hostname")
 		}
 		c.DisplayName = hostname
 	}
@@ -93,7 +93,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
 		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return help.DevReport(err, "generating ssh key")
+			return help.WrapError(err, "generating ssh key")
 		}
 		c.SSHPrivateKey = privateKey
 	}
@@ -105,7 +105,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.MaeveDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return help.DevReport(err, "getting home dir")
+			return help.WrapError(err, "getting home dir")
 		}
 		c.MaeveDir = filepath.Join(homeDir, "Maeve")
 	}
@@ -135,17 +135,17 @@ func (c *MaeveConf) SaveToFile() error {
 
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return help.DevReport(err, "marshalling config")
+		return help.WrapError(err, "marshalling config")
 	}
 
 	f, err := utils.Create(confPath)
 	if err != nil {
-		return help.Stacktrace(err, "creating config file", help.DelConfig)
+		return help.WrapError(err, "creating config file")
 	}
 	defer utils.Cleanup(&err, f.Close)
 
 	if _, err := f.Write(data); err != nil {
-		return help.Stacktrace(err, "writing data to config file", help.DelConfig)
+		return help.WrapError(err, "writing data to config file")
 	}
 
 	return nil
@@ -158,7 +158,7 @@ func (c *MaeveConf) SaveToFile() error {
 func configPath() (string, error) {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", help.DevReport(err, "reading user dir")
+		return "", help.WrapError(err, "reading user dir")
 	}
 	confPath := filepath.Join(userDir, "maeve", "config.yml")
 	return confPath, nil
@@ -201,7 +201,7 @@ func TimeToString(t time.Time) string {
 func TimeFromString(s string) (time.Time, error) {
 	snapshot, err := time.Parse(timeFormat, s)
 	if err != nil {
-		return snapshot, help.DevReport(err, "parsing root folder as time")
+		return snapshot, help.WrapError(err, "parsing root folder as time")
 	}
 	return snapshot, nil
 }

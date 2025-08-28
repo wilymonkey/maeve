@@ -35,7 +35,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "finding table version signature")
+		return nil, help.WrapError(err, "finding table version signature")
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -50,7 +50,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "getting latest snapshot")
+		return nil, help.WrapError(err, "getting latest snapshot")
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -62,7 +62,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "counting path_meta_link rows")
+		return nil, help.WrapError(err, "counting path_meta_link rows")
 	}
 
 	return &result, nil
@@ -81,7 +81,7 @@ func SetDBVersion(conn *sqlite.Conn, dirPath string) error {
 			Args: []any{sig},
 		})
 	if err != nil {
-		return help.DevReport(err, "inserting db signature")
+		return help.WrapError(err, "inserting db signature")
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.DevReport(err, "counting file_meta rows")
+		return nil, help.WrapError(err, "counting file_meta rows")
 	}
 
 	addHashes := func(stmt *sqlite.Stmt) error {
@@ -115,14 +115,14 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			&sqlitex.ExecOptions{ResultFunc: addHashes},
 		)
 		if err != nil {
-			return nil, help.DevReport(err, "hashing rows")
+			return nil, help.WrapError(err, "hashing rows")
 		}
 		return hasher.Sum(nil), nil
 	}
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.DevReport(err, "creating immediate transaction")
+		return nil, help.WrapError(err, "creating immediate transaction")
 	}
 	defer endTx(&err)
 
@@ -134,7 +134,7 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			},
 		)
 		if err != nil {
-			return nil, help.DevReport(err, "selecting evenly spread hashsums")
+			return nil, help.WrapError(err, "selecting evenly spread hashsums")
 		}
 	}
 

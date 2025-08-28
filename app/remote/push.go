@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,26 +33,40 @@ func (n *NodeConn) PushLinks(
 	metas []*local.FileMeta,
 	ctx context.Context,
 	progChan chan<- *PushStatus,
-) error {
+	onError func(err error),
+) {
 	defer close(progChan)
-
-	conn, err := db.OpenRead(conf.MyNode())
-	if err != nil {
-		return err
-	}
-	defer utils.Cleanup(&err, conn.Close)
 
 	if n.backupDir == "" {
 		if err := n.addBackupDir(); err != nil {
-			return err
+			onError(err)
 		}
 	}
 
 	if n.sftpClient == nil {
 		if err := n.addSFTP(); err != nil {
-			return err
+			onError(err)
 		}
 	}
+
+	go func() {
+		err := n.pushLinks(metas, ctx, progChan)
+		if err != nil {
+			onError(err)
+		}
+	}()
+}
+
+func (n *NodeConn) pushLinks(
+	metas []*local.FileMeta,
+	ctx context.Context,
+	progChan chan<- *PushStatus,
+) error {
+	conn, err := db.OpenRead(conf.MyNode())
+	if err != nil {
+		return err
+	}
+	defer utils.Cleanup(&err, conn.Close)
 
 	const maxRetries = 3
 
@@ -66,7 +81,7 @@ func (n *NodeConn) PushLinks(
 		}
 		if !isGood {
 			err = fmt.Errorf("remote file hash did not match local hash")
-			return help.BadNodeConn(err, "verifying sent file")
+			return help.WrapError(err, "verifying sent file")
 		}
 		return nil
 	}
@@ -131,7 +146,7 @@ func (n *NodeConn) pushFile(
 
 	localFile, err := os.Open(source)
 	if err != nil {
-		return help.CheckSource(err, "opening file")
+		return help.WrapError(err, "opening file")
 	}
 	defer utils.Cleanup(&err, localFile.Close)
 
@@ -139,16 +154,17 @@ func (n *NodeConn) pushFile(
 	if err != nil {
 		var sftpErr *sftp.StatusError
 		if errors.As(err, &sftpErr) && sftpErr.FxCode() == sftp.ErrSSHFxNoSuchFile {
-			return help.CheckSource(err, "creating remote file")
+			return help.WrapError(err, "creating remote file")
 		}
 
 		parentDir := filepath.Dir(target)
+		log.Printf("creating dir: %q", parentDir)
 		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
-			return help.CheckSource(err, "creating parent dir for remote file")
+			return help.WrapError(err, "creating parent dir for remote file")
 		}
 		remoteFile, err = n.sftpClient.Create(target)
 		if err != nil {
-			return help.CheckSource(err, "creating remote file AGAIN")
+			return help.WrapError(err, "creating remote file AGAIN")
 		}
 	}
 	defer utils.Cleanup(&err, remoteFile.Close)
@@ -161,7 +177,7 @@ func (n *NodeConn) pushFile(
 		},
 	)
 	if _, err := io.Copy(pw, localFile); err != nil {
-		return help.BadNodeConn(err, "pushing file")
+		return help.WrapError(err, "pushing file")
 	}
 
 	return err
@@ -218,7 +234,7 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 		if toWrite > 0 {
 			n, err := pw.writer.Write(p[:toWrite])
 			if err != nil {
-				return int(pw.written), help.BadNodeConn(err, "send byte array")
+				return int(pw.written), help.WrapError(err, "send byte array")
 			}
 			p = p[n:]
 			writtenNow += n

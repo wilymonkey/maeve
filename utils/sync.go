@@ -29,3 +29,20 @@ func CollectChan[T any](c chan T) func() []T {
 		return collector
 	}
 }
+
+type ThreadSafe[T any] struct {
+	mu  sync.RWMutex
+	val T
+}
+
+func (s *ThreadSafe[T]) Get() T {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.val
+}
+
+func (s *ThreadSafe[T]) Set(v T) {
+	s.mu.Lock()
+	s.val = v
+	s.mu.Unlock()
+}

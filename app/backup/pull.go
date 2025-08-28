@@ -105,11 +105,7 @@ func pullStateTable() fyne.CanvasObject {
 
 func newLatest() ([]*local.FileMeta, error) {
 	myNode := conf.MyNode()
-	exists, err := local.PathExists(myNode)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
+	if exists := local.PathOk(myNode); exists {
 		if err := removeChildDirs(myNode); err != nil {
 			return nil, err
 		}
@@ -124,9 +120,38 @@ func newLatest() ([]*local.FileMeta, error) {
 
 	for _, pState := range global.pullStates {
 		metaChan := make(chan *local.FileMeta, 100)
+
+		sourceDir := pState.path
+		targetDir := filepath.Join(latest, filepath.Base(sourceDir))
+		linkpath := func(path string) (string, error) {
+			relPath, err := filepath.Rel(sourceDir, path)
+			if err != nil {
+				return "", help.WrapError(err, "creating relative path")
+			}
+			targetPath := filepath.Join(targetDir, relPath)
+			if err := local.Hardlink(path, targetPath); err != nil {
+				return "", err
+			}
+			return targetPath, nil
+		}
+		onError := func(err error) {
+			global.err.Set(err)
+		}
+
+		if err := os.RemoveAll(targetDir); err != nil {
+			return nil, help.WrapError(err, "deleting folder to link things to")
+		}
+
+		local.WalkDirForMetas(
+			sourceDir,
+			global.ctx,
+			metaChan,
+			linkpath,
+			onError,
+		)
+
 		var totalSize int64
 		var totalFiles int
-
 		utils.Throttle(
 			metaChan,
 			func(meta *local.FileMeta) {
@@ -135,40 +160,12 @@ func newLatest() ([]*local.FileMeta, error) {
 				fileMetas = append(fileMetas, meta)
 			},
 			func() {
-				fyne.Do(func() {
-					pState.number.Set(totalFiles)
-					pState.size.Set(totalSize)
-				})
+				pState.number.Set(totalFiles)
+				pState.size.Set(totalSize)
 			},
 		)
-
-		sourceDir := pState.path
-		targetDir := filepath.Join(latest, filepath.Base(pState.path))
-
-		if err := os.RemoveAll(targetDir); err != nil {
-			return nil, help.CheckBackupDir(err, "deleting folder to link things to")
-		}
-
-		err := local.WalkDirForMetas(
-			sourceDir,
-			global.ctx,
-			metaChan,
-			func(path string) (string, error) {
-				relPath, err := filepath.Rel(sourceDir, path)
-				if err != nil {
-					return "", help.DevReport(err, "creating relative path")
-				}
-				targetPath := filepath.Join(targetDir, relPath)
-				if err := local.Hardlink(path, targetPath); err != nil {
-					return "", err
-				}
-				return targetPath, nil
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
 	}
+
 	return fileMetas, nil
 }
 
@@ -176,7 +173,7 @@ func newLatestDir() (string, error) {
 	currentTime := conf.TimeToString(conf.TimeNow())
 	path := filepath.Join(conf.MyNode(), currentTime)
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", help.CheckBackupDir(err, "creating latest folder")
+		return "", help.WrapError(err, "creating latest folder")
 	}
 	return path, nil
 }
@@ -184,14 +181,14 @@ func newLatestDir() (string, error) {
 func removeChildDirs(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return help.CheckBackupDir(err, "reading files in backup folder")
+		return help.WrapError(err, "reading files in backup folder")
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
 			if err != nil {
-				return help.CheckBackupDir(err, "deleting stale folders in backup")
+				return help.WrapError(err, "deleting stale folders in backup")
 			}
 		}
 	}

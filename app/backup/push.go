@@ -187,12 +187,18 @@ func pushToNode(state *nodeState) error {
 		return err
 	}
 
+	progChan := make(chan *remote.PushStatus, 10)
+	onError := func(err error) {
+		global.err.Set(err)
+	}
+
+	nodeConn.PushLinks(metas, global.ctx, progChan, onError)
+
 	var progPath string
 	var sentSize int64
 	var totalFileSize int64
 	var alreadySentSize int64
 	totalSize := fynext.Unwrap(global.pushState.totalSize)
-	progChan := make(chan *remote.PushStatus, 10)
 
 	utils.Throttle(
 		progChan,
@@ -225,10 +231,6 @@ func pushToNode(state *nodeState) error {
 			global.pushState.percent.Set(percent)
 		},
 	)
-
-	if err := nodeConn.PushLinks(metas, global.ctx, progChan); err != nil {
-		return err
-	}
 
 	state.isDone.Set(true)
 	return nil

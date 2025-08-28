@@ -42,7 +42,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return help.Stacktrace(err, "register rpc functions", help.UpdateMaeve)
+		return help.WrapError(err, "register rpc functions")
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -86,7 +86,7 @@ func (n *NodeConn) GetDBVersion() (*db.DBVersion, error) {
 	args := &GetDBVersionArgs{Node: conf.MyName()}
 	var reply GetDBVersionReply
 	if err := n.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
-		return reply.Version, help.FromErr(err)
+		return reply.Version, help.DecodeErr(err)
 	}
 	return reply.Version, nil
 }
@@ -107,7 +107,7 @@ func (n *NodeConn) addBackupDir() error {
 	args := &BackupDirArgs{Node: conf.MyName()}
 	var reply BackupDirReply
 	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
-		return help.FromErr(err)
+		return help.DecodeErr(err)
 	}
 	n.backupDir = reply.Path
 	return nil
@@ -139,7 +139,7 @@ func (n *NodeConn) VerifyFile(hash *local.FileMeta) (bool, error) {
 	}
 	var reply VerifyFileReply
 	if err := n.rpcClient.Call("RPCFuncs.VerifyFile", args, &reply); err != nil {
-		return false, help.FromErr(err)
+		return false, help.DecodeErr(err)
 	}
 	return reply.IsGood, nil
 }
@@ -175,7 +175,7 @@ func (h *RPCFuncs) ConformToDB(args *ConformToDBArgs, reply *ConformToDBReply) e
 	}
 
 	reply.MissingLinkIds = ids
-	return nil
+	return err
 }
 
 func (n *NodeConn) ConformToDB() ([]int64, error) {
@@ -184,7 +184,7 @@ func (n *NodeConn) ConformToDB() ([]int64, error) {
 	}
 	var reply ConformToDBReply
 	if err := n.rpcClient.Call("RPCFuncs.ConformToDB", args, &reply); err != nil {
-		return nil, help.FromErr(err)
+		return nil, help.DecodeErr(err)
 	}
 	return reply.MissingLinkIds, nil
 }
