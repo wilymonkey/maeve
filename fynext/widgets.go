@@ -111,17 +111,9 @@ func DeleteBtn(tapped func()) *widget.Button {
 	return btn
 }
 
-func PencilBtn(tapped func()) *widget.Button {
-	return widget.NewButtonWithIcon("", icons.PencilSvg, tapped)
-}
-
-func DupliBtn(tapped func()) *widget.Button {
-	return widget.NewButtonWithIcon("", icons.DuplicateSvg, tapped)
-}
-
 func EditBtn(onPred func() bool, onEdit func(), onConfirm func()) *widget.Button {
 	var btn *widget.Button
-	btn = PencilBtn(func() {
+	btn = widget.NewButtonWithIcon("", icons.PencilSvg, func() {
 		if onPred() {
 			onEdit()
 			btn.SetIcon(icons.CheckSvg)

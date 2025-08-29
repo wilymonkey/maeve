@@ -12,6 +12,7 @@ import (
 	"github.com/wilymonkey/maeve/app/clipboard"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/fynext"
+	"github.com/wilymonkey/maeve/fynext/icons"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -37,7 +38,7 @@ func thisPC() fyne.CanvasObject {
 			15,
 		),
 		maeveKey(),
-		trustedPCs(),
+		backupPCs(),
 	)
 }
 
@@ -104,7 +105,7 @@ func backupDir() fyne.CanvasObject {
 	}
 	return container.NewBorder(
 		nil, nil, nil,
-		fynext.PencilBtn(finderDlg),
+		widget.NewButtonWithIcon("", icons.PencilSvg, finderDlg),
 		fynext.VBox(
 			fynext.SmallTxt("Backup Folder"),
 			container.NewHScroll(
@@ -129,28 +130,17 @@ func maeveKey() fyne.CanvasObject {
 		}
 	}
 	info := widget.NewLabel("Copy this key to the backup PC so that it will accept files.")
+	info.Wrapping = fyne.TextWrapWord
 
 	return container.NewBorder(
 		nil, nil, nil,
-		fynext.DupliBtn(copyKey),
+		widget.NewButtonWithIcon("", icons.ClipboardSvg, copyKey),
 		fynext.VBox(
 			fynext.SmallTxt("Maeve Key"),
-			container.NewHScroll(info),
-		),
-	)
-}
-
-func trustedPCs() fyne.CanvasObject {
-	openDialog := func() {}
-	info := widget.NewLabel("PCs that have accepted files from this PC before.")
-	btn := fynext.PencilBtn(openDialog)
-
-	return container.NewBorder(
-		nil, nil, nil,
-		btn,
-		fynext.VBox(
-			fynext.SmallTxt("Trusted PCs"),
-			container.NewHScroll(info),
+			fynext.StackOfSize(
+				fyne.NewSize(200, 1),
+				info,
+			),
 		),
 	)
 }

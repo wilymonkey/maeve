@@ -60,7 +60,6 @@ func main() {
 			w := app.NewWindow("Maeve")
 			gui.LoadState(w)
 			w.SetContent(gui.Render())
-			w.Resize(fyne.NewSize(500, 1000))
 			return w
 		})
 	}

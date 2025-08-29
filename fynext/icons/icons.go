@@ -54,11 +54,11 @@ var DangerSvg = &fyne.StaticResource{
 	StaticContent: dangerIcon,
 }
 
-//go:embed duplicate.svg
-var duplicateIcon []byte
-var DuplicateSvg = &fyne.StaticResource{
-	StaticName:    "duplicate.svg",
-	StaticContent: duplicateIcon,
+//go:embed clipboard.svg
+var clipboardIcon []byte
+var ClipboardSvg = &fyne.StaticResource{
+	StaticName:    "clipboard.svg",
+	StaticContent: clipboardIcon,
 }
 
 //go:embed link.svg
