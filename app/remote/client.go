@@ -2,6 +2,7 @@ package remote
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/wilymonkey/maeve/app/conf"
@@ -26,6 +27,7 @@ func NewSSHClient(address string) (*ssh.Client, error) {
 
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", host, port), config)
 	if err != nil {
+		log.Printf("err: %v", err)
 		return nil, help.WrapError(err, "dialing ssh server")
 	}
 	return client, nil

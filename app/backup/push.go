@@ -191,7 +191,6 @@ func pushToNode(state *nodeState) error {
 	onError := func(err error) {
 		global.err.Set(err)
 	}
-
 	nodeConn.PushLinks(metas, global.ctx, progChan, onError)
 
 	var progPath string

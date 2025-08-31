@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -19,23 +20,20 @@ import (
 type helpTextKey int
 
 const (
-	DevReport helpTextKey = iota
+	devReport helpTextKey = iota
+	chkNodeDetails
 )
 
 var helpText = map[helpTextKey]string{
-	DevReport: "report this error to the developer",
+	devReport:      "report this error to the developer",
+	chkNodeDetails: "check the connection details of the backup PC and make sure you've copied the key to that PC",
 }
-
-var helpRegistry = []struct {
-	matcher func(error) bool
-	helpKey helpTextKey
-}{}
 
 func (c helpTextKey) String() string {
 	if s, ok := helpText[c]; ok {
 		return s
 	}
-	return helpText[DevReport]
+	return helpText[devReport]
 }
 
 type helpError struct {
@@ -55,15 +53,28 @@ func newHelpError(err, task string, help helpTextKey) error {
 }
 
 func WrapError(err error, task string) error {
-	h := DevReport
+	matchFound := false
+	h := devReport
 
 	for _, entry := range helpRegistry {
 		if entry.matcher(err) {
 			h = entry.helpKey
+			matchFound = true
+			break
+		}
+	}
+	if !matchFound {
+		str := err.Error()
+		for _, entry := range helpRegistryRegex {
+			if entry.matcher.MatchString(str) {
+				h = entry.helpKey
+				matchFound = true
+				break
+			}
 		}
 	}
 
-	if h == DevReport {
+	if h == devReport {
 		err = fmt.Errorf("type: %T\nerr: %v", err, err)
 	}
 	return newHelpError(err.Error(), task, h)
@@ -97,14 +108,17 @@ func Render(err error) fyne.CanvasObject {
 	var helpErr *helpError
 
 	if errors.As(err, &helpErr) {
+		helpTxt := widget.NewLabel(helpErr.Help.String())
+		helpTxt.Wrapping = fyne.TextWrapWord
 		errLbl := widget.NewLabel(helpErr.Err)
 		errLbl.Wrapping = fyne.TextWrapWord
 		sl := widget.NewLabel(helpErr.Stack)
 		sl.Wrapping = fyne.TextWrapWord
 
 		content := fynext.VBox(
+			fynext.StackOfSize(fyne.NewSize(300, 1)),
 			fynext.SmallTxt("Possible Fix"),
-			widget.NewLabel(helpErr.Help.String()),
+			helpTxt,
 			fynext.SmallTxt("Task Attempted"),
 			widget.NewLabel(helpErr.Task),
 			fynext.SmallTxt("Error"),
@@ -139,4 +153,21 @@ func newStacktrace(start, number int) string {
 
 	result := b.String()
 	return result[:b.Len()-1] // Trim trailing newline.
+}
+
+var regSSHHandshake = regexp.MustCompile(`^ssh: handshake failed`)
+
+var helpRegistry = []struct {
+	matcher func(error) bool
+	helpKey helpTextKey
+}{}
+
+var helpRegistryRegex = []struct {
+	matcher *regexp.Regexp
+	helpKey helpTextKey
+}{
+	{
+		matcher: regSSHHandshake,
+		helpKey: chkNodeDetails,
+	},
 }

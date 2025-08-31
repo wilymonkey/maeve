@@ -12,10 +12,16 @@ import (
 
 func backupPCs() fyne.CanvasObject {
 	openDialog := func() {
-		var dlg dialog.Dialog
+		var dlg *dialog.CustomDialog
+		closeBtn := widget.NewButton(
+			"CLOSE",
+			func() {
+				dlg.Dismiss()
+			},
+		)
 		dlg = dialog.NewCustomWithoutButtons(
 			"Backup PCs",
-			remoteNodeDlg(dlg),
+			container.NewBorder(nil, closeBtn, nil, nil, remoteNodeDlg()),
 			global.Window,
 		)
 		dlg.Show()
@@ -37,12 +43,10 @@ func backupPCs() fyne.CanvasObject {
 	)
 }
 
-func remoteNodeDlg(dlg dialog.Dialog) fyne.CanvasObject {
-	return container.NewVScroll(
-		container.NewVBox(
-			remoteNodeList(),
-			addRemoteNote(),
-		),
+func remoteNodeDlg() fyne.CanvasObject {
+	return container.NewVBox(
+		remoteNodeList(),
+		addRemoteNote(),
 	)
 }
 
@@ -76,6 +80,7 @@ func remoteNodeList() fyne.CanvasObject {
 			),
 		),
 	)
+	w.SetMinSize(fyne.NewSquareSize(300))
 	return w
 }
 
