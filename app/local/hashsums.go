@@ -74,35 +74,21 @@ func NewHashsum(path string, hasher *blake3.Hasher) ([32]byte, error) {
 
 // Writes FileMetas to a channel and closes channel when done.
 // Launches in a goroutine.
-func WalkDirForMetas(
-	sourceDir string,
-	ctx context.Context,
-	metaChan chan<- *FileMeta,
-	preProcess func(path string) (string, error),
-	onError func(err error),
-) {
-	pp := preProcess
-	if pp == nil {
-		pp = func(path string) (string, error) {
-			return path, nil
-		}
-	}
-	go func() {
-		err := metaWalk(sourceDir, ctx, metaChan, pp)
-		if err != nil {
-			onError(err)
-		}
-	}()
-}
-
 // Writes FileMetas to a channel and closes channel when done.
-func metaWalk(
+func WalkDirForMetas(
 	sourceDir string,
 	ctx context.Context,
 	metaChan chan<- *FileMeta,
 	preProcess func(path string) (string, error),
 ) error {
 	defer close(metaChan)
+
+	pp := preProcess
+	if pp == nil {
+		pp = func(path string) (string, error) {
+			return path, nil
+		}
+	}
 
 	numWorkers := runtime.NumCPU() * 2
 	paths := make(chan string, numWorkers*2)
@@ -111,7 +97,7 @@ func metaWalk(
 		eGrp.Go(func() error {
 			hasher := blake3.New()
 			for path := range paths {
-				prePath, err := preProcess(path)
+				prePath, err := pp(path)
 				if err != nil {
 					return err
 				}

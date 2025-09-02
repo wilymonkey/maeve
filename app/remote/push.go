@@ -2,17 +2,14 @@ package remote
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/pkg/sftp"
 	"github.com/wilymonkey/maeve/app/conf"
-	"github.com/wilymonkey/maeve/app/db"
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/utils"
@@ -28,53 +25,27 @@ func newPushStatus(meta *local.FileMeta) *PushStatus {
 	return &PushStatus{Meta: meta}
 }
 
-// Closes progChan when done.
 func (n *NodeConn) PushLinks(
 	metas []*local.FileMeta,
 	ctx context.Context,
 	progChan chan<- *PushStatus,
-	onError func(err error),
-) {
+) error {
+	const maxRetries = 3
 	defer close(progChan)
 
 	if n.backupDir == "" {
 		if err := n.addBackupDir(); err != nil {
-			onError(err)
+			return err
 		}
 	}
 
 	if n.sftpClient == nil {
 		if err := n.addSFTP(); err != nil {
-			onError(err)
-		}
-	}
-
-	go func() {
-		err := n.pushLinks(metas, ctx, progChan)
-		if err != nil {
-			onError(err)
-		}
-	}()
-}
-
-func (n *NodeConn) pushLinks(
-	metas []*local.FileMeta,
-	ctx context.Context,
-	progChan chan<- *PushStatus,
-) error {
-	conn, err := db.OpenRead(conf.MyNode())
-	if err != nil {
-		return err
-	}
-	defer utils.Cleanup(&err, conn.Close)
-
-	const maxRetries = 3
-
-	pushAndVerify := func(m *local.FileMeta) error {
-		if err := n.pushFile(m, ctx, progChan); err != nil {
 			return err
 		}
+	}
 
+	verify := func(m *local.FileMeta) error {
 		isGood, err := n.VerifyFile(m)
 		if err != nil {
 			return err
@@ -89,7 +60,11 @@ func (n *NodeConn) pushLinks(
 	for _, m := range metas {
 		var err error
 		for range maxRetries {
-			err = pushAndVerify(m)
+			// TODO: Create new SFTP client when this one errors out.
+			if err := n.pushFile(m, ctx, progChan); err != nil {
+				return err
+			}
+			err = verify(m)
 			if err == nil {
 				break
 			}
@@ -97,9 +72,10 @@ func (n *NodeConn) pushLinks(
 		if err != nil {
 			return err
 		}
+		utils.Sleep(1000)
 	}
 
-	return err
+	return nil
 }
 
 func (n *NodeConn) PushDB(path string, ctx context.Context) error {
@@ -152,13 +128,11 @@ func (n *NodeConn) pushFile(
 
 	remoteFile, err := n.sftpClient.Create(target)
 	if err != nil {
-		var sftpErr *sftp.StatusError
-		if errors.As(err, &sftpErr) && sftpErr.FxCode() == sftp.ErrSSHFxNoSuchFile {
+		if !strings.Contains(err.Error(), "does not exist") {
 			return help.WrapError(err, "creating remote file")
 		}
 
 		parentDir := filepath.Dir(target)
-		log.Printf("creating dir: %q", parentDir)
 		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
 			return help.WrapError(err, "creating parent dir for remote file")
 		}

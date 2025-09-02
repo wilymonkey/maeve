@@ -12,6 +12,7 @@ import (
 	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 // =======================================
@@ -134,21 +135,20 @@ func newLatest() ([]*local.FileMeta, error) {
 			}
 			return targetPath, nil
 		}
-		onError := func(err error) {
-			global.err.Set(err)
-		}
 
 		if err := os.RemoveAll(targetDir); err != nil {
 			return nil, help.WrapError(err, "deleting folder to link things to")
 		}
 
-		local.WalkDirForMetas(
-			sourceDir,
-			global.ctx,
-			metaChan,
-			linkpath,
-			onError,
-		)
+		eGrp, ctx := errgroup.WithContext(global.ctx)
+		eGrp.Go(func() error {
+			return local.WalkDirForMetas(
+				sourceDir,
+				ctx,
+				metaChan,
+				linkpath,
+			)
+		})
 
 		var totalSize int64
 		var totalFiles int
@@ -164,6 +164,9 @@ func newLatest() ([]*local.FileMeta, error) {
 				pState.size.Set(totalSize)
 			},
 		)
+		if err := eGrp.Wait(); err != nil {
+			return nil, err
+		}
 	}
 
 	return fileMetas, nil

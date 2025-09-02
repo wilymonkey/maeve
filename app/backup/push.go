@@ -16,6 +16,7 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/fynext/icons"
 	"github.com/wilymonkey/maeve/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 // =======================================
@@ -188,10 +189,10 @@ func pushToNode(state *nodeState) error {
 	}
 
 	progChan := make(chan *remote.PushStatus, 10)
-	onError := func(err error) {
-		global.err.Set(err)
-	}
-	nodeConn.PushLinks(metas, global.ctx, progChan, onError)
+	eGrp, ctx := errgroup.WithContext(global.ctx)
+	eGrp.Go(func() error {
+		return nodeConn.PushLinks(metas, ctx, progChan)
+	})
 
 	var progPath string
 	var sentSize int64
@@ -230,6 +231,11 @@ func pushToNode(state *nodeState) error {
 			global.pushState.percent.Set(percent)
 		},
 	)
+
+	err = eGrp.Wait()
+	if err != nil {
+		return err
+	}
 
 	state.isDone.Set(true)
 	return nil

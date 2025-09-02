@@ -8,7 +8,7 @@ import (
 
 	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
-	"github.com/wilymonkey/maeve/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, error) {
@@ -31,18 +31,15 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 	}
 
 	metaChan := make(chan *local.FileMeta, 100)
-	var walkErr utils.ThreadSafe[error]
-	onError := func(err error) {
-		walkErr.Set(err)
-	}
-
-	local.WalkDirForMetas(
-		sourceDir,
-		context.Background(),
-		metaChan,
-		nil,
-		onError,
-	)
+	eGrp, ctx := errgroup.WithContext(context.Background())
+	eGrp.Go(func() error {
+		return local.WalkDirForMetas(
+			sourceDir,
+			ctx,
+			metaChan,
+			nil,
+		)
+	})
 
 	existsMap := make(map[[32]byte]*local.FileMeta, len(metas))
 	for _, m := range metas {
@@ -66,8 +63,8 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 		missing = append(missing, m)
 	}
 
-	if walkErr.Get() != nil {
-		return nil, walkErr.Get()
+	if err := eGrp.Wait(); err != nil {
+		return nil, err
 	}
 
 	return missing, nil
