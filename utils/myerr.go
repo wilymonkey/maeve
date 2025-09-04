@@ -56,6 +56,12 @@ func Assert(truth bool, msg string) {
 	}
 }
 
+func Assertf(truth bool, msg string, a ...any) {
+	if !truth {
+		runAssert(fmt.Sprintf(msg, a...))
+	}
+}
+
 func AssertNoErr(err error, msg string) {
 	if err != nil {
 		runAssert(msg)

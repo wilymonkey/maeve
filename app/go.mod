@@ -8,8 +8,10 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/pkg/sftp v1.13.9
 	github.com/wilymonkey/maeve v0.1.1
+	github.com/wilymonkey/maeve/fynext v0.0.0-20250831094435-f21a8397f677
 	github.com/wilymonkey/maeve/theme v0.0.0-20250801105705-292004aaed17
 	github.com/zeebo/blake3 v0.2.4
+	golang.org/x/term v0.32.0
 	zombiezen.com/go/sqlite v1.4.2
 )
 

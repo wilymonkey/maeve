@@ -36,7 +36,7 @@ func createSchema(conn *sqlite.Conn) error {
 	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {
-		return help.WrapError(err, "creating schema")
+		return help.WrapErr(err, "creating schema")
 	}
 	return nil
 }

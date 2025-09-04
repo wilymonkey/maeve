@@ -52,7 +52,13 @@ func newHelpError(err, task string, help helpTextKey) error {
 	}
 }
 
-func WrapError(err error, task string) error {
+func Errorf(task string, err string, a ...any) error {
+	return WrapErr(fmt.Errorf(err, a...), task)
+}
+func Taskf(err error, task string, a ...any) error {
+	return WrapErr(err, fmt.Sprintf(task, a...))
+}
+func WrapErr(err error, task string) error {
 	matchFound := false
 	h := devReport
 
@@ -68,7 +74,6 @@ func WrapError(err error, task string) error {
 		for _, entry := range helpRegistryRegex {
 			if entry.matcher.MatchString(str) {
 				h = entry.helpKey
-				matchFound = true
 				break
 			}
 		}
@@ -87,6 +92,20 @@ func (e *helpError) Error() string {
 		return err.Error()
 	}
 	return base64.StdEncoding.EncodeToString(b.Bytes())
+}
+
+func PrintErr(err error) string {
+	e, ok := err.(*helpError)
+	if !ok {
+		return e.Error()
+	}
+	return fmt.Sprintf(
+		"Help: %s, Err: %s, Task: %s, Stack: %s",
+		e.Help.String(),
+		e.Err,
+		e.Task,
+		e.Stack,
+	)
 }
 
 func DecodeErr(err error) error {

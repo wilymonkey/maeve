@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/wilymonkey/maeve/app/backup"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/gui"
@@ -28,8 +29,9 @@ func main() {
 	}
 
 	// Visible
-	flagBackupAll := fs.Bool("backup", false, "Backup to all nodes in config")
+	flagBackup := fs.Bool("backup", false, "Backup to all nodes in config")
 	flagVersion := fs.Bool("version", false, "Print the current version")
+	flagDaemon := fs.Bool("daemon", false, "Run in daemon mode")
 
 	// Hidden, internal use only
 	flagServer := fs.Bool("server", false, "")
@@ -39,7 +41,11 @@ func main() {
 	}
 
 	switch {
-	case *flagBackupAll:
+	case *flagDaemon:
+		remote.RunSSHServer()
+		return
+
+	case *flagBackup:
 		startApp(func(app fyne.App) fyne.Window {
 			return backup.Launch(app, true)
 		})
@@ -60,15 +66,30 @@ func main() {
 			w := app.NewWindow("Maeve")
 			gui.LoadState(w)
 			w.SetContent(gui.Render())
+			w.SetCloseIntercept(func() {
+				w.Hide()
+			})
+
+			app.(desktop.App).SetSystemTrayMenu(maevetray(w))
+			app.(desktop.App).SetSystemTrayIcon(gui.FaviconIco)
+
 			return w
 		})
 	}
 }
 
 func startApp(window func(app fyne.App) fyne.Window) {
-	a := app.NewWithID("wilymonkey/maeve")
+	a := app.NewWithID("Maeve")
 	a.Settings().SetTheme(&fynext.Theme{})
 	w := window(a)
 	w.SetPadded(false)
 	w.ShowAndRun()
+}
+
+func maevetray(w fyne.Window) *fyne.Menu {
+	return fyne.NewMenu("Maeve",
+		fyne.NewMenuItem("Show", func() {
+			w.Show()
+		}),
+	)
 }

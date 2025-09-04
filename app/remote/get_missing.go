@@ -14,13 +14,10 @@ import (
 func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, error) {
 	if len(metas) == 0 {
 		err := fmt.Errorf("no metas received")
-		return nil, help.WrapError(err, "asserting meta array length")
+		return nil, help.WrapErr(err, "asserting meta array length")
 	}
 
-	root, _, err := local.SplitAtRootPath(metas[0].RelPath)
-	if err != nil {
-		return nil, err
-	}
+	root, _ := local.SplitAtRootPath(metas[0].RelPath)
 	sourceDir := filepath.Join(nodeDir, root)
 	exists, err := local.PathExists(sourceDir)
 	if err != nil {
@@ -34,6 +31,7 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 	eGrp, ctx := errgroup.WithContext(context.Background())
 	eGrp.Go(func() error {
 		return local.WalkDirForMetas(
+			nodeDir,
 			sourceDir,
 			ctx,
 			metaChan,
@@ -54,7 +52,7 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 
 		path := filepath.Join(nodeDir, meta.RelPath)
 		if err := os.Remove(path); err != nil {
-			return nil, help.WrapError(err, "removing partial/incorrect file")
+			return nil, help.WrapErr(err, "removing partial/incorrect file")
 		}
 	}
 

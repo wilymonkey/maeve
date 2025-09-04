@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"log"
 	"regexp"
 
 	"fyne.io/fyne/v2"
@@ -9,11 +10,18 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/backup"
 	"github.com/wilymonkey/maeve/fynext"
+	"github.com/wilymonkey/maeve/utils"
 )
 
 var sshNodeReg = regexp.MustCompile(`^[a-zA-Z0-9_]+@(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}$`)
 
 func Render() fyne.CanvasObject {
+	go func() {
+		for {
+			log.Println("hello! still runinng")
+			utils.Sleep(1000)
+		}
+	}()
 	launchBackup := func() {
 		lock := dialog.NewCustomWithoutButtons(
 			"Backup Lock",

@@ -45,14 +45,17 @@ func (n *NodeConn) PushLinks(
 		}
 	}
 
-	verify := func(m *local.FileMeta) error {
+	verifiedPush := func(m *local.FileMeta) error {
+		if err := n.pushFile(m, ctx, progChan); err != nil {
+			return err
+		}
 		isGood, err := n.VerifyFile(m)
 		if err != nil {
 			return err
 		}
 		if !isGood {
 			err = fmt.Errorf("remote file hash did not match local hash")
-			return help.WrapError(err, "verifying sent file")
+			return help.WrapErr(err, "verifying sent file")
 		}
 		return nil
 	}
@@ -60,19 +63,16 @@ func (n *NodeConn) PushLinks(
 	for _, m := range metas {
 		var err error
 		for range maxRetries {
-			// TODO: Create new SFTP client when this one errors out.
-			if err := n.pushFile(m, ctx, progChan); err != nil {
-				return err
+			if err = verifiedPush(m); err == nil {
+				break // Break on sucess.
 			}
-			err = verify(m)
-			if err == nil {
-				break
-			}
+			utils.Sleep(1000)
+			n.addSFTP() // Renew.
 		}
+
 		if err != nil {
 			return err
 		}
-		utils.Sleep(1000)
 	}
 
 	return nil
@@ -91,7 +91,7 @@ func (n *NodeConn) PushDB(path string, ctx context.Context) error {
 		}
 	}
 
-	meta, err := local.GenFileMeta(path, blake3.New())
+	meta, err := local.GenFileMeta(path, conf.MyNode(), blake3.New())
 	if err != nil {
 		return err
 	}
@@ -122,23 +122,23 @@ func (n *NodeConn) pushFile(
 
 	localFile, err := os.Open(source)
 	if err != nil {
-		return help.WrapError(err, "opening file")
+		return help.WrapErr(err, "opening file")
 	}
 	defer utils.Cleanup(&err, localFile.Close)
 
 	remoteFile, err := n.sftpClient.Create(target)
 	if err != nil {
 		if !strings.Contains(err.Error(), "does not exist") {
-			return help.WrapError(err, "creating remote file")
+			return help.WrapErr(err, "creating remote file")
 		}
 
 		parentDir := filepath.Dir(target)
 		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
-			return help.WrapError(err, "creating parent dir for remote file")
+			return help.WrapErr(err, "creating parent dir for remote file")
 		}
 		remoteFile, err = n.sftpClient.Create(target)
 		if err != nil {
-			return help.WrapError(err, "creating remote file AGAIN")
+			return help.WrapErr(err, "creating remote file AGAIN")
 		}
 	}
 	defer utils.Cleanup(&err, remoteFile.Close)
@@ -151,7 +151,7 @@ func (n *NodeConn) pushFile(
 		},
 	)
 	if _, err := io.Copy(pw, localFile); err != nil {
-		return help.WrapError(err, "pushing file")
+		return help.WrapErr(err, "pushing file")
 	}
 
 	return err
@@ -208,7 +208,7 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 		if toWrite > 0 {
 			n, err := pw.writer.Write(p[:toWrite])
 			if err != nil {
-				return int(pw.written), help.WrapError(err, "send byte array")
+				return int(pw.written), help.WrapErr(err, "send byte array")
 			}
 			p = p[n:]
 			writtenNow += n

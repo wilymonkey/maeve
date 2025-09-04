@@ -43,31 +43,31 @@ func NewNodeConn(node string, onStderr func(err error)) (*NodeConn, error) {
 	}
 	sshSession, err := sshClient.NewSession()
 	if err != nil {
-		return nil, help.WrapError(err, "creating ssh session")
+		return nil, help.WrapErr(err, "creating ssh session")
 	}
 
 	stdinPipe, err := sshSession.StdinPipe()
 	if err != nil {
-		return nil, help.WrapError(err, "getting stdin pipe")
+		return nil, help.WrapErr(err, "getting stdin pipe")
 	}
 	stdoutPipe, err := sshSession.StdoutPipe()
 	if err != nil {
-		return nil, help.WrapError(err, "getting stdout pipe")
+		return nil, help.WrapErr(err, "getting stdout pipe")
 	}
 	stderrPipe, err := sshSession.StderrPipe()
 	if err != nil {
-		return nil, help.WrapError(err, "getting stderr pipe")
+		return nil, help.WrapErr(err, "getting stderr pipe")
 	}
 
 	if err := sshSession.Start("maeve --server"); err != nil {
-		return nil, help.WrapError(err, "starting remote maeve as server")
+		return nil, help.WrapErr(err, "starting remote maeve as server")
 	}
 
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			err := errors.New(scanner.Text())
-			onStderr(help.WrapError(err, "scanning error pipe"))
+			onStderr(help.WrapErr(err, "scanning error pipe"))
 		}
 	}()
 
@@ -83,11 +83,16 @@ func NewNodeConn(node string, onStderr func(err error)) (*NodeConn, error) {
 	}, nil
 }
 
+// If connection already exists, this will close and open a new one.
 func (n *NodeConn) addSFTP() error {
+	if n.sftpClient != nil {
+		n.sftpClient.Close()
+	}
+
 	var err error
 	n.sftpClient, err = sftp.NewClient(n.sshClient)
 	if err != nil {
-		return help.WrapError(err, "getting SFTP client")
+		return help.WrapErr(err, "getting SFTP client")
 	}
 	return nil
 }

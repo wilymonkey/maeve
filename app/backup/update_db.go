@@ -3,12 +3,16 @@ package backup
 import (
 	"crypto/ed25519"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/app/conf"
 	"github.com/wilymonkey/maeve/app/db"
+	"github.com/wilymonkey/maeve/app/help"
 	"github.com/wilymonkey/maeve/app/local"
 	"github.com/wilymonkey/maeve/app/remote"
 	"github.com/wilymonkey/maeve/fynext"
@@ -35,7 +39,9 @@ func RDBDone(version *db.DBVersion) string {
 }
 
 const (
+	UDBDupliCheck = "checking to see if this is a duplicate snapshot..."
 	UDBAddEntries = "adding new entries into database..."
+	UDBNameChange = "renaming duplicate snapshot..."
 )
 
 func UDBDone(rows int64) string {
@@ -207,7 +213,7 @@ func findBestVersion(nodeVersions []nodeVersion) string {
 }
 
 func updateDB(fileMetas []*local.FileMeta) error {
-	_ = global.updateDBState.Set(UDBAddEntries)
+	global.updateDBState.Set(UDBDupliCheck)
 
 	conn, err := db.OpenWrite(conf.MyNode())
 	if err != nil {
@@ -215,11 +221,53 @@ func updateDB(fileMetas []*local.FileMeta) error {
 	}
 	defer utils.Cleanup(&err, conn.Close)
 
-	rows, err := db.InsertFileMetas(conn, fileMetas)
+	prev, err := db.GetLatestMeta(conn)
 	if err != nil {
 		return err
 	}
+	metasAreDifferent := func() bool {
+		if len(prev) != len(fileMetas) {
+			return true
+		}
 
-	_ = global.updateDBState.Set(UDBDone(rows))
+		prevSet := make(map[string]struct{}, len(prev))
+		for _, v := range prev {
+			prevSet[v.AsMapKey()] = struct{}{}
+		}
+
+		for i, entry := range fileMetas {
+			if _, exists := prevSet[entry.AsMapKey()]; !exists {
+				log.Printf("found bad entry after %d iters", i)
+				return true
+			}
+		}
+		return false
+	}
+
+	var rows int64
+	if metasAreDifferent() {
+		global.updateDBState.Set(UDBAddEntries)
+
+		rows, err = db.InsertFileMetas(conn, fileMetas)
+		if err != nil {
+			return err
+		}
+	} else {
+		global.updateDBState.Set(UDBNameChange)
+
+		myNode := conf.MyNode()
+		prevRoot, _ := local.SplitAtRootPath(prev[0].RelPath)
+		currRoot, _ := local.SplitAtRootPath(fileMetas[0].RelPath)
+		currPath := filepath.Join(myNode, currRoot)
+		prevPath := filepath.Join(myNode, prevRoot)
+
+		if currPath != prevPath {
+			if err := os.Rename(currPath, prevPath); err != nil {
+				return help.WrapErr(err, "renaming current snapshot to previous one")
+			}
+		}
+	}
+
+	global.updateDBState.Set(UDBDone(rows))
 	return err
 }

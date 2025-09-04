@@ -12,7 +12,7 @@ import (
 func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, error) {
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return 0, help.WrapError(err, "creating immediate transaction")
+		return 0, help.WrapErr(err, "creating immediate transaction")
 	}
 	defer endTx(&err)
 
@@ -26,7 +26,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.WrapError(err, "counting rows before inserts")
+		return 0, help.WrapErr(err, "counting rows before inserts")
 	}
 
 	for _, meta := range fileMetas {
@@ -45,7 +45,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapError(err, "insert row into file_meta")
+			return 0, help.WrapErr(err, "insert row into file_meta")
 		}
 
 		snapshot, rest, err := formatRelpath(meta.RelPath)
@@ -67,7 +67,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapError(err, "insert row into file_path")
+			return 0, help.WrapErr(err, "insert row into file_path")
 		}
 
 		err = sqlitex.Execute(conn,
@@ -78,7 +78,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapError(err, "insert row into path_meta_link")
+			return 0, help.WrapErr(err, "insert row into path_meta_link")
 		}
 	}
 
@@ -92,7 +92,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.WrapError(err, "counting rows after inserts")
+		return 0, help.WrapErr(err, "counting rows after inserts")
 	}
 
 	return endRows - startRows, err
@@ -100,13 +100,10 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 
 // Splits the relpath into a unix timestamp and the remaining path.
 func formatRelpath(relpath string) (int64, string, error) {
-	root, rest, err := local.SplitAtRootPath(relpath)
-	if err != nil {
-		return 0, "", err
-	}
+	root, rest := local.SplitAtRootPath(relpath)
 	snapshot, err := conf.TimeFromString(root)
 	if err != nil {
-		return 0, "", help.WrapError(err, "parsing root folder as time")
+		return 0, "", help.WrapErr(err, "parsing root folder as time")
 	}
 
 	return conf.TimeToInt64(snapshot), rest, nil

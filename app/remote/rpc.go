@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/rpc"
@@ -42,7 +43,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return help.WrapError(err, "register rpc functions")
+		return help.WrapErr(err, "register rpc functions")
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -187,4 +188,48 @@ func (n *NodeConn) ConformToDB() ([]int64, error) {
 		return nil, help.DecodeErr(err)
 	}
 	return reply.MissingLinkIds, nil
+}
+
+type FinaliseArgs struct {
+	Snapshot string
+	Node     string
+}
+type FinaliseReply struct{}
+
+func (h *RPCFuncs) Finalise(args *FinaliseArgs, reply *FinaliseReply) error {
+	tempDir := conf.RemoteTempDir(args.Node)
+	dbSource := db.DBPath(tempDir)
+	nodeDir := filepath.Dir(tempDir)
+	snapSource := filepath.Join(tempDir, args.Snapshot)
+
+	utils.Assertf(local.PathOk(snapSource), "path %q should exist", snapSource)
+	utils.Assertf(local.PathOk(dbSource), "path %q should exist", dbSource)
+
+	snapTarget := filepath.Join(nodeDir, filepath.Base(snapSource))
+	if err := os.Rename(snapSource, snapTarget); err != nil {
+		return fmt.Errorf("moving dir: %v", err)
+	}
+
+	dbTarget := filepath.Join(nodeDir, filepath.Base(dbSource))
+	if err := os.Rename(dbSource, dbTarget); err != nil {
+		return fmt.Errorf("moving database: %v", err)
+	}
+
+	if err := os.RemoveAll(tempDir); err != nil {
+		return fmt.Errorf("deleting temp dir: %v", err)
+	}
+
+	return nil
+}
+
+func (n *NodeConn) Finalise(meta local.FileMeta) error {
+	args := &FinaliseArgs{
+		Snapshot: meta.RelPath,
+		Node:     conf.MyName(),
+	}
+	var reply FinaliseReply
+	if err := n.rpcClient.Call("RPCFuncs.Finalise", args, &reply); err != nil {
+		return help.DecodeErr(err)
+	}
+	return nil
 }

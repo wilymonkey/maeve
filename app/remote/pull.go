@@ -18,19 +18,19 @@ func (n *NodeConn) PullDB() error {
 	}
 	sourceFile, err := n.sftpClient.Open(db.DBPath(n.backupDir))
 	if err != nil {
-		return help.WrapError(err, "opening remote file")
+		return help.WrapErr(err, "opening remote file")
 	}
 	defer sourceFile.Close()
 
 	localFile, err := os.Create(db.DBPath(conf.MyNode()))
 	if err != nil {
-		return help.WrapError(err, "opening local file")
+		return help.WrapErr(err, "opening local file")
 	}
 	defer localFile.Close()
 
 	_, err = io.Copy(localFile, sourceFile)
 	if err != nil {
-		return help.WrapError(err, "pulling data from node")
+		return help.WrapErr(err, "pulling data from node")
 	}
 
 	return nil

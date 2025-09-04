@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"context"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
@@ -18,6 +20,7 @@ type State struct {
 	MaxUpload   binding.String
 	RemoteNodes binding.StringList
 	SourceDirs  binding.StringList
+	Ctx         context.Context
 	Window      fyne.Window
 }
 
@@ -31,6 +34,7 @@ func LoadState(window fyne.Window) {
 		MaxUpload:   binding.NewString(),
 		RemoteNodes: binding.BindStringList(&cfg.RemoteNodes),
 		SourceDirs:  binding.BindStringList(&cfg.SourceDirs),
+		Ctx:         context.Background(),
 		Window:      window,
 	}
 

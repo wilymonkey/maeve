@@ -127,7 +127,7 @@ func newLatest() ([]*local.FileMeta, error) {
 		linkpath := func(path string) (string, error) {
 			relPath, err := filepath.Rel(sourceDir, path)
 			if err != nil {
-				return "", help.WrapError(err, "creating relative path")
+				return "", help.WrapErr(err, "creating relative path")
 			}
 			targetPath := filepath.Join(targetDir, relPath)
 			if err := local.Hardlink(path, targetPath); err != nil {
@@ -137,12 +137,13 @@ func newLatest() ([]*local.FileMeta, error) {
 		}
 
 		if err := os.RemoveAll(targetDir); err != nil {
-			return nil, help.WrapError(err, "deleting folder to link things to")
+			return nil, help.WrapErr(err, "deleting folder to link things to")
 		}
 
 		eGrp, ctx := errgroup.WithContext(global.ctx)
 		eGrp.Go(func() error {
 			return local.WalkDirForMetas(
+				conf.MyNode(),
 				sourceDir,
 				ctx,
 				metaChan,
@@ -176,7 +177,7 @@ func newLatestDir() (string, error) {
 	currentTime := conf.TimeToString(conf.TimeNow())
 	path := filepath.Join(conf.MyNode(), currentTime)
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", help.WrapError(err, "creating latest folder")
+		return "", help.WrapErr(err, "creating latest folder")
 	}
 	return path, nil
 }
@@ -184,14 +185,14 @@ func newLatestDir() (string, error) {
 func removeChildDirs(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return help.WrapError(err, "reading files in backup folder")
+		return help.WrapErr(err, "reading files in backup folder")
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
 			if err != nil {
-				return help.WrapError(err, "deleting stale folders in backup")
+				return help.WrapErr(err, "deleting stale folders in backup")
 			}
 		}
 	}

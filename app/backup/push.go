@@ -199,6 +199,7 @@ func pushToNode(state *nodeState) error {
 	var totalFileSize int64
 	var alreadySentSize int64
 	totalSize := fynext.Unwrap(global.pushState.totalSize)
+	speedSlice := utils.NewCircSlice[int64](10)
 
 	utils.Throttle(
 		progChan,
@@ -217,10 +218,10 @@ func pushToNode(state *nodeState) error {
 				task := saySendFile(progPath)
 				global.pushState.task.Set(task)
 			}
+
 			prevCurrSize := fynext.Unwrap(global.pushState.currSize)
 			currSize := alreadySentSize + sentSize
-
-			speed := (currSize - prevCurrSize) / utils.ThrottleMS * 1000
+			speed := calcSpeed(speedSlice, prevCurrSize, currSize)
 			global.pushState.speed.Set(utils.BytesToHuman(speed))
 
 			left := calcTimeLeft(speed, totalSize-currSize)
@@ -232,8 +233,7 @@ func pushToNode(state *nodeState) error {
 		},
 	)
 
-	err = eGrp.Wait()
-	if err != nil {
+	if err := eGrp.Wait(); err != nil {
 		return err
 	}
 
@@ -264,6 +264,20 @@ func processIds(linkIds []int64) ([]*local.FileMeta, error) {
 	global.pushState.currSize.Set(totalSize - missingSize)
 
 	return metas, err
+}
+
+func calcSpeed(speedSlice *utils.CircSlice[int64], prevSize, currSize int64) int64 {
+	speed := ((currSize - prevSize) / utils.ThrottleMS) * 1000
+
+	if hasPushed := speedSlice.Push(speed); !hasPushed {
+		speedSlice.Pop()
+		speedSlice.Push(speed)
+	}
+	var total int64
+	speedSlice.ForEach(func(size int64) {
+		total += size
+	})
+	return total / int64(speedSlice.Len())
 }
 
 func calcTimeLeft(speed int64, size int64) string {

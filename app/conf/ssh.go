@@ -2,7 +2,6 @@ package conf
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"strings"
 
@@ -28,8 +27,7 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		host := strings.Split(hostname, ":")[0]
 		if host == "" {
-			err := fmt.Errorf("cannot find host for %s", hostname)
-			return help.WrapError(err, "parsing hostname")
+			return help.Errorf("parsing hostname", "cannot find host for %s", hostname)
 		}
 		storedKey, exists := s.Hosts[host]
 		if !exists {
@@ -38,8 +36,7 @@ func (s *SSHKnownHosts) HostKeyCallback() ssh.HostKeyCallback {
 		}
 
 		if !bytes.Equal(key.Marshal(), storedKey) {
-			err := fmt.Errorf("host key mismatch for %s", host)
-			return help.WrapError(err, "validating keys")
+			return help.Errorf("validating keys", "host key mismatch for %s", host)
 		}
 
 		return nil

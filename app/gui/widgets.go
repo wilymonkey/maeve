@@ -7,11 +7,18 @@ import (
 	"fyne.io/fyne/v2/canvas"
 )
 
-//go:embed icon.svg
+//go:embed icon.ico
 var faviconBytes []byte
+var FaviconIco = &fyne.StaticResource{
+	StaticName:    "favicon.ico",
+	StaticContent: faviconBytes,
+}
+
+//go:embed icon.svg
+var faviconSvgBytes []byte
 var faviconSvg = &fyne.StaticResource{
 	StaticName:    "favicon.svg",
-	StaticContent: faviconBytes,
+	StaticContent: faviconSvgBytes,
 }
 
 func favicon(size float32) *canvas.Image {
