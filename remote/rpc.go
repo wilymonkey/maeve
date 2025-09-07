@@ -11,7 +11,6 @@ import (
 
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/db"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
@@ -43,7 +42,7 @@ func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
 func RunServer() error {
 	rpcFuncs := new(RPCFuncs)
 	if err := rpc.Register(rpcFuncs); err != nil {
-		return help.WrapErr(err, "register rpc functions")
+		return fmt.Errorf("register rpc functions: %w", err)
 	}
 
 	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
@@ -87,7 +86,7 @@ func (n *NodeConn) GetDBVersion() (*db.DBVersion, error) {
 	args := &GetDBVersionArgs{Node: conf.MyName()}
 	var reply GetDBVersionReply
 	if err := n.rpcClient.Call("RPCFuncs.GetDBVersion", args, &reply); err != nil {
-		return reply.Version, help.DecodeErr(err)
+		return reply.Version, err
 	}
 	return reply.Version, nil
 }
@@ -108,7 +107,7 @@ func (n *NodeConn) addBackupDir() error {
 	args := &BackupDirArgs{Node: conf.MyName()}
 	var reply BackupDirReply
 	if err := n.rpcClient.Call("RPCFuncs.BackupDir", args, &reply); err != nil {
-		return help.DecodeErr(err)
+		return err
 	}
 	n.backupDir = reply.Path
 	return nil
@@ -140,7 +139,7 @@ func (n *NodeConn) VerifyFile(hash *local.FileMeta) (bool, error) {
 	}
 	var reply VerifyFileReply
 	if err := n.rpcClient.Call("RPCFuncs.VerifyFile", args, &reply); err != nil {
-		return false, help.DecodeErr(err)
+		return false, err
 	}
 	return reply.IsGood, nil
 }
@@ -185,7 +184,7 @@ func (n *NodeConn) ConformToDB() ([]int64, error) {
 	}
 	var reply ConformToDBReply
 	if err := n.rpcClient.Call("RPCFuncs.ConformToDB", args, &reply); err != nil {
-		return nil, help.DecodeErr(err)
+		return nil, err
 	}
 	return reply.MissingLinkIds, nil
 }
@@ -229,7 +228,7 @@ func (n *NodeConn) Finalise(meta local.FileMeta) error {
 	}
 	var reply FinaliseReply
 	if err := n.rpcClient.Call("RPCFuncs.Finalise", args, &reply); err != nil {
-		return help.DecodeErr(err)
+		return err
 	}
 	return nil
 }

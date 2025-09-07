@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
 	"golang.org/x/crypto/ssh"
@@ -66,11 +65,11 @@ func loadConfig() (*MaeveConf, error) {
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, help.WrapErr(err, "parsing config file")
+			return nil, fmt.Errorf("parsing config file: %w", err)
 		}
 		// File exists since there is no error, so unmarshal it.
 	} else if err := yaml.Unmarshal(data, conf); err != nil {
-		return nil, help.WrapErr(err, "unmarshalling config file")
+		return nil, fmt.Errorf("unmarshalling config file: %w", err)
 	}
 
 	if err := conf.applyDefaults(); err != nil {
@@ -87,7 +86,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.DisplayName == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return help.WrapErr(err, "getting hostname")
+			return fmt.Errorf("getting hostname: %w", err)
 		}
 		c.DisplayName = hostname
 	}
@@ -95,7 +94,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
 		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return help.WrapErr(err, "generating ssh key")
+			return fmt.Errorf("generating ssh key: %w", err)
 		}
 		c.SSHPrivateKey = privateKey
 	}
@@ -111,7 +110,7 @@ func (c *MaeveConf) applyDefaults() error {
 	if c.MaeveDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return help.WrapErr(err, "getting home dir")
+			return fmt.Errorf("getting home dir: %w", err)
 		}
 		c.MaeveDir = filepath.Join(homeDir, "Maeve")
 	}
@@ -141,17 +140,17 @@ func (c *MaeveConf) SaveToFile() error {
 
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return help.WrapErr(err, "marshalling config")
+		return fmt.Errorf("marshalling config: %w", err)
 	}
 
 	f, err := utils.Create(confPath)
 	if err != nil {
-		return help.WrapErr(err, "creating config file")
+		return fmt.Errorf("creating config file: %w", err)
 	}
 	defer utils.Cleanup(&err, f.Close)
 
 	if _, err := f.Write(data); err != nil {
-		return help.WrapErr(err, "writing data to config file")
+		return fmt.Errorf("writing data to config file: %w", err)
 	}
 
 	return nil
@@ -164,7 +163,7 @@ func (c *MaeveConf) SaveToFile() error {
 func configPath() (string, error) {
 	userDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", help.WrapErr(err, "reading user dir")
+		return "", fmt.Errorf("reading user dir: %w", err)
 	}
 	confPath := filepath.Join(userDir, "maeve", "config.yml")
 	return confPath, nil
@@ -207,7 +206,7 @@ func TimeToString(t time.Time) string {
 func TimeFromString(s string) (time.Time, error) {
 	snapshot, err := time.Parse(timeFormat, s)
 	if err != nil {
-		return snapshot, help.WrapErr(err, "parsing root folder as time")
+		return snapshot, fmt.Errorf("parsing root folder as time: %w", err)
 	}
 	return snapshot, nil
 }

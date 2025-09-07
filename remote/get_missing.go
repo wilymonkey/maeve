@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"golang.org/x/sync/errgroup"
 )
@@ -14,7 +13,7 @@ import (
 func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, error) {
 	if len(metas) == 0 {
 		err := fmt.Errorf("no metas received")
-		return nil, help.WrapErr(err, "asserting meta array length")
+		return nil, fmt.Errorf("asserting meta array length: %w", err)
 	}
 
 	root, _ := local.SplitAtRootPath(metas[0].RelPath)
@@ -52,7 +51,7 @@ func GetMissing(nodeDir string, metas []*local.FileMeta) ([]*local.FileMeta, err
 
 		path := filepath.Join(nodeDir, meta.RelPath)
 		if err := os.Remove(path); err != nil {
-			return nil, help.WrapErr(err, "removing partial/incorrect file")
+			return nil, fmt.Errorf("removing partial/incorrect file: %w", err)
 		}
 	}
 

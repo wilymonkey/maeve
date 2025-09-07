@@ -1,7 +1,8 @@
 package db
 
 import (
-	"github.com/wilymonkey/maeve/help"
+	"fmt"
+
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
@@ -36,7 +37,7 @@ func createSchema(conn *sqlite.Conn) error {
 	);
 	`
 	if err := sqlitex.ExecScript(conn, schema); err != nil {
-		return help.WrapErr(err, "creating schema")
+		return fmt.Errorf("creating schema: %w", err)
 	}
 	return nil
 }

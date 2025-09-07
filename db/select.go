@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
@@ -18,7 +17,7 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.WrapErr(err, "creating read transaction")
+		return nil, fmt.Errorf("creating read transaction: %w", err)
 	}
 	defer endTx(&err)
 
@@ -37,13 +36,13 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 				},
 			})
 		if err != nil {
-			return nil, help.WrapErr(err, "getting FileMeta from link id")
+			return nil, fmt.Errorf("getting FileMeta from link id: %w", err)
 		}
 	}
 
 	if len(result) != len(linkIds) {
 		err := fmt.Errorf("only found %d out of %d FileMetas", len(result), len(linkIds))
-		return nil, help.WrapErr(err, "check result length")
+		return nil, fmt.Errorf("check result length: %w", err)
 	}
 
 	return result, err
@@ -52,14 +51,14 @@ func MetaFromIds(conn *sqlite.Conn, linkIds []int64) ([]*local.FileMeta, error) 
 func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 	if len(metas) < 1 {
 		err := errors.New("no FileMetas given to get Ids for")
-		return nil, help.WrapErr(err, "checking input length")
+		return nil, fmt.Errorf("checking input length: %w", err)
 	}
 
 	result := make([]int64, 0, len(metas))
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.WrapErr(err, "creating read transaction")
+		return nil, fmt.Errorf("creating read transaction: %w", err)
 	}
 	defer endTx(&err)
 
@@ -87,13 +86,13 @@ func IdsFromMetas(conn *sqlite.Conn, metas []*local.FileMeta) ([]int64, error) {
 				},
 			})
 		if err != nil {
-			return nil, help.WrapErr(err, "getting link id from FileMeta")
+			return nil, fmt.Errorf("getting link id from FileMeta: %w", err)
 		}
 	}
 
 	if len(result) != len(metas) {
 		err := fmt.Errorf("found %d out of %d path meta ids", len(result), len(metas))
-		return nil, help.WrapErr(err, "checking result length")
+		return nil, fmt.Errorf("checking result length: %w", err)
 	}
 
 	return result, err
@@ -117,7 +116,7 @@ func GetLatestMeta(conn *sqlite.Conn) ([]*local.FileMeta, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.WrapErr(err, "getting FileMeta from latest snapshot")
+		return nil, fmt.Errorf("getting FileMeta from latest snapshot: %w", err)
 	}
 
 	return result, nil

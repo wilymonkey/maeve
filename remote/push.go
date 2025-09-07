@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
@@ -55,7 +54,7 @@ func (n *NodeConn) PushLinks(
 		}
 		if !isGood {
 			err = fmt.Errorf("remote file hash did not match local hash")
-			return help.WrapErr(err, "verifying sent file")
+			return fmt.Errorf("verifying sent file: %w", err)
 		}
 		return nil
 	}
@@ -122,23 +121,23 @@ func (n *NodeConn) pushFile(
 
 	localFile, err := os.Open(source)
 	if err != nil {
-		return help.WrapErr(err, "opening file")
+		return fmt.Errorf("opening file: %w", err)
 	}
 	defer utils.Cleanup(&err, localFile.Close)
 
 	remoteFile, err := n.sftpClient.Create(target)
 	if err != nil {
 		if !strings.Contains(err.Error(), "does not exist") {
-			return help.WrapErr(err, "creating remote file")
+			return fmt.Errorf("creating remote file: %w", err)
 		}
 
 		parentDir := filepath.Dir(target)
 		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
-			return help.WrapErr(err, "creating parent dir for remote file")
+			return fmt.Errorf("creating parent dir for remote file: %w", err)
 		}
 		remoteFile, err = n.sftpClient.Create(target)
 		if err != nil {
-			return help.WrapErr(err, "creating remote file AGAIN")
+			return fmt.Errorf("creating remote file AGAIN: %w", err)
 		}
 	}
 	defer utils.Cleanup(&err, remoteFile.Close)
@@ -151,7 +150,7 @@ func (n *NodeConn) pushFile(
 		},
 	)
 	if _, err := io.Copy(pw, localFile); err != nil {
-		return help.WrapErr(err, "pushing file")
+		return fmt.Errorf("pushing file: %w", err)
 	}
 
 	return err
@@ -208,7 +207,7 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 		if toWrite > 0 {
 			n, err := pw.writer.Write(p[:toWrite])
 			if err != nil {
-				return int(pw.written), help.WrapErr(err, "send byte array")
+				return int(pw.written), fmt.Errorf("send byte array: %w", err)
 			}
 			p = p[n:]
 			writtenNow += n

@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -8,9 +9,8 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
-	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/fynext"
+	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -127,7 +127,7 @@ func newLatest() ([]*local.FileMeta, error) {
 		linkpath := func(path string) (string, error) {
 			relPath, err := filepath.Rel(sourceDir, path)
 			if err != nil {
-				return "", help.WrapErr(err, "creating relative path")
+				return "", fmt.Errorf("creating relative path: %w", err)
 			}
 			targetPath := filepath.Join(targetDir, relPath)
 			if err := local.Hardlink(path, targetPath); err != nil {
@@ -137,7 +137,7 @@ func newLatest() ([]*local.FileMeta, error) {
 		}
 
 		if err := os.RemoveAll(targetDir); err != nil {
-			return nil, help.WrapErr(err, "deleting folder to link things to")
+			return nil, fmt.Errorf("deleting folder to link things to: %w", err)
 		}
 
 		eGrp, ctx := errgroup.WithContext(global.ctx)
@@ -177,7 +177,7 @@ func newLatestDir() (string, error) {
 	currentTime := conf.TimeToString(conf.TimeNow())
 	path := filepath.Join(conf.MyNode(), currentTime)
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", help.WrapErr(err, "creating latest folder")
+		return "", fmt.Errorf("creating latest folder: %w", err)
 	}
 	return path, nil
 }
@@ -185,14 +185,14 @@ func newLatestDir() (string, error) {
 func removeChildDirs(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return help.WrapErr(err, "reading files in backup folder")
+		return fmt.Errorf("reading files in backup folder: %w", err)
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			err := os.RemoveAll(filepath.Join(dir, entry.Name()))
 			if err != nil {
-				return help.WrapErr(err, "deleting stale folders in backup")
+				return fmt.Errorf("deleting stale folders in backup: %w", err)
 			}
 		}
 	}

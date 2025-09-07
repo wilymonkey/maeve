@@ -5,7 +5,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/fynext"
 )
 
@@ -98,7 +97,7 @@ func showErrorDialog(err error) {
 	d = dialog.NewCustomWithoutButtons(
 		"ERROR",
 		container.NewVBox(
-			help.Render(err),
+			widget.NewLabel(err.Error()),
 			cancelBtn(),
 		),
 		global.window,

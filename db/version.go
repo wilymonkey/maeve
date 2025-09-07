@@ -2,9 +2,9 @@ package db
 
 import (
 	"crypto/ed25519"
+	"fmt"
 
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/zeebo/blake3"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
@@ -35,7 +35,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.WrapErr(err, "finding table version signature")
+		return nil, fmt.Errorf("finding table version signature: %w", err)
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -50,7 +50,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.WrapErr(err, "getting latest snapshot")
+		return nil, fmt.Errorf("getting latest snapshot: %w", err)
 	}
 
 	err = sqlitex.ExecuteTransient(conn,
@@ -62,7 +62,7 @@ func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.WrapErr(err, "counting path_meta_link rows")
+		return nil, fmt.Errorf("counting path_meta_link rows: %w", err)
 	}
 
 	return &result, nil
@@ -81,7 +81,7 @@ func SetDBVersion(conn *sqlite.Conn, dirPath string) error {
 			Args: []any{sig},
 		})
 	if err != nil {
-		return help.WrapErr(err, "inserting db signature")
+		return fmt.Errorf("inserting db signature: %w", err)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			},
 		})
 	if err != nil {
-		return nil, help.WrapErr(err, "counting file_meta rows")
+		return nil, fmt.Errorf("counting file_meta rows: %w", err)
 	}
 
 	addHashes := func(stmt *sqlite.Stmt) error {
@@ -115,14 +115,14 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			&sqlitex.ExecOptions{ResultFunc: addHashes},
 		)
 		if err != nil {
-			return nil, help.WrapErr(err, "hashing rows")
+			return nil, fmt.Errorf("hashing rows: %w", err)
 		}
 		return hasher.Sum(nil), nil
 	}
 
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return nil, help.WrapErr(err, "creating immediate transaction")
+		return nil, fmt.Errorf("creating immediate transaction: %w", err)
 	}
 	defer endTx(&err)
 
@@ -134,7 +134,7 @@ func hashDB(conn *sqlite.Conn) ([]byte, error) {
 			},
 		)
 		if err != nil {
-			return nil, help.WrapErr(err, "selecting evenly spread hashsums")
+			return nil, fmt.Errorf("selecting evenly spread hashsums: %w", err)
 		}
 	}
 

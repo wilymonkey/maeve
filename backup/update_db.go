@@ -12,10 +12,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/db"
-	"github.com/wilymonkey/maeve/help"
+	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/local"
 	"github.com/wilymonkey/maeve/remote"
-	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -263,7 +262,7 @@ func updateDB(fileMetas []*local.FileMeta) error {
 
 		if currPath != prevPath {
 			if err := os.Rename(currPath, prevPath); err != nil {
-				return help.WrapErr(err, "renaming current snapshot to previous one")
+				return fmt.Errorf("renaming current snapshot to previous one: %w", err)
 			}
 		}
 	}

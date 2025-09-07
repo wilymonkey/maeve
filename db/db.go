@@ -1,9 +1,9 @@
 package db
 
 import (
+	"fmt"
 	"path"
 
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
@@ -12,19 +12,19 @@ import (
 func OpenWrite(dirPath string) (*sqlite.Conn, error) {
 	dbPath := DBPath(dirPath)
 	if err := utils.TouchFile(dbPath); err != nil {
-		return nil, help.WrapErr(err, "creating db")
+		return nil, fmt.Errorf("creating db: %w", err)
 	}
 
 	conn, err := sqlite.OpenConn(dbPath, sqlite.OpenReadWrite, sqlite.OpenCreate)
 	if err != nil {
-		return nil, help.WrapErr(err, "opening connection")
+		return nil, fmt.Errorf("opening connection: %w", err)
 	}
 	err = sqlitex.ExecuteTransient(conn,
 		"PRAGMA foreign_keys=ON",
 		&sqlitex.ExecOptions{},
 	)
 	if err != nil {
-		return nil, help.WrapErr(err, "setting foreign keys on")
+		return nil, fmt.Errorf("setting foreign keys on: %w", err)
 	}
 
 	if err := createSchema(conn); err != nil {
@@ -39,7 +39,7 @@ func OpenRead(dirPath string) (*sqlite.Conn, error) {
 	dbPath := DBPath(dirPath)
 	conn, err := sqlite.OpenConn(dbPath, sqlite.OpenReadOnly)
 	if err != nil {
-		return nil, help.WrapErr(err, "opening connection")
+		return nil, fmt.Errorf("opening connection: %w", err)
 	}
 	return conn, nil
 }
@@ -51,15 +51,15 @@ func DBPath(dirPath string) string {
 func flushWrites(conn *sqlite.Conn) error {
 	err := sqlitex.ExecuteTransient(conn, "PRAGMA wal_checkpoint(FULL);", nil)
 	if err != nil {
-		return help.WrapErr(err, "creating checkpoint")
+		return fmt.Errorf("creating checkpoint: %w", err)
 	}
 	err = sqlitex.ExecuteTransient(conn, "PRAGMA synchronous=FULL;", nil)
 	if err != nil {
-		return help.WrapErr(err, "syncing DB")
+		return fmt.Errorf("syncing DB: %w", err)
 	}
 	err = sqlitex.ExecuteTransient(conn, "PRAGMA optimize;", nil)
 	if err != nil {
-		return help.WrapErr(err, "optimising DB")
+		return fmt.Errorf("optimising DB: %w", err)
 	}
 	return nil
 }

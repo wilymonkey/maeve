@@ -1,8 +1,9 @@
 package db
 
 import (
+	"fmt"
+
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/local"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
@@ -12,7 +13,7 @@ import (
 func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, error) {
 	endTx, err := sqlitex.ImmediateTransaction(conn)
 	if err != nil {
-		return 0, help.WrapErr(err, "creating immediate transaction")
+		return 0, fmt.Errorf("creating immediate transaction: %w", err)
 	}
 	defer endTx(&err)
 
@@ -26,7 +27,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.WrapErr(err, "counting rows before inserts")
+		return 0, fmt.Errorf("counting rows before inserts: %w", err)
 	}
 
 	for _, meta := range fileMetas {
@@ -45,7 +46,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapErr(err, "insert row into file_meta")
+			return 0, fmt.Errorf("insert row into file_meta: %w", err)
 		}
 
 		snapshot, rest, err := formatRelpath(meta.RelPath)
@@ -67,7 +68,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapErr(err, "insert row into file_path")
+			return 0, fmt.Errorf("insert row into file_path: %w", err)
 		}
 
 		err = sqlitex.Execute(conn,
@@ -78,7 +79,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		)
 		if err != nil {
-			return 0, help.WrapErr(err, "insert row into path_meta_link")
+			return 0, fmt.Errorf("insert row into path_meta_link: %w", err)
 		}
 	}
 
@@ -92,7 +93,7 @@ func InsertFileMetas(conn *sqlite.Conn, fileMetas []*local.FileMeta) (int64, err
 			},
 		})
 	if err != nil {
-		return 0, help.WrapErr(err, "counting rows after inserts")
+		return 0, fmt.Errorf("counting rows after inserts: %w", err)
 	}
 
 	return endRows - startRows, err
@@ -103,7 +104,7 @@ func formatRelpath(relpath string) (int64, string, error) {
 	root, rest := local.SplitAtRootPath(relpath)
 	snapshot, err := conf.TimeFromString(root)
 	if err != nil {
-		return 0, "", help.WrapErr(err, "parsing root folder as time")
+		return 0, "", fmt.Errorf("parsing root folder as time: %w", err)
 	}
 
 	return conf.TimeToInt64(snapshot), rest, nil

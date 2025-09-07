@@ -3,10 +3,10 @@ package remote
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"net/rpc"
 
 	"github.com/pkg/sftp"
-	"github.com/wilymonkey/maeve/help"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,31 +43,31 @@ func NewNodeConn(node string, onStderr func(err error)) (*NodeConn, error) {
 	}
 	sshSession, err := sshClient.NewSession()
 	if err != nil {
-		return nil, help.WrapErr(err, "creating ssh session")
+		return nil, fmt.Errorf("creating ssh session: %w", err)
 	}
 
 	stdinPipe, err := sshSession.StdinPipe()
 	if err != nil {
-		return nil, help.WrapErr(err, "getting stdin pipe")
+		return nil, fmt.Errorf("getting stdin pipe: %w", err)
 	}
 	stdoutPipe, err := sshSession.StdoutPipe()
 	if err != nil {
-		return nil, help.WrapErr(err, "getting stdout pipe")
+		return nil, fmt.Errorf("getting stdout pipe: %w", err)
 	}
 	stderrPipe, err := sshSession.StderrPipe()
 	if err != nil {
-		return nil, help.WrapErr(err, "getting stderr pipe")
+		return nil, fmt.Errorf("getting stderr pipe: %w", err)
 	}
 
 	if err := sshSession.Start("maeve --server"); err != nil {
-		return nil, help.WrapErr(err, "starting remote maeve as server")
+		return nil, fmt.Errorf("starting remote maeve as server: %w", err)
 	}
 
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			err := errors.New(scanner.Text())
-			onStderr(help.WrapErr(err, "scanning error pipe"))
+			onStderr(fmt.Errorf("scanning error pipe: %w", err))
 		}
 	}()
 
@@ -92,7 +92,7 @@ func (n *NodeConn) addSFTP() error {
 	var err error
 	n.sftpClient, err = sftp.NewClient(n.sshClient)
 	if err != nil {
-		return help.WrapErr(err, "getting SFTP client")
+		return fmt.Errorf("getting SFTP client: %w", err)
 	}
 	return nil
 }

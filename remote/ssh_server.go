@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/wilymonkey/maeve/conf"
-	"github.com/wilymonkey/maeve/help"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
@@ -15,10 +14,10 @@ import (
 func RunSSHServer() {
 	sshCfg, err := prepareConfig()
 	if err != nil {
-		log.Fatal(help.PrintErr(err))
+		log.Fatal(err)
 	}
 	if err := serve(sshCfg); err != nil {
-		log.Fatal(help.PrintErr(err))
+		log.Fatal(err)
 	}
 }
 
@@ -29,19 +28,19 @@ func serve(sshCfg *ssh.ServerConfig) error {
 	fmt.Printf("Listening on: %q\n", connStr)
 	listener, err := net.Listen("tcp", connStr)
 	if err != nil {
-		return help.WrapErr(err, "listening for connection")
+		return fmt.Errorf("listening for connection: %w", err)
 	}
 	fmt.Println("1")
 	nConn, err := listener.Accept()
 	if err != nil {
-		return help.WrapErr(err, "accepting incoming connection")
+		return fmt.Errorf("accepting incoming connection: %w", err)
 	}
 	fmt.Println("2")
 
 	conn, chans, reqs, err := ssh.NewServerConn(nConn, sshCfg)
 	if err != nil {
 		fmt.Println("3")
-		return help.WrapErr(err, "handshaking conn")
+		return fmt.Errorf("handshaking conn: %w", err)
 	}
 	fmt.Println("4")
 	log.Printf("logged in with key %s", conn.Permissions.Extensions["pubkey-fp"])
@@ -68,7 +67,7 @@ func serve(sshCfg *ssh.ServerConfig) error {
 		}
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
-			return help.WrapErr(err, "accepting channel")
+			return fmt.Errorf("accepting channel: %w", err)
 		}
 
 		// Sessions have out-of-band requests such as "shell",
@@ -112,7 +111,7 @@ func prepareConfig() (*ssh.ServerConfig, error) {
 	for _, key := range cfg.SSHAuthKeys {
 		pubKey, err := ssh.ParsePublicKey([]byte(key))
 		if err != nil {
-			return nil, help.WrapErr(err, "parsing public key")
+			return nil, fmt.Errorf("parsing public key: %w", err)
 		}
 
 		authorizedKeysMap[string(pubKey.Marshal())] = true
@@ -141,7 +140,7 @@ func prepareConfig() (*ssh.ServerConfig, error) {
 
 	signer, err := ssh.NewSignerFromKey(cfg.SSHPrivateKey)
 	if err != nil {
-		return nil, help.WrapErr(err, "parsing SSH private key")
+		return nil, fmt.Errorf("parsing SSH private key: %w", err)
 	}
 	config.AddHostKey(signer)
 

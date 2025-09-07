@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"github.com/zeebo/blake3"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -31,12 +31,12 @@ func GenFileMeta(path string, baseDir string, hasher *blake3.Hasher) (FileMeta, 
 
 	relPath, err := filepath.Rel(baseDir, path)
 	if err != nil {
-		return meta, help.WrapErr(err, "creating relative path")
+		return meta, fmt.Errorf("creating relative path: %w", err)
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return meta, help.WrapErr(err, "getting file stats")
+		return meta, fmt.Errorf("getting file stats: %w", err)
 	}
 
 	return FileMeta{
@@ -68,13 +68,13 @@ func NewHashsum(path string, hasher *blake3.Hasher) ([32]byte, error) {
 	var result [32]byte
 	file, err := os.Open(path)
 	if err != nil {
-		return result, help.WrapErr(err, "opening source file")
+		return result, fmt.Errorf("opening source file: %w", err)
 	}
 	defer utils.Cleanup(&err, file.Close)
 
 	hasher.Reset()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return result, help.WrapErr(err, "hashing source file")
+		return result, fmt.Errorf("hashing source file: %w", err)
 	}
 	copy(result[:], hasher.Sum(nil))
 	return result, err
@@ -138,7 +138,7 @@ func WalkDirForMetas(
 		return err
 	}
 	if err != nil {
-		return help.WrapErr(err, "walking dir")
+		return fmt.Errorf("walking dir: %w", err)
 	}
 
 	return nil

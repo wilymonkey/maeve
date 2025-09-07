@@ -2,11 +2,11 @@ package local
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/wilymonkey/maeve/help"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -38,7 +38,7 @@ func PathExists(path string) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, help.WrapErr(err, "checking if path exists")
+		return false, fmt.Errorf("checking if path exists: %w", err)
 	}
 	return true, nil
 }
@@ -55,16 +55,16 @@ func Hardlink(sourcePath, targetPath string) error {
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return help.WrapErr(err, "creating folders in latest")
+			return fmt.Errorf("creating folders in latest: %w", err)
 		}
 		// Try to link the file again.
 		if err := os.Link(sourcePath, targetPath); err != nil {
-			return help.WrapErr(err, "linking file into latest AGAIN")
+			return fmt.Errorf("linking file into latest AGAIN: %w", err)
 		}
 		return nil
 	}
 
-	return help.WrapErr(err, "linking file into latest")
+	return fmt.Errorf("linking file into latest: %w", err)
 }
 
 func CullSnapshots(node string) error {
