@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"github.com/wilymonkey/maeve/fynext/icons"
+	"github.com/wilymonkey/maeve/icons"
 )
 
 type Theme struct{}
