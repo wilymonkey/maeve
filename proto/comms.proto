@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package proto;
+option go_package = ".;proto";
+
+message Empty {}
+
+// DBVersion message representing database version information
+message DBVersion {
+  int32 major = 1;
+  int32 minor = 2;
+  int32 patch = 3;
+}
+
+// FileMeta message representing file metadata
+message FileMeta {
+  string rel_path = 1;
+  string hash = 2;
+  int64 size = 3;
+  int64 mod_time = 4;
+}
+
+service NodeService {
+  // Get the database version for a node
+  rpc GetDBVersion(GetDBVersionRequest) returns (GetDBVersionResponse);
+  
+  // Get the backup directory path for a node
+  rpc BackupDir(BackupDirRequest) returns (BackupDirResponse);
+  
+  // Verify a file's integrity
+  rpc VerifyFile(VerifyFileRequest) returns (VerifyFileResponse);
+  
+  // Conform local files to database state and return missing link IDs
+  rpc ConformToDB(ConformToDBRequest) returns (ConformToDBResponse);
+  
+  // Finalize a snapshot by moving it to permanent location
+  rpc Finalise(FinaliseRequest) returns (Empty);
+}
+
+message GetDBVersionRequest {
+  string node = 1;
+}
+
+message GetDBVersionResponse {
+  DBVersion version = 1;
+}
+
+message BackupDirRequest {
+  string node = 1;
+}
+
+message BackupDirResponse {
+  string path = 1;
+}
+
+message VerifyFileRequest {
+  FileMeta hash = 1;
+  string node = 2;
+}
+
+message VerifyFileResponse {
+  bool is_good = 1;
+}
+
+message ConformToDBRequest {
+  string node = 1;
+}
+
+message ConformToDBResponse {
+  repeated int64 missing_link_ids = 1;
+}
+
+message FinaliseRequest {
+  string snapshot = 1;
+  string node = 2;
+}

@@ -34,16 +34,13 @@ func main() {
 	flagVersion := fs.Bool("version", false, "Print the current version")
 	flagDaemon := fs.Bool("daemon", false, "Run in daemon mode")
 
-	// Hidden, internal use only
-	flagServer := fs.Bool("server", false, "")
-
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalf("Failed to parse args: %v", err)
 	}
 
 	switch {
 	case *flagDaemon:
-		remote.RunSSHServer()
+		remote.RunServer()
 		return
 
 	case *flagBackup:
@@ -54,12 +51,6 @@ func main() {
 
 	case *flagVersion:
 		fmt.Printf("%s\n", conf.Version)
-		return
-
-	case *flagServer:
-		if err := remote.RunServer(); err != nil {
-			log.Fatalf("RPC Server Failed:  %v", err)
-		}
 		return
 
 	default:

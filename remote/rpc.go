@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/rpc"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,17 +37,6 @@ func (c *sshPipeConn) RemoteAddr() net.Addr               { return nil }
 func (c *sshPipeConn) SetReadDeadline(t time.Time) error  { return nil }
 func (c *sshPipeConn) SetWriteDeadline(t time.Time) error { return nil }
 func (c *sshPipeConn) SetDeadline(t time.Time) error      { return nil }
-
-func RunServer() error {
-	rpcFuncs := new(RPCFuncs)
-	if err := rpc.Register(rpcFuncs); err != nil {
-		return fmt.Errorf("register rpc functions: %w", err)
-	}
-
-	conn := &sshPipeConn{reader: os.Stdin, writer: os.Stdout}
-	rpc.ServeConn(conn)
-	return nil
-}
 
 type RPCFuncs int
 

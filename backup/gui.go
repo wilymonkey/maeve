@@ -93,11 +93,14 @@ func showErrorDialog(err error) {
 		cancelBtn.Importance = widget.HighImportance
 		return cancelBtn
 	}
+	lbl := widget.NewLabel(err.Error())
+	lbl.Wrapping = fyne.TextWrapWord
 
 	d = dialog.NewCustomWithoutButtons(
 		"ERROR",
 		container.NewVBox(
-			widget.NewLabel(err.Error()),
+			fynext.StackOfSize(fyne.NewSize(250, 1)),
+			lbl,
 			cancelBtn(),
 		),
 		global.window,

@@ -8,7 +8,8 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/pkg/sftp v1.13.9
 	github.com/zeebo/blake3 v0.2.4
-	golang.org/x/term v0.32.0
+	google.golang.org/grpc v1.75.0
+	google.golang.org/protobuf v1.36.8
 	zombiezen.com/go/sqlite v1.4.2
 )
 
@@ -51,6 +52,7 @@ require (
 	golang.org/x/image v0.28.0 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.65.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

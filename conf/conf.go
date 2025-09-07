@@ -33,7 +33,7 @@ type MaeveConf struct {
 	SSHPrivateKey ed25519.PrivateKey `yaml:"sshprivatekey,flow"`
 	SSHKnownHosts SSHKnownHosts
 	SSHAuthKeys   []string
-	SSHPort       int
+	ServerPort    int
 	MaeveDir      string
 	MaxBackups    int
 	MaxUpload     int64
@@ -103,8 +103,8 @@ func (c *MaeveConf) applyDefaults() error {
 		c.SSHKnownHosts = NewSSHKnownHosts()
 	}
 
-	if c.SSHPort < 1024 {
-		c.SSHPort = 2222
+	if c.ServerPort < 1024 {
+		c.ServerPort = 2222
 	}
 
 	if c.MaeveDir == "" {

@@ -1,3 +1,5 @@
 # Generated
 maeve
 icons/favicon.ico
+proto/comms.pb.go
+proto/comms_grpc.pb.go
