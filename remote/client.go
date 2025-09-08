@@ -1,50 +1,44 @@
 package remote
 
 import (
+	"context"
 	"fmt"
-	"log"
-	"strings"
 
 	"github.com/wilymonkey/maeve/conf"
-	"golang.org/x/crypto/ssh"
+	"github.com/wilymonkey/maeve/proto"
+	"google.golang.org/grpc"
 )
 
-func NewSSHClient(address string) (*ssh.Client, error) {
-	cfg := conf.GetConf()
-	user, host, port := parseAddress(address)
-
-	signer, err := ssh.NewSignerFromKey(cfg.SSHPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("parsing private key: %w", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User:            user,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: cfg.SSHKnownHosts.HostKeyCallback(),
-	}
-
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", host, port), config)
-	if err != nil {
-		log.Printf("err: %v", err)
-		return nil, fmt.Errorf("dialing ssh server: %w", err)
-	}
-	return client, nil
+type Comms struct {
+	conn      *grpc.ClientConn
+	Client    proto.CommsClient
+	backupDir string
 }
 
-func parseAddress(address string) (user, host, port string) {
-	parts := strings.Split(address, "@")
-	if len(parts) != 2 {
-		parts = append([]string{""}, parts...)
+func NewComms(addr string) (*Comms, error) {
+	var opts []grpc.DialOption
+	conn, err := grpc.NewClient(addr, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create grpc client: %w", err)
 	}
-	user = parts[0]
+	return &Comms{
+		conn:   conn,
+		Client: proto.NewCommsClient(conn),
+	}, nil
+}
 
-	hostPort := strings.Split(parts[1], ":")
-	if len(hostPort) != 2 {
-		hostPort = append(hostPort, "22")
+func (c *Comms) Close() {
+	c.Close()
+}
+
+func (c *Comms) addBackupDir(ctx context.Context) error {
+	resp, err := c.Client.BackupDir(
+		ctx,
+		&proto.BackupDirRequest{Node: conf.MyName()},
+	)
+	if err != nil {
+		return err
 	}
-	host = hostPort[0]
-	port = hostPort[1]
-
-	return user, host, port
+	c.backupDir = resp.Path
+	return nil
 }

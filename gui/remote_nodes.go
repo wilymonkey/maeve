@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"regexp"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
@@ -9,6 +11,8 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/icons"
 )
+
+var regRemoteNode = regexp.MustCompile(`^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d):([0-9]{1,5})$`)
 
 func backupPCs() fyne.CanvasObject {
 	openDialog := func() {
@@ -92,7 +96,7 @@ func addRemoteNote() fyne.CanvasObject {
 	})
 	addButton.Disable()
 	inputEntry.OnChanged = func(s string) {
-		if sshNodeReg.MatchString(s) {
+		if regRemoteNode.MatchString(s) {
 			addButton.Enable()
 		} else {
 			addButton.Disable()

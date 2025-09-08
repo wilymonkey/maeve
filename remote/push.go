@@ -6,13 +6,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/proto"
 	"github.com/wilymonkey/maeve/utils"
 	"github.com/zeebo/blake3"
+	"google.golang.org/grpc"
 )
 
 type PushStatus struct {
@@ -24,7 +25,7 @@ func newPushStatus(meta *local.FileMeta) *PushStatus {
 	return &PushStatus{Meta: meta}
 }
 
-func (n *NodeConn) PushLinks(
+func (c *Comms) PushLinks(
 	metas []*local.FileMeta,
 	ctx context.Context,
 	progChan chan<- *PushStatus,
@@ -32,29 +33,25 @@ func (n *NodeConn) PushLinks(
 	const maxRetries = 3
 	defer close(progChan)
 
-	if n.backupDir == "" {
-		if err := n.addBackupDir(); err != nil {
-			return err
-		}
-	}
-
-	if n.sftpClient == nil {
-		if err := n.addSFTP(); err != nil {
+	if c.backupDir == "" {
+		if err := c.addBackupDir(ctx); err != nil {
 			return err
 		}
 	}
 
 	verifiedPush := func(m *local.FileMeta) error {
-		if err := n.pushFile(m, ctx, progChan); err != nil {
+		if err := c.pushFile(m, ctx, progChan); err != nil {
 			return err
 		}
-		isGood, err := n.VerifyFile(m)
+		resp, err := c.Client.VerifyFile(
+			ctx,
+			&proto.VerifyFileRequest{Filemeta: m.AsProto()},
+		)
 		if err != nil {
 			return err
 		}
-		if !isGood {
-			err = fmt.Errorf("remote file hash did not match local hash")
-			return fmt.Errorf("verifying sent file: %w", err)
+		if !resp.IsGood {
+			return fmt.Errorf("remote file hash did not match local hash")
 		}
 		return nil
 	}
@@ -66,7 +63,6 @@ func (n *NodeConn) PushLinks(
 				break // Break on sucess.
 			}
 			utils.Sleep(1000)
-			n.addSFTP() // Renew.
 		}
 
 		if err != nil {
@@ -77,19 +73,7 @@ func (n *NodeConn) PushLinks(
 	return nil
 }
 
-func (n *NodeConn) PushDB(path string, ctx context.Context) error {
-	if n.backupDir == "" {
-		if err := n.addBackupDir(); err != nil {
-			return err
-		}
-	}
-
-	if n.sftpClient == nil {
-		if err := n.addSFTP(); err != nil {
-			return err
-		}
-	}
-
+func (c *Comms) PushDB(ctx context.Context, path string) error {
 	meta, err := local.GenFileMeta(path, conf.MyNode(), blake3.New())
 	if err != nil {
 		return err
@@ -101,23 +85,22 @@ func (n *NodeConn) PushDB(path string, ctx context.Context) error {
 		}
 	}()
 
-	if err := n.pushFile(&meta, ctx, progChan); err != nil {
+	if err := c.pushFile(&meta, ctx, progChan); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (n *NodeConn) pushFile(
+func (c *Comms) pushFile(
 	meta *local.FileMeta,
 	ctx context.Context,
 	progChan chan<- *PushStatus,
 ) error {
-	utils.Assert(n.backupDir != "", "Backup Dir has already been attained")
+	utils.Assert(c.backupDir != "", "Backup Dir has already been attained")
 
 	status := newPushStatus(meta)
 	source := filepath.Join(conf.MyNode(), meta.RelPath)
-	target := filepath.Join(n.backupDir, meta.RelPath)
 
 	localFile, err := os.Open(source)
 	if err != nil {
@@ -125,25 +108,24 @@ func (n *NodeConn) pushFile(
 	}
 	defer utils.Cleanup(&err, localFile.Close)
 
-	remoteFile, err := n.sftpClient.Create(target)
+	stream, err := c.Client.Upload(ctx)
 	if err != nil {
-		if !strings.Contains(err.Error(), "does not exist") {
-			return fmt.Errorf("creating remote file: %w", err)
-		}
-
-		parentDir := filepath.Dir(target)
-		if err = n.sftpClient.MkdirAll(parentDir); err != nil {
-			return fmt.Errorf("creating parent dir for remote file: %w", err)
-		}
-		remoteFile, err = n.sftpClient.Create(target)
-		if err != nil {
-			return fmt.Errorf("creating remote file AGAIN: %w", err)
-		}
+		return fmt.Errorf("acquiring client stream: %w", err)
 	}
-	defer utils.Cleanup(&err, remoteFile.Close)
+
+	err = stream.Send(&proto.UploadRequest{
+		Data: &proto.UploadRequest_Filemeta{
+			Filemeta: meta.AsProto(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("sending metadata: %w", err)
+	}
 
 	pw := newProgWriter(
-		remoteFile, meta.Size, ctx,
+		&gRPCWriter{stream: stream},
+		meta.Size,
+		ctx,
 		func(written int64) {
 			status.SentSize = written
 			progChan <- status
@@ -151,6 +133,10 @@ func (n *NodeConn) pushFile(
 	)
 	if _, err := io.Copy(pw, localFile); err != nil {
 		return fmt.Errorf("pushing file: %w", err)
+	}
+	_, err = stream.CloseAndRecv()
+	if err != nil {
+		return fmt.Errorf("closing file upload: %w", err)
 	}
 
 	return err
@@ -165,7 +151,7 @@ type progWriter struct {
 	rate       int64
 	burstSize  int64
 	tokens     int64
-	lastRefill time.Time
+	ticker     *time.Ticker
 }
 
 func newProgWriter(
@@ -177,22 +163,27 @@ func newProgWriter(
 ) *progWriter {
 	rateKB := conf.GetConf().MaxUpload * 1024
 
-	return &progWriter{
+	pw := &progWriter{
 		writer:     writer,
 		total:      total,
 		ctx:        ctx,
 		onProgress: onProgress,
 		rate:       rateKB,
 		burstSize:  rateKB / 2,
-		tokens:     rateKB,
-		lastRefill: time.Now(), // TODO: Make the time a ticker instead of manually refilling.
+		tokens:     rateKB / 2, // start half full
 	}
+
+	pw.ticker = time.NewTicker(100 * time.Millisecond)
+	go pw.refillTokens()
+	return pw
 }
 
 func (pw *progWriter) Write(p []byte) (int, error) {
 	if err := pw.ctx.Err(); err != nil {
 		return 0, err
 	}
+
+	// No rate limit.
 	if pw.rate < 1 {
 		n, err := pw.writer.Write(p)
 		pw.written += int64(n)
@@ -202,38 +193,55 @@ func (pw *progWriter) Write(p []byte) (int, error) {
 
 	var writtenNow int
 	for len(p) > 0 {
-		pw.refillTokens()
-		toWrite := min(int64(len(p)), pw.tokens)
-		if toWrite > 0 {
-			n, err := pw.writer.Write(p[:toWrite])
-			if err != nil {
-				return int(pw.written), fmt.Errorf("send byte array: %w", err)
+
+		// wait a tiny bit if no tokens
+		if pw.tokens < 1 {
+			select {
+			case <-pw.ctx.Done():
+				return writtenNow, pw.ctx.Err()
+			case <-time.After(10 * time.Millisecond):
+				continue
 			}
-			p = p[n:]
-			writtenNow += n
-
-			bytes := int64(n)
-			pw.tokens -= bytes
-			pw.written += bytes
-			pw.onProgress(pw.written)
 		}
 
-		if len(p) > 0 {
-			utils.Sleep(10) // Allow tokens to refill
+		toWrite := min(int64(len(p)), pw.tokens)
+		n, err := pw.writer.Write(p[:toWrite])
+		if err != nil {
+			return int(pw.written), fmt.Errorf("send byte array: %w", err)
 		}
+		p = p[n:]
+		writtenNow += int(n)
+
+		bytes := int64(n)
+		pw.tokens -= bytes
+		pw.written += bytes
+		pw.onProgress(pw.written)
 	}
 	return writtenNow, nil
 }
 
 func (pw *progWriter) refillTokens() {
-	now := time.Now()
-	elapsed := now.Sub(pw.lastRefill)
-	newTokens := int64(float64(pw.rate) * elapsed.Seconds())
-	if newTokens > 0 {
-		pw.tokens += newTokens
-		if pw.tokens > pw.burstSize {
-			pw.tokens = pw.burstSize
+	for {
+		select {
+		case <-pw.ctx.Done():
+			pw.ticker.Stop()
+			return
+		case <-pw.ticker.C:
+			pw.tokens += pw.rate / 10 // 100ms interval
+			if pw.tokens > pw.burstSize {
+				pw.tokens = pw.burstSize
+			}
 		}
-		pw.lastRefill = now
 	}
+}
+
+type gRPCWriter struct {
+	stream grpc.ClientStreamingClient[proto.UploadRequest, proto.Empty]
+}
+
+func (gw *gRPCWriter) Write(p []byte) (int, error) {
+	err := gw.stream.Send(&proto.UploadRequest{
+		Data: &proto.UploadRequest_Chunk{Chunk: p},
+	})
+	return len(p), err
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/wilymonkey/maeve/db"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/proto"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
@@ -33,7 +34,7 @@ func RDBFetch(node string) string {
 	return fmt.Sprintf("fetching best version from %s...", node)
 }
 
-func RDBDone(version *db.DBVersion) string {
+func RDBDone(version *proto.DBVersion) string {
 	return fmt.Sprintf("Done! Current database has %d entries.", version.Rows)
 }
 
@@ -85,7 +86,7 @@ func updateDBUI() fyne.CanvasObject {
 
 type nodeVersion struct {
 	node    string
-	version *db.DBVersion
+	version *proto.DBVersion
 }
 
 func repairDB() error {
@@ -110,24 +111,25 @@ func repairDB() error {
 				return err
 			}
 
-			nodeConn, err := remote.NewNodeConn(node, func(err error) {
-				nodeState.err.Set(err)
-			})
+			nodeConn, err := remote.NewComms(node)
 			if err != nil {
 				nodeState.err.Set(err)
 				return nil
 			}
-			defer utils.Cleanup(&err, nodeConn.Close)
+			defer nodeConn.Close()
 
 			nodeState.isConnected.Set(true)
 			defer nodeState.isConnected.Set(false)
 
-			dbVersion, err := nodeConn.GetDBVersion()
+			resp, err := nodeConn.Client.GetDBVersion(
+				ctx,
+				&proto.GetDBVersionRequest{Node: conf.MyName()},
+			)
 			if err != nil {
 				nodeState.err.Set(err)
 				return nil
 			}
-			versionChan <- nodeVersion{node: node, version: dbVersion}
+			versionChan <- nodeVersion{node: node, version: resp.Version}
 			return err
 		})
 	}
@@ -147,15 +149,13 @@ func repairDB() error {
 	}
 
 	global.repairDBState.Set(RDBFetch(node))
-	nodeConn, err := remote.NewNodeConn(node, func(err error) {
-		global.err.Set(err)
-	})
+	nodeConn, err := remote.NewComms(node)
 	if err != nil {
 		return err
 	}
-	defer utils.Cleanup(&err, nodeConn.Close)
+	defer nodeConn.Close()
 
-	if err := nodeConn.PullDB(); err != nil {
+	if err := nodeConn.PullDB(global.ctx); err != nil {
 		return err
 	}
 
@@ -168,14 +168,14 @@ func repairDB() error {
 	return err
 }
 
-func getLocalVer() (*db.DBVersion, error) {
+func getLocalVer() (*proto.DBVersion, error) {
 	myNode := conf.MyNode()
 	exists, err := local.PathExists(db.DBPath(myNode))
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return &db.DBVersion{}, nil
+		return &proto.DBVersion{}, nil
 	}
 
 	conn, err := db.OpenRead(myNode)

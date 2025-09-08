@@ -14,6 +14,7 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/icons"
 	"github.com/wilymonkey/maeve/local"
+	"github.com/wilymonkey/maeve/proto"
 	"github.com/wilymonkey/maeve/remote"
 	"github.com/wilymonkey/maeve/utils"
 	"golang.org/x/sync/errgroup"
@@ -160,30 +161,31 @@ func pushChanges() {
 
 func pushToNode(state *nodeState) error {
 	global.pushState.task.Set(sayConnecting)
-	nodeConn, err := remote.NewNodeConn(state.name, func(err error) {
-		state.err.Set(err)
-	})
+	comms, err := remote.NewComms(state.name)
 	if err != nil {
 		return err
 	}
-	defer utils.Cleanup(&err, nodeConn.Close)
+	defer comms.Close()
 
 	state.isConnected.Set(true)
 	defer state.isConnected.Set(false)
 
 	global.pushState.task.Set(sayPushDB)
 	dbPath := db.DBPath(conf.MyNode())
-	if err := nodeConn.PushDB(dbPath, global.ctx); err != nil {
+	if err := comms.PushDB(global.ctx, dbPath); err != nil {
 		return err
 	}
 
 	global.pushState.task.Set(sayLinking)
-	missingIds, err := nodeConn.ConformToDB()
+	resp, err := comms.Client.ConformToDB(
+		global.ctx,
+		&proto.ConformToDBRequest{Node: conf.MyName()},
+	)
 	if err != nil {
 		return err
 	}
 
-	metas, err := processIds(missingIds)
+	metas, err := processIds(resp.MissingLinkIds)
 	if err != nil {
 		return err
 	}
@@ -191,7 +193,7 @@ func pushToNode(state *nodeState) error {
 	progChan := make(chan *remote.PushStatus, 10)
 	eGrp, ctx := errgroup.WithContext(global.ctx)
 	eGrp.Go(func() error {
-		return nodeConn.PushLinks(metas, ctx, progChan)
+		return comms.PushLinks(metas, ctx, progChan)
 	})
 
 	var progPath string

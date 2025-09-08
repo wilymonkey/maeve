@@ -13,8 +13,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/wilymonkey/maeve/utils"
-	"github.com/zeebo/blake3"
-	"golang.org/x/crypto/ssh"
 )
 
 var Version = "DEV"
@@ -29,16 +27,14 @@ var (
 )
 
 type MaeveConf struct {
-	DisplayName   string
-	SSHPrivateKey ed25519.PrivateKey `yaml:"sshprivatekey,flow"`
-	SSHKnownHosts SSHKnownHosts
-	SSHAuthKeys   []string
-	ServerPort    int
-	MaeveDir      string
-	MaxBackups    int
-	MaxUpload     int64
-	RemoteNodes   []string
-	SourceDirs    []string
+	DisplayName string
+	PrivKey     ed25519.PrivateKey `yaml:"privatekey,flow"`
+	ServerPort  int
+	MaeveDir    string
+	MaxBackups  int
+	MaxUpload   int64
+	RemoteNodes []string
+	SourceDirs  []string
 }
 
 func GetConf() *MaeveConf {
@@ -51,7 +47,7 @@ func GetConf() *MaeveConf {
 }
 
 func (c *MaeveConf) PublicKey() ed25519.PublicKey {
-	return c.SSHPrivateKey.Public().(ed25519.PublicKey)
+	return c.PrivKey.Public().(ed25519.PublicKey)
 }
 
 // Reads/Creates the config file.
@@ -91,16 +87,12 @@ func (c *MaeveConf) applyDefaults() error {
 		c.DisplayName = hostname
 	}
 
-	if c.SSHPrivateKey == nil || c.SSHPrivateKey.Public() == nil {
+	if c.PrivKey == nil || c.PrivKey.Public() == nil {
 		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return fmt.Errorf("generating ssh key: %w", err)
+			return fmt.Errorf("generating private key: %w", err)
 		}
-		c.SSHPrivateKey = privateKey
-	}
-
-	if c.SSHKnownHosts.Hosts == nil {
-		c.SSHKnownHosts = NewSSHKnownHosts()
+		c.PrivKey = privateKey
 	}
 
 	if c.ServerPort < 1024 {
@@ -171,12 +163,7 @@ func configPath() (string, error) {
 
 func MyName() string {
 	conf := GetConf()
-	pubKey, err := ssh.NewPublicKey(conf.SSHPrivateKey.Public())
-
-	utils.AssertNoErr(err, "cannot generate pub key from config private key")
-
-	sum := blake3.Sum512(pubKey.Marshal())
-	keyHash := hex.EncodeToString(sum[:3])
+	keyHash := hex.EncodeToString(conf.PublicKey()[:3])
 	return fmt.Sprintf("%s_%s", conf.DisplayName, keyHash)
 }
 

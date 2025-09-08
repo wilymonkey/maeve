@@ -12,6 +12,8 @@ import (
 	"github.com/zeebo/blake3"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/wilymonkey/maeve/conf"
+	"github.com/wilymonkey/maeve/proto"
 	"github.com/wilymonkey/maeve/utils"
 )
 
@@ -45,6 +47,36 @@ func GenFileMeta(path string, baseDir string, hasher *blake3.Hasher) (FileMeta, 
 		Size:    info.Size(),
 		ModTime: info.ModTime(),
 	}, nil
+}
+
+func (f *FileMeta) AsProto() *proto.FileMeta {
+	return &proto.FileMeta{
+		Hash:    f.Hash[:],
+		RelPath: f.RelPath,
+		Size:    f.Size,
+		ModTime: conf.TimeToInt64(f.ModTime),
+	}
+}
+
+func FromProto(pf *proto.FileMeta) *FileMeta {
+	return &FileMeta{
+		Hash:    [32]byte(pf.Hash),
+		RelPath: pf.RelPath,
+		Size:    pf.Size,
+		ModTime: conf.TimeFromInt64(pf.ModTime),
+	}
+}
+
+func Validate(
+	pMeta *proto.FileMeta,
+	path string,
+	hasher *blake3.Hasher,
+) (bool, error) {
+	newHash, err := NewHashsum(path, hasher)
+	if err != nil {
+		return false, err
+	}
+	return newHash == [32]byte(pMeta.Hash), nil
 }
 
 func (h *FileMeta) Validate(path string, hasher *blake3.Hasher) (bool, error) {

@@ -1,9 +1,6 @@
 package gui
 
 import (
-	"log"
-	"regexp"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -13,9 +10,8 @@ import (
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/icons"
 	"github.com/wilymonkey/maeve/utils"
+	"log"
 )
-
-var sshNodeReg = regexp.MustCompile(`^[a-zA-Z0-9_]+@(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}$`)
 
 func Render() fyne.CanvasObject {
 	go func() {

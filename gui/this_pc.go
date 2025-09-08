@@ -9,11 +9,8 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/wilymonkey/maeve/clipboard"
-	"github.com/wilymonkey/maeve/conf"
 	"github.com/wilymonkey/maeve/fynext"
 	"github.com/wilymonkey/maeve/icons"
-	"golang.org/x/crypto/ssh"
 )
 
 func thisPC() fyne.CanvasObject {
@@ -117,17 +114,11 @@ func backupDir() fyne.CanvasObject {
 
 func maeveKey() fyne.CanvasObject {
 	copyKey := func() {
-		p := conf.GetConf().SSHPrivateKey.Public()
-		pubKey, err := ssh.NewPublicKey(p)
-		if err != nil {
-			global.ShowError(err)
-			return
-		}
-		key := ssh.MarshalAuthorizedKey(pubKey)
-		if err := clipboard.WriteAll(string(key)); err != nil {
-			global.ShowError(err)
-			return
-		}
+		panic("TODO: Unimplemented!")
+		// if err := clipboard.WriteAll("TODO"); err != nil {
+		// 	global.ShowError(err)
+		// 	return
+		// }
 	}
 	info := widget.NewLabel("Copy this key to the backup PC so that it will accept files.")
 	info.Wrapping = fyne.TextWrapWord

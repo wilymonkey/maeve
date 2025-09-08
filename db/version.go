@@ -5,20 +5,14 @@ import (
 	"fmt"
 
 	"github.com/wilymonkey/maeve/conf"
+	"github.com/wilymonkey/maeve/proto"
 	"github.com/zeebo/blake3"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type DBVersion struct {
-	LatestSnapshot int64
-	Hash           []byte
-	HashSign       []byte
-	Rows           int64
-}
-
-func GetVersion(conn *sqlite.Conn) (*DBVersion, error) {
-	var result DBVersion
+func GetVersion(conn *sqlite.Conn) (*proto.DBVersion, error) {
+	var result proto.DBVersion
 	var err error
 
 	result.Hash, err = hashDB(conn)
@@ -73,7 +67,7 @@ func SetDBVersion(conn *sqlite.Conn, dirPath string) error {
 	if err != nil {
 		return err
 	}
-	sig := ed25519.Sign(conf.GetConf().SSHPrivateKey, hash)
+	sig := ed25519.Sign(conf.GetConf().PrivKey, hash)
 
 	err = sqlitex.ExecuteTransient(conn,
 		"INSERT OR REPLACE INTO size_signature (id, signature) VALUES (1, ?)",
