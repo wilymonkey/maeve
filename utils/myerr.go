@@ -33,37 +33,20 @@ func Sleep(ms int) {
 	time.Sleep(time.Millisecond * time.Duration(ms))
 }
 
-var assertData map[string]any = map[string]any{}
-
-func AddAssertData(key string, value any) {
-	assertData[key] = value
-}
-
-func RemoveAssertData(key string) {
-	delete(assertData, key)
-}
-
-func runAssert(msg string) {
-	for k, v := range assertData {
-		log.Printf("context, key %s value %s", k, v)
-	}
-	log.Fatal(msg)
-}
-
 func Assert(truth bool, msg string) {
 	if !truth {
-		runAssert(msg)
+		log.Fatal(msg)
 	}
 }
 
 func Assertf(truth bool, msg string, a ...any) {
 	if !truth {
-		runAssert(fmt.Sprintf(msg, a...))
+		log.Fatalf(msg, a...)
 	}
 }
 
 func AssertNoErr(err error, msg string) {
 	if err != nil {
-		runAssert(msg)
+		log.Fatalf("While: %s, Err: %v", msg, err)
 	}
 }

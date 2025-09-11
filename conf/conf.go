@@ -1,13 +1,16 @@
 package conf
 
 import (
+	"bytes"
+	"compress/flate"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,38 +27,87 @@ var Version = "DEV"
 // CONFIG
 // =======================================
 
-var (
-	maeveConf *MaeveConf
-	once      sync.Once
-)
-
-type MaeveConf struct {
+type InMemory struct {
 	DisplayName string
-	PrivKey     ed25519.PrivateKey `yaml:"privatekey,flow"`
 	ServerPort  int
-	MaeveDir    string
 	MaxBackups  int
 	MaxUpload   int64
+	RootDir     string
 	RemoteNodes []string
 	SourceDirs  []string
+	PrivKey     ed25519.PrivateKey
+	Cert        *x509.Certificate
 }
 
-func GetConf() *MaeveConf {
+type OnFile struct {
+	DisplayName string   `yaml:"Name"`
+	ServerPort  int      `yaml:"Server Port"`
+	MaxBackups  int      `yaml:"Max Backups"`
+	MaxUpload   int64    `yaml:"Max Upload Speed"`
+	RootDir     string   `yaml:"Backup Folder"`
+	SourceDirs  []string `yaml:"Source Folders"`
+	RemoteNodes []string `yaml:"Backup PCs"`
+	CryptoBlob  string   `yaml:"Crypto Blob"`
+}
+
+var (
+	inMem *InMemory
+	once  sync.Once
+)
+
+func GetConf() *InMemory {
 	once.Do(func() {
-		var err error
-		maeveConf, err = loadConfig()
-		utils.AssertNoErr(err, "config should be parseable")
+		onFile, err := readFile()
+		utils.AssertNoErr(err, "reading config from file")
+		inMem, err = onFile.toMemory()
+		utils.AssertNoErr(err, "reading config into memory")
 	})
-	return maeveConf
+	return inMem
 }
 
-func (c *MaeveConf) PublicKey() ed25519.PublicKey {
-	return c.PrivKey.Public().(ed25519.PublicKey)
+func (c *InMemory) SaveToFile() error {
+	cryptoBlob, err := encodeCryptoBlob(c.PrivKey, c.Cert)
+	if err != nil {
+		return err
+	}
+	onFile := &OnFile{
+		DisplayName: c.DisplayName,
+		ServerPort:  c.ServerPort,
+		MaxBackups:  c.MaxBackups,
+		MaxUpload:   c.MaxUpload,
+		RootDir:     c.RootDir,
+		RemoteNodes: c.RemoteNodes,
+		SourceDirs:  c.SourceDirs,
+		CryptoBlob:  cryptoBlob,
+	}
+	return onFile.writeFile()
 }
 
-// Reads/Creates the config file.
-func loadConfig() (*MaeveConf, error) {
-	conf := &MaeveConf{}
+// =======================================
+// OnFile Methods
+// =======================================
+
+func (c *OnFile) toMemory() (*InMemory, error) {
+	privKey, cert, err := decodeCryptoBlob(c.CryptoBlob)
+	if err != nil {
+		return nil, err
+	}
+
+	return &InMemory{
+		DisplayName: c.DisplayName,
+		ServerPort:  c.ServerPort,
+		MaxBackups:  c.MaxBackups,
+		MaxUpload:   c.MaxUpload,
+		RootDir:     c.RootDir,
+		RemoteNodes: c.RemoteNodes,
+		SourceDirs:  c.SourceDirs,
+		PrivKey:     privKey,
+		Cert:        cert,
+	}, nil
+}
+
+func readFile() (*OnFile, error) {
+	cfg := &OnFile{}
 	confPath, err := configPath()
 	if err != nil {
 		return nil, err
@@ -66,22 +118,24 @@ func loadConfig() (*MaeveConf, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("parsing config file: %w", err)
 		}
-		// File exists since there is no error, so unmarshal it.
-	} else if err := yaml.Unmarshal(data, conf); err != nil {
-		return nil, fmt.Errorf("unmarshalling config file: %w", err)
+	} else {
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("unmarshalling config file: %w", err)
+		}
 	}
 
-	if err := conf.applyDefaults(); err != nil {
-		return nil, err
-	}
-	if err := conf.SaveToFile(); err != nil {
+	if err := cfg.applyDefaults(); err != nil {
 		return nil, err
 	}
 
-	return conf, nil
+	if err := cfg.writeFile(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
-func (c *MaeveConf) applyDefaults() error {
+func (c *OnFile) applyDefaults() error {
 	if c.DisplayName == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
@@ -90,24 +144,16 @@ func (c *MaeveConf) applyDefaults() error {
 		c.DisplayName = hostname
 	}
 
-	if c.PrivKey == nil || c.PrivKey.Public() == nil {
-		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			return fmt.Errorf("generating private key: %w", err)
-		}
-		c.PrivKey = privateKey
-	}
-
 	if c.ServerPort < 1024 {
 		c.ServerPort = 2222
 	}
 
-	if c.MaeveDir == "" {
+	if c.RootDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("getting home dir: %w", err)
 		}
-		c.MaeveDir = filepath.Join(homeDir, "Maeve")
+		c.RootDir = filepath.Join(homeDir, "Maeve")
 	}
 
 	if c.MaxBackups == 0 {
@@ -122,12 +168,22 @@ func (c *MaeveConf) applyDefaults() error {
 		c.SourceDirs = make([]string, 0)
 	}
 
-	// Ignore: MaxUpload
+	if c.MaxUpload < 0 {
+		c.MaxUpload = 0
+	}
+
+	if c.CryptoBlob == "" {
+		var err error
+		c.CryptoBlob, err = genCryptoBlob()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (c *MaeveConf) SaveToFile() error {
+func (c *OnFile) writeFile() error {
 	confPath, err := configPath()
 	if err != nil {
 		return err
@@ -151,33 +207,96 @@ func (c *MaeveConf) SaveToFile() error {
 	return nil
 }
 
-// =======================================
-// TLS
-// =======================================
-
-var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-
-func (c *MaeveConf) genTLSCert(ipAddr string) (*x509.Certificate, error) {
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+func genCryptoBlob() (string, error) {
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("generating serial number: %w", err)
+		return "", fmt.Errorf("generating private key: %w", err)
+	}
+	cert, err := genTLSCert(&privKey)
+	if err != nil {
+		return "", fmt.Errorf("generating tls cert: %w", err)
+	}
+	return encodeCryptoBlob(privKey, cert)
+}
+
+const cryptoBlobKey = "privKey"
+const cryptoBlobCert = "cert"
+
+func encodeCryptoBlob(
+	privKey ed25519.PrivateKey,
+	cert *x509.Certificate,
+) (string, error) {
+	m := make(map[string][]byte)
+	m[cryptoBlobKey] = privKey
+	m[cryptoBlobCert] = cert.Raw
+
+	buf := new(bytes.Buffer)
+	comp, _ := flate.NewWriter(buf, flate.BestCompression)
+
+	if err := gob.NewEncoder(comp).Encode(m); err != nil {
+		return "", fmt.Errorf("encoding crypto blob: %w", err)
+	}
+
+	if err := comp.Close(); err != nil {
+		return "", fmt.Errorf("closing flate writer: %w", err)
+	}
+
+	s := base64.StdEncoding.EncodeToString(buf.Bytes())
+	return s, nil
+}
+
+func decodeCryptoBlob(s string) (ed25519.PrivateKey, *x509.Certificate, error) {
+	compressed, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, nil, fmt.Errorf("translating crypto blob: %w", err)
+	}
+
+	zr := flate.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return nil, nil, fmt.Errorf("uncompressing crypto blob: %w", err)
+	}
+	defer utils.Cleanup(&err, zr.Close)
+
+	var m map[string][]byte
+	if err := gob.NewDecoder(zr).Decode(&m); err != nil {
+		return nil, nil, fmt.Errorf("decoding crypto blob: %w", err)
+	}
+
+	privKey, privKeyOk := m[cryptoBlobKey]
+	certDer, cerOk := m[cryptoBlobCert]
+	if !privKeyOk || !cerOk {
+		return nil, nil, fmt.Errorf("retrieving private key and cert from crypto blob: %w", err)
+	}
+	cert, err := x509.ParseCertificate(certDer)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing certDer from crypto blob: %w", err)
+	}
+
+	return privKey, cert, err
+}
+
+func genTLSCert(
+	privKey *ed25519.PrivateKey,
+	validAddr ...string,
+) (*x509.Certificate, error) {
+	var ipAddr []net.IP
+	for _, ipStr := range validAddr {
+		ipAddr = append(ipAddr, net.ParseIP(ipStr))
 	}
 
 	template := &x509.Certificate{
-		SerialNumber: serialNumber,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().AddDate(100, 0, 0), // Valid for 100 years
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		IPAddresses:  []net.IP{net.ParseIP(ipAddr)},
-		IsCA:         false,
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().AddDate(100, 0, 0), // Valid for 100 years
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		IPAddresses: ipAddr,
 	}
 	certDer, err := x509.CreateCertificate(
 		rand.Reader,
 		template,
 		template,
-		c.PublicKey(),
-		c.PrivKey,
+		privKey.Public().(ed25519.PublicKey),
+		privKey,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating certDer: %w", err)
@@ -206,17 +325,18 @@ func configPath() (string, error) {
 
 func MyName() string {
 	conf := GetConf()
-	keyHash := hex.EncodeToString(conf.PublicKey()[:3])
+	pubKey := conf.PrivKey.Public().(ed25519.PublicKey)
+	keyHash := hex.EncodeToString(pubKey[:3])
 	return fmt.Sprintf("%s_%s", conf.DisplayName, keyHash)
 }
 
 func MyNode() string {
-	return filepath.Join(GetConf().MaeveDir, MyName())
+	return filepath.Join(GetConf().RootDir, MyName())
 }
 
 func RemoteTempDir(node string) string {
 	conf := GetConf()
-	return filepath.Join(conf.MaeveDir, node, "Temp")
+	return filepath.Join(conf.RootDir, node, "Temp")
 }
 
 // =======================================

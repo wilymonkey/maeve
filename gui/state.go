@@ -29,7 +29,7 @@ func LoadState(window fyne.Window) {
 
 	state := State{
 		Name:        binding.BindString(&cfg.DisplayName),
-		MaeveDir:    binding.BindString(&cfg.MaeveDir),
+		MaeveDir:    binding.BindString(&cfg.RootDir),
 		MaxBackups:  binding.BindInt(&cfg.MaxBackups),
 		MaxUpload:   binding.NewString(),
 		RemoteNodes: binding.BindStringList(&cfg.RemoteNodes),

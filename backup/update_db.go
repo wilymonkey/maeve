@@ -193,7 +193,7 @@ func getLocalVer() (*proto.DBVersion, error) {
 }
 
 func findBestVersion(nodeVersions []nodeVersion) string {
-	pubKey := conf.GetConf().PublicKey()
+	pubKey := conf.GetConf().PrivKey.Public().(ed25519.PublicKey)
 
 	var nodeIndex int
 	var latest int64
