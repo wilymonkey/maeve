@@ -3,9 +3,12 @@ package conf
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -146,6 +149,46 @@ func (c *MaeveConf) SaveToFile() error {
 	}
 
 	return nil
+}
+
+// =======================================
+// TLS
+// =======================================
+
+var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
+
+func (c *MaeveConf) genTLSCert(ipAddr string) (*x509.Certificate, error) {
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, fmt.Errorf("generating serial number: %w", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().AddDate(100, 0, 0), // Valid for 100 years
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		IPAddresses:  []net.IP{net.ParseIP(ipAddr)},
+		IsCA:         false,
+	}
+	certDer, err := x509.CreateCertificate(
+		rand.Reader,
+		template,
+		template,
+		c.PublicKey(),
+		c.PrivKey,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating certDer: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDer)
+	if err != nil {
+		return nil, fmt.Errorf("parssing certDer: %w", err)
+	}
+
+	return cert, nil
 }
 
 // =======================================
